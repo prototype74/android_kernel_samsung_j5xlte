@@ -103,18 +103,18 @@ struct msm_cpp_frame_strip_info {
 	uint32_t output_bytes_per_pixel;
 	uint32_t temporal_bytes_per_pixel;
 
-	unsigned int source_address[2];
-	unsigned int destination_address[2];
+	uint32_t source_address[2];
+	uint32_t destination_address[2];
 	/* source_address[1] is used for CbCR planar
 	 * to CbCr interleaved conversion
 	 */
-	unsigned int temporal_source_address[2];
+	uint32_t temporal_source_address[2];
 	/* destination_address[1] is used for CbCr interleved
 	 * to CbCr planar conversion
 	 */
-	unsigned int temporal_destination_address[2];
-	unsigned int src_stride;
-	unsigned int dst_stride;
+	uint32_t temporal_destination_address[2];
+	uint32_t src_stride;
+	uint32_t dst_stride;
 	uint32_t rotate_270;
 	uint32_t horizontal_flip;
 	uint32_t vertical_flip;
