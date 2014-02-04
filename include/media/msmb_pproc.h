@@ -90,7 +90,7 @@ struct msm_cpp_frame_strip_info {
 };
 
 struct msm_cpp_buffer_info_t {
-	int fd;
+	int32_t fd;
 	uint32_t index;
 	uint32_t offset;
 	uint8_t native_buff;
@@ -154,7 +154,7 @@ struct msm_vpe_frame_strip_info {
 };
 
 struct msm_vpe_buffer_info_t {
-	int fd;
+	int32_t fd;
 	uint32_t index;
 	uint32_t offset;
 	uint8_t native_buff;
@@ -175,8 +175,8 @@ struct msm_vpe_frame_info_t {
 	uint32_t client_id;
 	enum msm_vpe_frame_type frame_type;
 	struct msm_vpe_frame_strip_info strip_info;
-	int src_fd;
-	int dst_fd;
+	unsigned long src_fd;
+	unsigned long dst_fd;
 	struct ion_handle *src_ion_handle;
 	struct ion_handle *dest_ion_handle;
 	unsigned long src_phyaddr;
@@ -260,7 +260,7 @@ struct msm_pproc_queue_buf_info {
 
 struct msm_camera_v4l2_ioctl_t {
 	uint32_t id;
-	uint32_t len;
+	size_t len;
 	int32_t trans_code;
 	void __user *ioctl_ptr;
 };
