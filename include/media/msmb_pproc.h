@@ -4,6 +4,9 @@
 #ifdef MSM_CAMERA_BIONIC
 #include <sys/types.h>
 #endif
+#ifdef CONFIG_COMPAT
+#include <linux/compat.h>
+#endif
 #include <linux/videodev2.h>
 #include <linux/types.h>
 #include <media/msmb_generic_buf_mgr.h>
@@ -109,20 +112,23 @@ struct msm_cpp_frame_info_t {
 	uint32_t client_id;
 	enum msm_cpp_frame_type frame_type;
 	uint32_t num_strips;
-	struct msm_cpp_frame_strip_info *strip_info;
+	struct msm_cpp_frame_strip_info __user *strip_info;
 	uint32_t msg_len;
 	uint32_t *cpp_cmd_msg;
 	int src_fd;
 	int dst_fd;
-	struct ion_handle *src_ion_handle;
-	struct ion_handle *dest_ion_handle;
 	struct timeval in_time, out_time;
-	void *cookie;
+	void __user *cookie;
 	int32_t *status;
 	int32_t duplicate_output;
 	uint32_t duplicate_identity;
 	struct msm_cpp_buffer_info_t input_buffer_info;
 	struct msm_cpp_buffer_info_t output_buffer_info[2];
+};
+
+struct msm_cpp_pop_stream_info_t {
+	int32_t frame_id;
+	uint32_t identity;
 };
 
 struct cpp_hw_info {
@@ -211,7 +217,6 @@ struct msm_pproc_queue_buf_info {
 #define VIDIOC_MSM_CPP_DEQUEUE_STREAM_BUFF_INFO \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 7, struct msm_camera_v4l2_ioctl_t)
 
-
 #define VIDIOC_MSM_VPE_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 8, struct msm_camera_v4l2_ioctl_t)
 
@@ -279,7 +284,6 @@ struct msm_cpp_frame_info32_t {
 	uint32_t duplicate_identity;
 	struct msm_cpp_buffer_info_t input_buffer_info;
 	struct msm_cpp_buffer_info_t output_buffer_info[2];
-	struct msm_cpp_buffer_info_t tnr_scratch_buffer_info[2];
 };
 
 struct msm_cpp_stream_buff_info32_t {
