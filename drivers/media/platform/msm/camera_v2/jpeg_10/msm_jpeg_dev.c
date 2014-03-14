@@ -72,8 +72,9 @@ static long msm_jpeg_compat_ioctl(struct file *filp, unsigned int cmd,
 	int rc;
 	struct msm_jpeg_device *pgmn_dev = filp->private_data;
 
-	JPEG_DBG("%s:%d] cmd=%d pgmn_dev=0x%x arg=0x%x\n", __func__,
-		__LINE__, _IOC_NR(cmd), (uint32_t)pgmn_dev, (uint32_t)arg);
+	JPEG_DBG("%s:%d] cmd=%d pgmn_dev=0x%lx arg=0x%lx\n", __func__,
+		__LINE__, _IOC_NR(cmd), (unsigned long)pgmn_dev,
+	(unsigned long)arg);
 
 	rc = __msm_jpeg_compat_ioctl(pgmn_dev, cmd, arg);
 
@@ -87,8 +88,9 @@ static long msm_jpeg_ioctl(struct file *filp, unsigned int cmd,
 	int rc;
 	struct msm_jpeg_device *pgmn_dev = filp->private_data;
 
-	JPEG_DBG("%s:%d] cmd=%d pgmn_dev=0x%x arg=0x%x\n", __func__,
-		__LINE__, _IOC_NR(cmd), (uint32_t)pgmn_dev, (uint32_t)arg);
+	JPEG_DBG("%s:%d] cmd=%d pgmn_dev=0x%lx arg=0x%lx\n", __func__,
+		__LINE__, _IOC_NR(cmd), (unsigned long)pgmn_dev,
+	(unsigned long)arg);
 
 	rc = __msm_jpeg_ioctl(pgmn_dev, cmd, arg);
 
@@ -113,8 +115,9 @@ int msm_jpeg_subdev_init(struct v4l2_subdev *jpeg_sd)
 	struct msm_jpeg_device *pgmn_dev =
 		(struct msm_jpeg_device *)jpeg_sd->host_priv;
 
-	JPEG_DBG("%s:%d: jpeg_sd=0x%x pgmn_dev=0x%x\n",
-		__func__, __LINE__, (uint32_t)jpeg_sd, (uint32_t)pgmn_dev);
+	JPEG_DBG("%s:%d: jpeg_sd=0x%lx pgmn_dev=0x%lx\n",
+		__func__, __LINE__, (unsigned long)jpeg_sd,
+		(unsigned long)pgmn_dev);
 	rc = __msm_jpeg_open(pgmn_dev);
 	JPEG_DBG("%s:%d: rc=%d\n",
 		__func__, __LINE__, rc);
@@ -130,7 +133,7 @@ static long msm_jpeg_subdev_ioctl(struct v4l2_subdev *sd,
 
 	JPEG_DBG("%s: cmd=%d\n", __func__, cmd);
 
-	JPEG_DBG("%s: pgmn_dev 0x%x", __func__, (uint32_t)pgmn_dev);
+	JPEG_DBG("%s: pgmn_dev 0x%lx", __func__, (unsigned long)pgmn_dev);
 
 	JPEG_DBG("%s: Calling __msm_jpeg_ioctl\n", __func__);
 
@@ -144,7 +147,7 @@ void msm_jpeg_subdev_release(struct v4l2_subdev *jpeg_sd)
 	int rc;
 	struct msm_jpeg_device *pgmn_dev =
 		(struct msm_jpeg_device *)jpeg_sd->host_priv;
-	JPEG_DBG("%s:pgmn_dev=0x%x", __func__, (uint32_t)pgmn_dev);
+	JPEG_DBG("%s:pgmn_dev=0x%lx", __func__, (unsigned long)pgmn_dev);
 	rc = __msm_jpeg_release(pgmn_dev);
 	JPEG_DBG("%s:rc=%d", __func__, rc);
 }
@@ -185,8 +188,8 @@ static int msm_jpeg_init_dev(struct platform_device *pdev)
 
 	v4l2_subdev_init(&msm_jpeg_device_p->subdev, &msm_jpeg_subdev_ops);
 	v4l2_set_subdev_hostdata(&msm_jpeg_device_p->subdev, msm_jpeg_device_p);
-	JPEG_DBG("%s: msm_jpeg_device_p 0x%x", __func__,
-			(uint32_t)msm_jpeg_device_p);
+	JPEG_DBG("%s: msm_jpeg_device_p 0x%lx", __func__,
+			(unsigned long)msm_jpeg_device_p);
 
 	rc = alloc_chrdev_region(&msm_jpeg_device_p->msm_jpeg_devno, 0, 1,
 				devname);
