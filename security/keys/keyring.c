@@ -340,7 +340,7 @@ key_ref_t keyring_search_aux(key_ref_t keyring_ref,
 	key_check(keyring);
 
 	/* top keyring must have search permission to begin the search */
-	err = key_task_permission(keyring_ref, cred, KEY_SEARCH);
+	err = key_task_permission(keyring_ref, cred, KEY_NEED_SEARCH);
 	if (err < 0) {
 		key_ref = ERR_PTR(err);
 		goto error;
@@ -424,7 +424,7 @@ descend:
 
 		/* key must have search permissions */
 		if (key_task_permission(make_key_ref(key, possessed),
-					cred, KEY_SEARCH) < 0)
+					cred, KEY_NEED_SEARCH) < 0)
 			continue;
 
 		if (no_state_check)
@@ -456,7 +456,7 @@ ascend:
 			continue;
 
 		if (key_task_permission(make_key_ref(key, possessed),
-					cred, KEY_SEARCH) < 0)
+					cred, KEY_NEED_SEARCH) < 0)
 			continue;
 
 		/* stack the current position */
@@ -625,7 +625,7 @@ struct key *find_keyring_by_name(const char *name, bool uid_keyring)
 					continue;
 			} else {
 				if (key_permission(make_key_ref(keyring, 0),
-						   KEY_SEARCH) < 0)
+						   KEY_NEED_SEARCH) < 0)
 					continue;
 			}
 

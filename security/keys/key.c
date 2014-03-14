@@ -721,7 +721,7 @@ static inline key_ref_t __key_update(key_ref_t key_ref,
 	int ret;
 
 	/* need write permission on the key to update it */
-	ret = key_permission(key_ref, KEY_WRITE);
+	ret = key_permission(key_ref, KEY_NEED_WRITE);
 	if (ret < 0)
 		goto error;
 
@@ -836,7 +836,7 @@ key_ref_t key_create_or_update(key_ref_t keyring_ref,
 
 	/* if we're going to allocate a new key, we're going to have
 	 * to modify the keyring */
-	ret = key_permission(keyring_ref, KEY_WRITE);
+	ret = key_permission(keyring_ref, KEY_NEED_WRITE);
 	if (ret < 0) {
 		key_ref = ERR_PTR(ret);
 		goto error_link_end;
@@ -936,7 +936,7 @@ int key_update(key_ref_t key_ref, const void *payload, size_t plen)
 	key_check(key);
 
 	/* the key must be writable */
-	ret = key_permission(key_ref, KEY_WRITE);
+	ret = key_permission(key_ref, KEY_NEED_WRITE);
 	if (ret < 0)
 		goto error;
 
