@@ -137,10 +137,10 @@ ramoops_get_next_prz(struct persistent_ram_zone *przs[], uint *c, uint max,
 	prz = przs[i];
 	if (!prz)
 		return NULL;
-	
+
 	/* Update old/shadowed buffer. */
 	if (update)
-			persistent_ram_save_old(prz);
+		persistent_ram_save_old(prz);
 
 	if (!persistent_ram_old_size(prz))
 		return NULL;
