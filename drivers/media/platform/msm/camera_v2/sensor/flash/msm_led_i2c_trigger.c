@@ -13,7 +13,6 @@
 
 #define pr_fmt(fmt) "%s:%d " fmt, __func__, __LINE__
 
-#include <mach/gpiomux.h>
 #include <linux/module.h>
 #include "msm_led_flash.h"
 #include "msm_camera_io_util.h"
@@ -142,10 +141,6 @@ int msm_flash_led_init(struct msm_led_flash_ctrl_t *fctrl)
         fctrl->led_state = MSM_CAMERA_LED_RELEASE;
 	if (power_info->gpio_conf->cam_gpiomux_conf_tbl != NULL) {
 		pr_err("%s:%d mux install\n", __func__, __LINE__);
-		msm_gpiomux_install(
-			(struct msm_gpiomux_config *)
-			power_info->gpio_conf->cam_gpiomux_conf_tbl,
-			power_info->gpio_conf->cam_gpiomux_conf_tbl_size);
 	}
 
 	/* CCI Init */
