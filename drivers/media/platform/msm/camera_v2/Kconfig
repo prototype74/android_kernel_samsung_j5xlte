@@ -361,6 +361,12 @@ config MSM_GEMINI
 	---help---
 	  Enables support for the Gemini JPEG encoder engine for 8x60.
 
+config MSM_FD
+	 tristate "Qualcomm MSM FD face detection engine support"
+	 depends on MSMB_CAMERA
+	 ---help---
+	    Enables support for the MSM FD face detection engine.
+
 config SEC_CAMERA_TUNING
 	bool "Generic Tuning Concept"
 	---help---
