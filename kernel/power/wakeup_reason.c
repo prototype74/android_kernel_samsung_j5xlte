@@ -35,7 +35,7 @@ static char abort_reason[MAX_SUSPEND_ABORT_LEN];
 static struct kobject *wakeup_reason;
 static DEFINE_SPINLOCK(resume_reason_lock);
 
-static ssize_t reason_show(struct kobject *kobj, struct kobj_attribute *attr,
+static ssize_t last_resume_reason_show(struct kobject *kobj, struct kobj_attribute *attr,
 		char *buf)
 {
 	int irq_no, buf_offset = 0;
@@ -58,8 +58,7 @@ static ssize_t reason_show(struct kobject *kobj, struct kobj_attribute *attr,
 	return buf_offset;
 }
 
-static struct kobj_attribute resume_reason = __ATTR(last_resume_reason, 0444,
-		reason_show, NULL);
+static struct kobj_attribute resume_reason = __ATTR_RO(last_resume_reason);
 
 static struct attribute *attrs[] = {
 	&resume_reason.attr,
