@@ -57,11 +57,12 @@ static const struct platform_device_id msm_vfe_dev_id[] = {
 	{"msm_vfe32", (kernel_ulong_t) &vfe32_hw_info},
 	{}
 };
-
-#define MAX_OVERFLOW_COUNTERS  15
+#define MAX_OVERFLOW_COUNTERS  16
 #define OVERFLOW_LENGTH 512
 #define OVERFLOW_BUFFER_LENGTH 32
+
 static struct msm_isp_buf_mgr vfe_buf_mgr;
+struct msm_isp_statistics stats;
 static int msm_isp_enable_debugfs(struct msm_isp_statistics *stats);
 static char *stats_str[MAX_OVERFLOW_COUNTERS] = {
 	"imgmaster0_overflow_cnt",
@@ -79,8 +80,8 @@ static char *stats_str[MAX_OVERFLOW_COUNTERS] = {
 	"cs_overflow_cnt",
 	"ihist_overflow_cnt",
 	"skinbhist_overflow_cnt",
+	"bfscale_overflow_cnt",
 };
-
 static int vfe_debugfs_statistics_open(struct inode *inode, struct file *file)
 {
 	file->private_data = inode->i_private;
@@ -96,11 +97,10 @@ static ssize_t vfe_debugfs_statistics_read(struct file *t_file, char *t_char,
 	char buffer[OVERFLOW_BUFFER_LENGTH] = {0};
 	struct msm_isp_statistics  *stats = (struct msm_isp_statistics *)
 		t_file->private_data;
-	ptr = (int *)stats;
-
+	ptr = (int *)(stats);
 	for (i = 0; i < MAX_OVERFLOW_COUNTERS; i++) {
 		strlcat(name, stats_str[i], sizeof(name));
-		strlcat(name, "    ", sizeof(name));
+		strlcat(name, "     ", sizeof(name));
 		snprintf(buffer, sizeof(buffer), "%d", ptr[i]);
 		strlcat(name, buffer, sizeof(name));
 		strlcat(name, "\r\n", sizeof(name));

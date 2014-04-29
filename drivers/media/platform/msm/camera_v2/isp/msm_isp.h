@@ -478,6 +478,7 @@ struct msm_isp_statistics {
 	int32_t cs_overflow;
 	int32_t ihist_overflow;
 	int32_t skinbhist_overflow;
+	int32_t bfscale_overflow;
 };
 
 struct msm_vfe_hw_init_parms {
