@@ -1455,8 +1455,10 @@ static int msm_isp_start_axi_stream(struct vfe_device *vfe_dev,
 		vfe_dev->axi_data.
 			session_frame_src_mask[stream_info->session_id] |=
 			(1 << SRC_TO_INTF(stream_info->stream_src));
-		vfe_dev->axi_data.src_info[
-			SRC_TO_INTF(stream_info->stream_src)].frame_id = 0;
+		if (SRC_TO_INTF(stream_info->stream_src) != VFE_PIX_0) {
+			vfe_dev->axi_data.src_info[SRC_TO_INTF(
+				stream_info->stream_src)].frame_id = 0;
+		}
 	}
 	msm_isp_update_stream_bandwidth(vfe_dev);
 	vfe_dev->hw_info->vfe_ops.axi_ops.reload_wm(vfe_dev, wm_reload_mask);
