@@ -20,11 +20,7 @@
 DEFINE_MSM_MUTEX(msm_actuator_mutex);
 
 #undef CDBG
-#ifdef MSM_ACUTUATOR_DEBUG
-#define CDBG(fmt, args...) pr_err(fmt, ##args)
-#else
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
-#endif
 
 #define LENS_POSITION_CENTER_10BIT    500
 #define LENS_POSITION_BOTTOM_10BIT    10

@@ -44,13 +44,8 @@ static int table_size;
 #endif
 
 /* Logging macro */
-//#define MSM_SENSOR_DRIVER_DEBUG
 #undef CDBG
-#ifdef MSM_SENSOR_DRIVER_DEBUG
-#define CDBG(fmt, args...) pr_err(fmt, ##args)
-#else
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
-#endif
 
 #define SENSOR_MAX_MOUNTANGLE (360)
 

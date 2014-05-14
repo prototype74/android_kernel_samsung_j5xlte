@@ -24,11 +24,7 @@
 #define CDBG(fmt, args...) pr_err(fmt, ##args)
 
 #undef CDBG
-#ifdef CONFIG_MSMB_CAMERA_DEBUG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
-#else
-#define CDBG(fmt, args...) do { } while (0)
-#endif
 
 #ifdef CONFIG_MFD_RT5033_RESET_WA
 #ifdef CONFIG_CAM_USE_EXT_VANA_GPIO
@@ -486,7 +482,7 @@ void msm_camera_bus_scale_cfg(uint32_t bus_perf_client,
 	case S_DEFAULT:
 		break;
 	default:
-		pr_warning("%s: INVALID CASE\n", __func__);
+		pr_debug("%s: INVALID CASE\n", __func__);
 	}
 }
 

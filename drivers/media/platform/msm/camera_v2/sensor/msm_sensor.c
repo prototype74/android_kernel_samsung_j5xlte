@@ -25,13 +25,8 @@
 #ifdef DISABLE_AFC
 #include <linux/muic/muic_afc.h>
 #endif
-//#define CONFIG_MSMB_CAMERA_DEBUG
 #undef CDBG
-#ifdef CONFIG_MSMB_CAMERA_DEBUG
-#define CDBG(fmt, args...) pr_err(fmt, ##args)
-#else
-#define CDBG(fmt, args...) do { } while (0)
-#endif
+#define CDBG(fmt, args...) pr_debug(fmt, ##args)
 struct task_struct	*qdaemon_task;
 extern unsigned int system_rev;
 

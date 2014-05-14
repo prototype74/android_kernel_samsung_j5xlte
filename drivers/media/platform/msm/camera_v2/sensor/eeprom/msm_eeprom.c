@@ -20,11 +20,7 @@
 #include "msm_eeprom.h"
 
 #undef CDBG
-#ifdef MSM_EEPROM_DEBUG
-#define CDBG(fmt, args...) pr_err(fmt, ##args)
-#else
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
-#endif
 
 #if defined(CONFIG_SEC_XCOVER3_PROJECT)
 #define EEPROM_CAM_PIN_USE
