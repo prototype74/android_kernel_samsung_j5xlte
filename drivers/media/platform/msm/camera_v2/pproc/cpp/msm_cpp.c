@@ -52,8 +52,6 @@
 
 #define CPP_CMD_TIMEOUT_MS	300
 
-#define MSM_CPP_CORE_CLK_IDX	4
-
 #define MSM_CPP_NOMINAL_CLOCK	266670000
 #define MSM_CPP_TURBO_CLOCK	320000000
 
@@ -788,6 +786,7 @@ void msm_cpp_do_tasklet(unsigned long data)
 		}
 	}
 }
+
 static void cpp_get_clk_freq_tbl(struct clk *clk, struct cpp_hw_info *hw_info)
 {
 	uint32_t count;
@@ -813,6 +812,7 @@ static void cpp_get_clk_freq_tbl(struct clk *clk, struct cpp_hw_info *hw_info)
 static int cpp_init_hardware(struct cpp_device *cpp_dev)
 {
 	int rc = 0;
+	uint32_t msm_cpp_core_clk_idx;
 	uint32_t msm_micro_iface_idx;
 
 	if (cpp_dev->bus_master_flag)
@@ -940,7 +940,8 @@ static int cpp_init_hardware(struct cpp_device *cpp_dev)
 	pr_info("CPP HW Version: 0x%x\n", cpp_dev->hw_info.cpp_hw_version);
 	cpp_dev->hw_info.cpp_hw_caps =
 		msm_camera_io_r(cpp_dev->cpp_hw_base + 0x4);
-	cpp_get_clk_freq_tbl(cpp_dev->cpp_clk[MSM_CPP_CORE_CLK_IDX],
+	msm_cpp_core_clk_idx = get_clock_index("cpp_core_clk");
+	cpp_get_clk_freq_tbl(cpp_dev->cpp_clk[msm_cpp_core_clk_idx],
 		&cpp_dev->hw_info);
 	pr_debug("CPP HW Caps: 0x%x\n", cpp_dev->hw_info.cpp_hw_caps);
 	msm_camera_io_w(0x1, cpp_dev->vbif_base + 0x4);
