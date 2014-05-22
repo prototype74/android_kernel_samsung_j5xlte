@@ -19,7 +19,7 @@
 #include <media/msmb_ispif.h>
 #include "msm_sd.h"
 
-#define ISPIF_CLK_INFO_MAX 16
+#define ISPIF_CLK_INFO_MAX 24
 #define ISPIF_AHB_CLK_INFO 2
 
 struct ispif_irq_status {
