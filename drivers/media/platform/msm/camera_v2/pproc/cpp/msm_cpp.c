@@ -1672,7 +1672,7 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 			memcpy(u_stream_buff_info, ioctl_ptr->ioctl_ptr,
 					ioctl_ptr->len);
 		} else
-#else
+#endif
 		{
 			rc = (copy_from_user(u_stream_buff_info,
 					(void __user *)ioctl_ptr->ioctl_ptr,
@@ -1684,7 +1684,6 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 				return -EINVAL;
 			}
 		}
-#endif
 		if (u_stream_buff_info->num_buffs == 0) {
 			pr_err("%s:%d: Invalid number of buffers\n", __func__,
 				__LINE__);
