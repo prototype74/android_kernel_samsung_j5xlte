@@ -189,7 +189,6 @@ static irqreturn_t msm_csid_irq(int irq_num, void *data)
 {
 	uint32_t irq;
 	struct csid_device *csid_dev;
-	void __iomem *csidbase;
 
 	if (!data) {
 		pr_err("%s:%d data NULL\n", __func__, __LINE__);
@@ -200,7 +199,6 @@ static irqreturn_t msm_csid_irq(int irq_num, void *data)
 		pr_err("%s:%d csid_dev NULL\n", __func__, __LINE__);
 		return IRQ_HANDLED;
 	}
-	csidbase = csid_dev->base;
 	irq = msm_camera_io_r(csid_dev->base +
 		csid_dev->ctrl_reg->csid_reg.csid_irq_status_addr);
 	CDBG("%s CSID%d_IRQ_STATUS_ADDR = 0x%x\n",
