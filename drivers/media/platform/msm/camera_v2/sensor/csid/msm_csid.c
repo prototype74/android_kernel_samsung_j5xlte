@@ -40,8 +40,6 @@
 #define TRUE   1
 #define FALSE  0
 
-#define CSID_NUM_CLK_MAX  16
-
 extern int32_t msm_isp_camera_boost(bool flag);
 
 #undef CDBG
