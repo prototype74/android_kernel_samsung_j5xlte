@@ -32,6 +32,8 @@
 #define CCI_NUM_CLK_MAX 16
 
 
+#define CCI_NUM_CLK_MAX	16
+
 enum cci_i2c_queue_t {
 	QUEUE_0,
 	QUEUE_1,
