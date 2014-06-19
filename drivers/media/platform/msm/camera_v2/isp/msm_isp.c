@@ -256,13 +256,14 @@ static int vfe_probe(struct platform_device *pdev)
 	vfe_dev = kzalloc(sizeof(struct vfe_device), GFP_KERNEL);
 	if (!vfe_dev) {
 		pr_err("%s: no enough memory\n", __func__);
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto end;
 	}
 	vfe_dev->stats = kzalloc(sizeof(struct msm_isp_statistics), GFP_KERNEL);
 	if (!vfe_dev->stats) {
 		pr_err("%s: no enough memory\n", __func__);
-		kfree(vfe_dev);
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto probe_fail1;
 	}
 	if (pdev->dev.of_node) {
 		of_property_read_u32((&pdev->dev)->of_node,
@@ -270,8 +271,8 @@ static int vfe_probe(struct platform_device *pdev)
 		match_dev = of_match_device(msm_vfe_dt_match, &pdev->dev);
 		if (!match_dev) {
 			pr_err("%s: No vfe hardware info\n", __func__);
-			kfree(vfe_dev);
-			return -EINVAL;
+			rc = -EINVAL;
+			goto probe_fail2;
 		}
 		vfe_dev->hw_info =
 			(struct msm_vfe_hardware_info *) match_dev->data;
@@ -282,8 +283,8 @@ static int vfe_probe(struct platform_device *pdev)
 
 	if (!vfe_dev->hw_info) {
 		pr_err("%s: No vfe hardware info\n", __func__);
-		kfree(vfe_dev);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto probe_fail2;
 	}
 	ISP_DBG("%s: device id = %d\n", __func__, pdev->id);
 
@@ -291,8 +292,8 @@ static int vfe_probe(struct platform_device *pdev)
 	rc = vfe_dev->hw_info->vfe_ops.core_ops.get_platform_data(vfe_dev);
 	if (rc < 0) {
 		pr_err("%s: failed to get platform resources\n", __func__);
-		kfree(vfe_dev);
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto probe_fail2;
 	}
 
 	INIT_LIST_HEAD(&vfe_dev->tasklet_q);
@@ -324,8 +325,7 @@ static int vfe_probe(struct platform_device *pdev)
 	rc = msm_sd_register(&vfe_dev->subdev);
 	if (rc != 0) {
 		pr_err("%s: msm_sd_register error = %d\n", __func__, rc);
-		kfree(vfe_dev);
-		goto end;
+		goto probe_fail2;
 	}
 
 	msm_isp_v4l2_subdev_fops.owner = v4l2_subdev_fops.owner;
@@ -342,13 +342,19 @@ static int vfe_probe(struct platform_device *pdev)
 		&vfe_vb2_ops, &vfe_layout);
 	if (rc < 0) {
 		pr_err("%s: Unable to create buffer manager\n", __func__);
-		kfree(vfe_dev);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto probe_fail2;
 	}
 	msm_isp_enable_debugfs(vfe_dev->stats);
 	vfe_dev->buf_mgr->ops->register_ctx(vfe_dev->buf_mgr,
 		&vfe_dev->iommu_ctx[0], vfe_dev->hw_info->num_iommu_ctx);
 	vfe_dev->vfe_open_cnt = 0;
+	return rc;
+
+probe_fail2:
+	kfree(vfe_dev->stats);
+probe_fail1:
+	kfree(vfe_dev);
 end:
 	return rc;
 }

@@ -135,7 +135,7 @@ vfe_remap_failed:
 clk_enable_failed:
 	if (vfe_dev->fs_vfe)
 		regulator_disable(vfe_dev->fs_vfe);
-		kfree(vfe_dev->vfe_clk);
+	kfree(vfe_dev->vfe_clk);
 fs_failed:
 	msm_isp_deinit_bandwidth_mgr(ISP_VFE0 + vfe_dev->pdev->id);
 bus_scale_register_failed:

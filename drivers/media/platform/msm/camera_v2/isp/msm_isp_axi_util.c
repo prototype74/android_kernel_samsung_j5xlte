@@ -80,8 +80,14 @@ int msm_isp_validate_axi_request(struct msm_vfe_axi_shared_data *axi_data,
 			HANDLE_TO_IDX(stream_cfg_cmd->axi_stream_handle)];
 	} else {
 		pr_err("%s: Invalid axi_stream_handle\n", __func__);
-                return rc;
+		return rc;
 	}
+
+	if (!stream_info) {
+		pr_err("%s: Stream info is NULL\n", __func__);
+		return -EINVAL;
+	}
+
 	switch (stream_cfg_cmd->output_format) {
 	case V4L2_PIX_FMT_YUYV:
 	case V4L2_PIX_FMT_YVYU:
@@ -548,7 +554,11 @@ void msm_isp_calculate_framedrop(
 		stream_info = &axi_data->stream_info[
 			HANDLE_TO_IDX(stream_cfg_cmd->axi_stream_handle)];
 	} else {
-		pr_err("%s: Invalid stream handle",__func__);
+		pr_err("%s: Invalid stream handle", __func__);
+		return;
+	}
+	if (!stream_info) {
+		pr_err("%s: Stream info is NULL\n", __func__);
 		return;
 	}
 
@@ -601,7 +611,11 @@ void msm_isp_calculate_bandwidth(
 			stream_info->format_factor / ISP_Q2;
 	} else {
 		int rdi = SRC_TO_INTF(stream_info->stream_src);
-		stream_info->bandwidth = axi_data->src_info[rdi].pixel_clock;
+		if (rdi < VFE_SRC_MAX)
+			stream_info->bandwidth =
+				axi_data->src_info[rdi].pixel_clock;
+		else
+			pr_err("%s: Invalid rdi interface\n", __func__);
 	}
 }
 
@@ -932,8 +946,9 @@ static int msm_isp_cfg_ping_pong_address(struct vfe_device *vfe_dev,
 	uint32_t pingpong_bit = 0;
 	uint32_t bufq_handle = 0;
 	uint32_t stream_idx = HANDLE_TO_IDX(stream_info->stream_handle);
+
 	if (stream_idx >= MAX_NUM_STREAM) {
-		pr_err("%s: Invalid stream_idx",__func__);
+		pr_err("%s: Invalid stream_idx", __func__);
 		return rc;
 	}
 	if (stream_info->bufq_scratch_handle && !stream_info->request_frm_num)
