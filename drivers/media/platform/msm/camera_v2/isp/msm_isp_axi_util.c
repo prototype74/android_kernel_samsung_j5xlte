@@ -1476,7 +1476,8 @@ static int msm_isp_start_axi_stream(struct vfe_device *vfe_dev,
 		vfe_dev->axi_data.
 			session_frame_src_mask[stream_info->session_id] |=
 			(1 << SRC_TO_INTF(stream_info->stream_src));
-		if (SRC_TO_INTF(stream_info->stream_src) != VFE_PIX_0) {
+		if (SRC_TO_INTF(stream_info->stream_src) != VFE_PIX_0 &&
+			stream_info->stream_src < VFE_AXI_SRC_MAX) {
 			vfe_dev->axi_data.src_info[SRC_TO_INTF(
 				stream_info->stream_src)].frame_id = 0;
 		}
