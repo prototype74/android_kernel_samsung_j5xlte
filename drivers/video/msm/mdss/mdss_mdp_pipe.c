@@ -849,6 +849,7 @@ static void mdss_mdp_init_pipe_params(struct mdss_mdp_pipe *pipe)
 {
 	kref_init(&pipe->kref);
 	init_waitqueue_head(&pipe->free_waitq);
+	INIT_LIST_HEAD(&pipe->buf_queue);
 }
 
 static struct mdss_mdp_pipe *mdss_mdp_pipe_init(struct mdss_mdp_mixer *mixer,
@@ -1600,8 +1601,6 @@ static int mdss_mdp_src_addr_setup(struct mdss_mdp_pipe *pipe,
 	int ret = 0;
 
 	pr_debug("pnum=%d\n", pipe->num);
-
-	data.bwc_enabled = pipe->bwc_mode;
 
 	ret = mdss_mdp_data_check(&data, &pipe->src_planes);
 	if (ret)
