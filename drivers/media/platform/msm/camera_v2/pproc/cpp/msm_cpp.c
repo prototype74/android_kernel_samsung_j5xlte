@@ -2242,6 +2242,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 	case VIDIOC_MSM_CPP_FLUSH_QUEUE32:
 		cmd = VIDIOC_MSM_CPP_FLUSH_QUEUE;
 		break;
+	case VIDIOC_MSM_CPP_APPEND_STREAM_BUFF_INFO32:
 	case VIDIOC_MSM_CPP_ENQUEUE_STREAM_BUFF_INFO32:
 	{
 		struct msm_cpp_stream_buff_info32_t *u32_cpp_buff_info =
@@ -2262,7 +2263,10 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 				kp_ioctl.len =
 				  sizeof(struct msm_cpp_stream_buff_info_t);
 		}
-		cmd = VIDIOC_MSM_CPP_ENQUEUE_STREAM_BUFF_INFO;
+		if (cmd == VIDIOC_MSM_CPP_ENQUEUE_STREAM_BUFF_INFO32)
+			cmd = VIDIOC_MSM_CPP_ENQUEUE_STREAM_BUFF_INFO;
+		else
+			cmd = VIDIOC_MSM_CPP_APPEND_STREAM_BUFF_INFO;
 		break;
 	}
 	case VIDIOC_MSM_CPP_DEQUEUE_STREAM_BUFF_INFO32:
@@ -2328,6 +2332,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 	case VIDIOC_MSM_CPP_GET_HW_INFO:
 	case VIDIOC_MSM_CPP_LOAD_FIRMWARE:
 	case VIDIOC_MSM_CPP_FLUSH_QUEUE:
+	case VIDIOC_MSM_CPP_APPEND_STREAM_BUFF_INFO:
 	case VIDIOC_MSM_CPP_ENQUEUE_STREAM_BUFF_INFO:
 	case VIDIOC_MSM_CPP_DEQUEUE_STREAM_BUFF_INFO:
 	case VIDIOC_MSM_CPP_SET_CLOCK:
