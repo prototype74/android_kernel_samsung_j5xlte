@@ -457,9 +457,11 @@ struct msm_sensor_power_setting {
 };
 
 struct msm_sensor_power_setting_array {
-	struct msm_sensor_power_setting power_setting[MAX_POWER_CONFIG];
+	struct msm_sensor_power_setting  power_setting_a[MAX_POWER_CONFIG];
+	struct msm_sensor_power_setting *power_setting;
 	uint16_t size;
-	struct msm_sensor_power_setting power_down_setting[MAX_POWER_CONFIG];
+	struct msm_sensor_power_setting  power_down_setting_a[MAX_POWER_CONFIG];
+	struct msm_sensor_power_setting *power_down_setting;
 	uint16_t size_down;
 };
 
@@ -561,7 +563,8 @@ struct msm_camera_csid_vc_cfg {
 
 struct msm_camera_csid_lut_params {
 	uint8_t num_cid;
-	struct msm_camera_csid_vc_cfg vc_cfg[MAX_CID];
+	struct msm_camera_csid_vc_cfg vc_cfg_a[MAX_CID];
+	struct msm_camera_csid_vc_cfg *vc_cfg[MAX_CID];
 };
 
 struct msm_camera_csid_params {
@@ -579,9 +582,22 @@ struct msm_camera_csiphy_params {
 	uint8_t csid_core;
 };
 
+struct msm_camera_csi2_params {
+	struct msm_camera_csid_params csid_params;
+	struct msm_camera_csiphy_params csiphy_params;
+};
+
 struct msm_camera_csi_lane_params {
 	uint16_t csi_lane_assign;
 	uint16_t csi_lane_mask;
+};
+
+struct csi_lane_params_t {
+	uint16_t csi_lane_assign;
+	uint8_t csi_lane_mask;
+	uint8_t csi_if;
+	int8_t csid_core[2];
+	uint8_t csi_phy_sel;
 };
 
 struct camera_vreg_t {
@@ -622,6 +638,7 @@ struct msm_camera_sensor_slave_info {
 	enum msm_camera_i2c_data_type data_type;
 	struct msm_sensor_id_info_t sensor_id_info;
 	struct msm_sensor_power_setting_array power_setting_array;
+	uint8_t  is_init_params_valid;
 	struct msm_sensor_init_params sensor_init_params;
 	uint8_t is_probe_succeed;
 	char subdev_name[32];
@@ -739,9 +756,12 @@ struct msm_sensor_power_setting32 {
 };
 
 struct msm_sensor_power_setting_array32 {
-	struct msm_sensor_power_setting32 power_setting[MAX_POWER_CONFIG];
+	struct msm_sensor_power_setting32 power_setting_a[MAX_POWER_CONFIG];
+	compat_uptr_t power_setting;
 	uint16_t size;
-	struct msm_sensor_power_setting32 power_down_setting[MAX_POWER_CONFIG];
+	struct msm_sensor_power_setting32
+		power_down_setting_a[MAX_POWER_CONFIG];
+	compat_uptr_t power_down_setting;
 	uint16_t size_down;
 };
 
@@ -755,8 +775,27 @@ struct msm_camera_sensor_slave_info32 {
 	enum msm_camera_i2c_reg_addr_type addr_type;
 	struct msm_sensor_id_info_t sensor_id_info;
 	struct msm_sensor_power_setting_array32 power_setting_array;
+	uint8_t  is_init_params_valid;
 	struct msm_sensor_init_params sensor_init_params;
 	uint8_t is_flash_supported;
+};
+
+struct msm_camera_csid_lut_params32 {
+	uint8_t num_cid;
+	struct msm_camera_csid_vc_cfg vc_cfg_a[MAX_CID];
+	compat_uptr_t vc_cfg[MAX_CID];
+};
+
+struct msm_camera_csid_params32 {
+	uint8_t lane_cnt;
+	uint16_t lane_assign;
+	uint8_t phy_sel;
+	struct msm_camera_csid_lut_params32 lut_params;
+};
+
+struct msm_camera_csi2_params32 {
+	struct msm_camera_csid_params32 csid_params;
+	struct msm_camera_csiphy_params csiphy_params;
 };
 
 struct csid_cfg_data32 {
