@@ -1388,6 +1388,11 @@ static inline void msm_isp_process_overflow_irq(
 #if defined(CONFIG_SR200PC20) && defined(CONFIG_SR544)
 	uint8_t cur_stream_cnt = 0;
 #endif
+
+	/* if there are no active streams - do not start recovery */
+	if (!vfe_dev->axi_data.num_active_stream)
+		return;
+
 	/*Mask out all other irqs if recovery is started*/
 	if (atomic_read(&vfe_dev->error_info.overflow_state) !=
 		NO_OVERFLOW) {
