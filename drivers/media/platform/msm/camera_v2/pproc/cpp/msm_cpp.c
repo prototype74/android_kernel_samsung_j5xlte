@@ -1670,6 +1670,7 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 	case VIDIOC_MSM_CPP_ENQUEUE_STREAM_BUFF_INFO: {
 		struct msm_cpp_stream_buff_info_t *u_stream_buff_info;
 		struct msm_cpp_stream_buff_info_t k_stream_buff_info;
+		struct msm_cpp_buff_queue_info_t *buff_queue_info;
 		CPP_DBG("VIDIOC_MSM_CPP_ENQUEUE_STREAM_BUFF_INFO\n");
 		if (sizeof(struct msm_cpp_stream_buff_info_t) !=
 			ioctl_ptr->len) {
@@ -1743,7 +1744,11 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 			return -EINVAL;
 		}
 
-		if (cmd != VIDIOC_MSM_CPP_APPEND_STREAM_BUFF_INFO) {
+		buff_queue_info = msm_cpp_get_buff_queue_entry(cpp_dev,
+				(k_stream_buff_info.identity >> 16) & 0xFFFF,
+				k_stream_buff_info.identity & 0xFFFF);
+
+		if (buff_queue_info == NULL) {
 			rc = msm_cpp_add_buff_queue_entry(cpp_dev,
 				((k_stream_buff_info.identity >> 16) & 0xFFFF),
 				(k_stream_buff_info.identity & 0xFFFF));
@@ -1756,7 +1761,7 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 		kfree(k_stream_buff_info.buffer_info);
 		kfree(u_stream_buff_info);
 
-		if (cmd != VIDIOC_MSM_CPP_APPEND_STREAM_BUFF_INFO) {
+		if (buff_queue_info == NULL) {
 			cpp_dev->stream_cnt++;
 			pr_err("stream_cnt:%d\n", cpp_dev->stream_cnt);
 		}
