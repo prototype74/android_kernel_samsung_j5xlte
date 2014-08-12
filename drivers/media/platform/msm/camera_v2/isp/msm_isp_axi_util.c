@@ -1636,9 +1636,12 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 			enum msm_isp_camif_update_state camif_update)
 {
 	int i, rc = 0;
-	uint8_t wait_for_complete = 0, cur_stream_cnt = 0;
+	uint8_t wait_for_complete_for_this_stream = 0, cur_stream_cnt = 0;
+	uint8_t wait_for_complete = 0;
 	struct msm_vfe_axi_stream *stream_info = NULL;
 	struct msm_vfe_axi_shared_data *axi_data = &vfe_dev->axi_data;
+	int    ext_read =
+		axi_data->src_info[VFE_PIX_0].input_mux == EXTERNAL_READ;
 	uint16_t session_mask = 0;
 	uint32_t session_id = 0;
 	uint8_t skip_session_mask_update = 0;
@@ -1653,15 +1656,16 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 		}
 		stream_info = &axi_data->stream_info[
 			HANDLE_TO_IDX(stream_cfg_cmd->stream_handle[i])];
-
+		wait_for_complete_for_this_stream = 0;
 		stream_info->state = STOP_PENDING;
 		if (stream_info->stream_src == CAMIF_RAW ||
 			stream_info->stream_src == IDEAL_RAW) {
 			/* We dont get reg update IRQ for raw snapshot
 			 * so frame skip cant be ocnfigured
 			*/
-			if (camif_update != DISABLE_CAMIF_IMMEDIATELY)
-				wait_for_complete = 1;
+			if ((camif_update != DISABLE_CAMIF_IMMEDIATELY) &&
+					(!ext_read))
+				wait_for_complete_for_this_stream = 1;
 		} else if (stream_info->stream_type == BURST_STREAM &&
 				stream_info->runtime_num_burst_capture == 0) {
 			/* Configure AXI writemasters to stop immediately
@@ -1671,14 +1675,18 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 			if (stream_info->stream_src == RDI_INTF_0 ||
 				stream_info->stream_src == RDI_INTF_1 ||
 				stream_info->stream_src == RDI_INTF_2)
-				wait_for_complete = 1;
-		} else if (camif_update != DISABLE_CAMIF_IMMEDIATELY)
-				wait_for_complete = 1;
-		if (wait_for_complete == 0) {
+				wait_for_complete_for_this_stream = 1;
+		} else {
+			if  ((camif_update != DISABLE_CAMIF_IMMEDIATELY) &&
+					(!ext_read))
+				wait_for_complete_for_this_stream = 1;
+		}
+		if (!wait_for_complete_for_this_stream) {
 			msm_isp_axi_stream_enable_cfg(vfe_dev, stream_info);
 			stream_info->state = INACTIVE;
 			vfe_dev->hw_info->vfe_ops.core_ops.reg_update(vfe_dev, 0xF);
 		}
+		wait_for_complete |= wait_for_complete_for_this_stream;
 		session_id = stream_info->session_id;
 		if (!session_mask)
 			session_mask = vfe_dev->axi_data.
@@ -1700,7 +1708,6 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 			session_mask &=
 				~(1 << SRC_TO_INTF(stream_info->stream_src));
 		}
-
 	}
 	if (wait_for_complete) {
 		vfe_dev->hw_info->vfe_ops.core_ops.reg_update(vfe_dev, 0xF);
@@ -1735,10 +1742,13 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 		vfe_dev->hw_info->vfe_ops.core_ops.
 			update_camif_state(vfe_dev, DISABLE_CAMIF);
 		vfe_dev->axi_data.camif_state = CAMIF_DISABLE;
-	}
-	else if (camif_update == DISABLE_CAMIF_IMMEDIATELY) {
-		vfe_dev->hw_info->vfe_ops.core_ops.
-			update_camif_state(vfe_dev, DISABLE_CAMIF_IMMEDIATELY);
+	} else if ((camif_update == DISABLE_CAMIF_IMMEDIATELY) ||
+					(ext_read)) {
+		/*during stop immediately, stop output then stop input*/
+		if (!ext_read)
+			vfe_dev->hw_info->vfe_ops.core_ops.
+				update_camif_state(vfe_dev,
+						DISABLE_CAMIF_IMMEDIATELY);
 		vfe_dev->axi_data.camif_state = CAMIF_STOPPED;
 	}
 	msm_isp_update_camif_output_count(vfe_dev, stream_cfg_cmd);
