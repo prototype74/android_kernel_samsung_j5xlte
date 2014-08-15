@@ -1913,6 +1913,7 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 
 			clk_set_rate(cpp_dev->cpp_clk[MSM_CPP_CORE_CLK_IDX],
 				clock_rate);
+			msm_isp_util_update_clk_rate(clock_rate);
 		}
 		break;
 	}
