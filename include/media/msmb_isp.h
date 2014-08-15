@@ -219,7 +219,7 @@ struct msm_vfe_axi_halt_cmd {
 
 struct msm_vfe_axi_reset_cmd {
 	uint32_t blocking; //Boolean whether stop camif is to be done
-	unsigned long frame_id;
+	uint32_t frame_id;
 };
 
 struct msm_vfe_axi_restart_cmd {
