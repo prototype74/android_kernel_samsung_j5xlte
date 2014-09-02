@@ -844,6 +844,7 @@ static int32_t msm_cci_release(struct v4l2_subdev *sd)
 	if (!IS_ERR_OR_NULL(cci_dev->reg_ptr)) {
 		regulator_disable(cci_dev->reg_ptr);
 		regulator_put(cci_dev->reg_ptr);
+		cci_dev->reg_ptr = NULL;
 	}
 	if (cci_dev->cci_pinctrl_status) {
 		rc = pinctrl_select_state(cci_dev->cci_pinctrl.pinctrl,
@@ -1275,6 +1276,7 @@ static int msm_cci_probe(struct platform_device *pdev)
 		of_property_read_u32((&pdev->dev)->of_node,
 			"cell-index", &pdev->id);
 
+	new_cci_dev->reg_ptr = NULL;
 	rc = msm_cci_get_clk_info(new_cci_dev, pdev);
 	if (rc < 0) {
 		pr_err("%s: msm_cci_get_clk_info() failed", __func__);
