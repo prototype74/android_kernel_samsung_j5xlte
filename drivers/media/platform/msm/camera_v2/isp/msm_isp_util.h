@@ -71,5 +71,6 @@ int msm_isp_close_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh);
 long msm_isp_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg);
 int msm_isp_get_clk_info(struct vfe_device *vfe_dev,
 	struct platform_device *pdev, struct msm_cam_clk_info *vfe_clk_info);
+void msm_isp_print_fourcc_error(const char *origin, uint32_t fourcc_format);
 
 #endif /* __MSM_ISP_UTIL_H__ */
