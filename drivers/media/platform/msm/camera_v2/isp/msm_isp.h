@@ -342,7 +342,8 @@ struct msm_vfe_axi_stream {
 	uint32_t runtime_init_frame_drop;
 	uint32_t runtime_burst_frame_count;/*number of sof before burst stop*/
 	uint32_t runtime_num_burst_capture;
-	uint8_t runtime_framedrop_update;
+	uint8_t  runtime_framedrop_update;
+	uint8_t  runtime_framedrop_update_burst;
 	uint32_t runtime_output_format;
 	enum msm_vfe_frame_skip_pattern frame_skip_pattern;
 
