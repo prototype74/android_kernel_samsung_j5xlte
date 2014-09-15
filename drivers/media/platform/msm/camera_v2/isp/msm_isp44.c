@@ -561,7 +561,7 @@ static long msm_vfe44_reset_hardware(struct vfe_device *vfe_dev,
 	init_completion(&vfe_dev->reset_complete);
 	if (blocking) {
 		msm_camera_io_w_mb(rst_val, vfe_dev->vfe_base + 0xC);
-		rc = wait_for_completion_interruptible_timeout(
+		rc = wait_for_completion_timeout(
 			&vfe_dev->reset_complete, msecs_to_jiffies(50));
 	} else {
 		msm_camera_io_w_mb(0x1EF, vfe_dev->vfe_base + 0xC);
@@ -1089,7 +1089,7 @@ static long msm_vfe44_axi_halt(struct vfe_device *vfe_dev, uint32_t blocking)
 	msm_camera_io_w_mb(halt_mask, vfe_dev->vfe_base + 0x2C);
 	init_completion(&vfe_dev->halt_complete);
 	msm_camera_io_w_mb(0x1, vfe_dev->vfe_base + 0x2C0);
-	return wait_for_completion_interruptible_timeout(
+	return wait_for_completion_timeout(
 		&vfe_dev->halt_complete, msecs_to_jiffies(500));
 }
 
