@@ -826,7 +826,6 @@ static void msm_vfe44_update_camif_state(struct vfe_device *vfe_dev,
 	if (update_state == NO_UPDATE)
 		return;
 
-	val = msm_camera_io_r(vfe_dev->vfe_base + 0x2F8);
 	if (update_state == ENABLE_CAMIF) {
 		val = msm_camera_io_r(vfe_dev->vfe_base + 0x28);
 		val |= 0xF5;
