@@ -419,7 +419,7 @@ static void msm_vfe40_init_hardware_reg(struct vfe_device *vfe_dev)
 	msm_camera_io_w(0x00000001, vfe_dev->vfe_base + 0x9C);
 	msm_camera_io_w(0x00000001, vfe_dev->vfe_base + 0xC0);
 	msm_camera_io_w(0x00000001, vfe_dev->vfe_base + 0xE4);
-	msm_camera_io_w(0xE00000F3, vfe_dev->vfe_base + 0x28);
+	msm_camera_io_w(0xE00000F1, vfe_dev->vfe_base + 0x28);
 	msm_camera_io_w_mb(0xFEFFFFFF, vfe_dev->vfe_base + 0x2C);
 	msm_camera_io_w(0xFFFFFFFF, vfe_dev->vfe_base + 0x30);
 	msm_camera_io_w_mb(0xFEFFFFFF, vfe_dev->vfe_base + 0x34);
