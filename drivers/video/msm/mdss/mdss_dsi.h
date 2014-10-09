@@ -427,8 +427,9 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_panel_cmds status_cmds;
 	u32 status_cmds_rlen;
 	struct mdss_dsi_panel_cmd_list cmd_list;
-	u32 status_value;
+	u32 *status_value;
 	u32 status_error_count;
+	u32 max_status_error_count;
 
 	struct dsi_panel_cmds video2cmd;
 	struct dsi_panel_cmds cmd2video;
@@ -679,6 +680,12 @@ static inline bool mdss_dsi_ulps_feature_enabled(
 	return pdata->panel_info.ulps_feature_enabled;
 }
 
+static inline bool mdss_dsi_cmp_panel_reg(struct dsi_buf status_buf,
+	u32 *status_val, int i)
+{
+	return status_buf.data[i] == status_val[i];
+}
+
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 int mdss_samsung_parse_dcs_cmds(struct device_node *np,
 		struct dsi_panel_cmds *pcmds, char *cmd_key, char *link_key);
@@ -688,4 +695,5 @@ void mdss_samsung_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 		struct dsi_panel_cmds *pcmds);
 struct mdss_dsi_ctrl_pdata **mdss_dsi_get_ctrl(void);
 #endif
+
 #endif /* MDSS_DSI_H */
