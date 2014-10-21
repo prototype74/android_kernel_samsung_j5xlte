@@ -1009,6 +1009,8 @@ int mdss_mdp_cmd_restore(struct mdss_mdp_ctl *ctl)
 int mdss_mdp_cmd_intfs_stop(struct mdss_mdp_ctl *ctl, int session,
 	int panel_power_state)
 {
+	struct mdss_mdp_ctl *sctl = NULL;
+	struct mdss_mdp_cmd_ctx *sctx = NULL;
 	struct mdss_mdp_cmd_ctx *ctx;
 	unsigned long flags;
 	int need_wait = 0;
@@ -1024,6 +1026,10 @@ int mdss_mdp_cmd_intfs_stop(struct mdss_mdp_ctl *ctl, int session,
 		if (IS_ERR_VALUE(ret))
 			return ret;
 	}
+
+	sctl = mdss_mdp_get_split_ctl(ctl);
+	if (sctl)
+		sctx = (struct mdss_mdp_cmd_ctx *) sctl->priv_data;
 
 	ctx = &mdss_mdp_cmd_ctx_list[session];
 	if (!ctx->ref_cnt) {
@@ -1042,6 +1048,8 @@ int mdss_mdp_cmd_intfs_stop(struct mdss_mdp_ctl *ctl, int session,
 		 * next vsync if there has no kickoff pending
 		 */
 		ctx->rdptr_enabled = 1;
+		if (sctx)
+			sctx->rdptr_enabled = 1;
 	}
 	spin_unlock_irqrestore(&ctx->clk_lock, flags);
 
