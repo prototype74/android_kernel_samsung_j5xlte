@@ -66,6 +66,16 @@
 		} \
 	} while (0)
 
+#define UPDATE_THRESHOLD_SET(_val, _trip) do {		\
+	if (_trip == THERMAL_TRIP_CONFIGURABLE_HI)	\
+		_val |= 1;				\
+	else if (_trip == THERMAL_TRIP_CONFIGURABLE_LOW)\
+		_val |= 2;				\
+} while (0)
+
+#define IS_HI_THRESHOLD_SET(_val) (_val & 1)
+#define IS_LOW_THRESHOLD_SET(_val) (_val & 2)
+
 static struct msm_thermal_data msm_thermal_info;
 static struct delayed_work check_temp_work;
 static bool core_control_enabled;
@@ -1946,7 +1956,7 @@ int sensor_mgr_set_threshold(uint32_t zone_id,
 			zone_id, ret);
 		goto set_threshold_exit;
 	}
-
+	pr_debug("Sensor:[%d] temp:[%ld]\n", zone_id, temp);
 	while (i < MAX_THRESHOLD) {
 		switch (threshold[i].trip) {
 		case THERMAL_TRIP_CONFIGURABLE_HI:
@@ -1955,6 +1965,8 @@ int sensor_mgr_set_threshold(uint32_t zone_id,
 					&threshold[i]);
 				if (ret)
 					goto set_threshold_exit;
+				UPDATE_THRESHOLD_SET(ret,
+					THERMAL_TRIP_CONFIGURABLE_HI);
 			}
 			break;
 		case THERMAL_TRIP_CONFIGURABLE_LOW:
@@ -1963,6 +1975,8 @@ int sensor_mgr_set_threshold(uint32_t zone_id,
 					&threshold[i]);
 				if (ret)
 					goto set_threshold_exit;
+				UPDATE_THRESHOLD_SET(ret,
+					THERMAL_TRIP_CONFIGURABLE_LOW);
 			}
 			break;
 		default:
@@ -2313,9 +2327,13 @@ static __ref int do_hotplug(void *data)
 		for_each_possible_cpu(cpu) {
 			if (hotplug_enabled &&
 				cpus[cpu].hotplug_thresh_clear) {
+				ret =
 				sensor_mgr_set_threshold(cpus[cpu].sensor_id,
 				&cpus[cpu].threshold[HOTPLUG_THRESHOLD_HIGH]);
 
+				if (cpus[cpu].offline
+					&& !IS_LOW_THRESHOLD_SET(ret))
+					cpus[cpu].offline = 0;
 				cpus[cpu].hotplug_thresh_clear = false;
 			}
 			if (cpus[cpu].offline || cpus[cpu].user_offline)
@@ -2963,9 +2981,15 @@ reset_threshold:
 			}
 			if (freq_mitigation_enabled &&
 				cpus[cpu].freq_thresh_clear) {
+				ret =
 				sensor_mgr_set_threshold(cpus[cpu].sensor_id,
 				&cpus[cpu].threshold[FREQ_THRESHOLD_HIGH]);
 
+				if (cpus[cpu].max_freq
+					&& !IS_LOW_THRESHOLD_SET(ret)) {
+					cpus[cpu].max_freq = false;
+					complete(&freq_mitigation_complete);
+				}
 				cpus[cpu].freq_thresh_clear = false;
 			}
 		}
@@ -3290,7 +3314,7 @@ int therm_set_threshold(struct threshold_info *thresh_inp)
 		thresh_ptr->trip_triggered = -1;
 		err = sensor_mgr_set_threshold(thresh_ptr->sensor_id,
 			thresh_ptr->threshold);
-		if (err) {
+		if (err < 0) {
 			ret = err;
 			err = 0;
 		}
