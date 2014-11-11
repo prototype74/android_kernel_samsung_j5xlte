@@ -3432,6 +3432,7 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 	int ret = 0;
 	bool is_bw_released;
 	int split_enable;
+	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
 
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 	struct mdss_overlay_private *mdp5_data = NULL;
@@ -3568,6 +3569,10 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 	if (commit_cb)
 		commit_cb->commit_cb_fnc(MDP_COMMIT_STAGE_READY_FOR_KICKOFF,
 			commit_cb->data);
+
+	if (mdss_has_quirk(mdata, MDSS_QUIRK_BWCPANIC) &&
+	    !bitmap_empty(mdata->bwc_enable_map, MAX_DRV_SUP_PIPES))
+		mdss_mdp_bwcpanic_ctrl(mdata, true);
 
 	ATRACE_BEGIN("flush_kickoff");
 	mdss_mdp_ctl_write(ctl, MDSS_MDP_REG_CTL_FLUSH, ctl->flush_bits);
