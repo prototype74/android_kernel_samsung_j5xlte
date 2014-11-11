@@ -754,8 +754,8 @@ static void mdss_dsi_ctl_phy_reset(struct mdss_dsi_ctrl_pdata *ctrl, u32 event)
 			MDSS_XLOG(ctrl0->ndx, ln0, 0x1f1f);
 			MDSS_XLOG(ctrl1->ndx, ln1, 0x1f1f);
 			pr_err("Clock lane still in stop state");
-			MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0", "dsi1",
-						"panic");
+			MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0_ctrl", "dsi0_phy",
+				"dsi1_ctrl", "dsi1_phy", "panic");
 		}
 		pr_debug("%s: lane ctrl, ctrl0 = 0x%x, ctrl1 = 0x%x\n",
 			 __func__, ln0, ln1);
@@ -825,8 +825,8 @@ static void mdss_dsi_ctl_phy_reset(struct mdss_dsi_ctrl_pdata *ctrl, u32 event)
 		if (i == loop) {
 			MDSS_XLOG(ctrl->ndx, ln0, 0x1f1f);
 			pr_err("Clock lane still in stop state");
-			MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0", "dsi1",
-						"panic");
+			MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0_ctrl", "dsi0_phy",
+				"dsi1_ctrl", "dsi1_phy", "panic");
 		}
 		pr_debug("%s: lane status = 0x%x\n",
 			 __func__, ln0);
@@ -2390,9 +2390,8 @@ static int dsi_event_thread(void *data)
 				mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 0);
 			}
 			mutex_unlock(&ctrl->mutex);
-
-			MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0", "dsi1",
-						"edp", "hdmi", "panic");
+			MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0_ctrl", "dsi0_phy",
+				"dsi1_ctrl", "dsi1_phy", "panic");
 		}
 
 		if (todo & DSI_EV_DSI_FIFO_EMPTY)
