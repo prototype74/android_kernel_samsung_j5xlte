@@ -497,6 +497,13 @@ void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 		vfe_dev->axi_data.current_frame_src_mask[session_id] = 0;
 		switch (event_type) {
 		case ISP_EVENT_SOF:
+			if (vfe_dev->isp_sof_debug < 5)
+				pr_err("%s: frame id: %u\n", __func__,
+					vfe_dev->axi_data.frame_id[session_id]);
+			else
+				ISP_DBG("%s: frame id: %u\n", __func__,
+					vfe_dev->axi_data.frame_id[session_id]);
+			vfe_dev->isp_sof_debug++;
 			vfe_dev->axi_data.frame_id[session_id]++;
 			if (vfe_dev->axi_data.frame_id[session_id] == 0)
 				vfe_dev->axi_data.frame_id[session_id] = 1;
