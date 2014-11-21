@@ -558,7 +558,6 @@ struct tsens_tm_device_sensor {
 	/* Software index. This is keep track of the HW/SW
 	 * sensor_ID mapping */
 	unsigned int			sensor_sw_id;
-	struct work_struct		work;
 	int				offset;
 	int				calib_data_point1;
 	int				calib_data_point2;
@@ -987,15 +986,6 @@ static struct thermal_zone_device_ops tsens_thermal_zone_ops = {
 	.notify = tsens_tz_notify,
 };
 
-static void notify_uspace_tsens_fn(struct work_struct *work)
-{
-	struct tsens_tm_device_sensor *tm = container_of(work,
-		struct tsens_tm_device_sensor, work);
-
-	sysfs_notify(&tm->tz_dev->device.kobj,
-					NULL, "type");
-}
-
 static void tsens_scheduler_fn(struct work_struct *work)
 {
 	struct tsens_tm_device *tm = container_of(work, struct tsens_tm_device,
@@ -1043,8 +1033,6 @@ static void tsens_scheduler_fn(struct work_struct *work)
 			tsens_tz_get_temp(tm->sensor[i].tz_dev, &temp);
 			thermal_sensor_trip(tm->sensor[i].tz_dev, trip, temp);
 
-			/* Notify user space */
-			queue_work(tm->tsens_wq, &tm->sensor[i].work);
 			rc = tsens_get_sw_id_mapping(
 					tm->sensor[i].sensor_hw_num,
 					&sensor_sw_id);
@@ -1249,7 +1237,6 @@ static int tsens_calib_msm8909_sensors(void)
 				tmdev->sensor[i].slope_mul_tsens_factor);
 		pr_debug("offset:%d and slope:%d\n", tmdev->sensor[i].offset,
 				tmdev->sensor[i].slope_mul_tsens_factor);
-		INIT_WORK(&tmdev->sensor[i].work, notify_uspace_tsens_fn);
 		tmdev->prev_reading_avail = false;
 	}
 
@@ -1440,7 +1427,6 @@ static int tsens_calib_8939_sensors(void)
 				tmdev->sensor[i].slope_mul_tsens_factor);
 		pr_debug("offset:%d and slope:%d\n", tmdev->sensor[i].offset,
 				tmdev->sensor[i].slope_mul_tsens_factor);
-		INIT_WORK(&tmdev->sensor[i].work, notify_uspace_tsens_fn);
 		tmdev->prev_reading_avail = false;
 	}
 
@@ -1564,7 +1550,6 @@ static int tsens_calib_8916_sensors(void)
 				tmdev->sensor[i].slope_mul_tsens_factor);
 		pr_debug("offset:%d and slope:%d\n", tmdev->sensor[i].offset,
 				tmdev->sensor[i].slope_mul_tsens_factor);
-		INIT_WORK(&tmdev->sensor[i].work, notify_uspace_tsens_fn);
 		tmdev->prev_reading_avail = false;
 	}
 
@@ -1647,7 +1632,6 @@ compute_intercept_slope:
 				tmdev->sensor[i].slope_mul_tsens_factor);
 		pr_debug("offset:%d and slope:%d\n", tmdev->sensor[i].offset,
 				tmdev->sensor[i].slope_mul_tsens_factor);
-		INIT_WORK(&tmdev->sensor[i].work, notify_uspace_tsens_fn);
 		tmdev->prev_reading_avail = false;
 	}
 
@@ -1890,7 +1874,6 @@ calibration_less_mode:
 				tmdev->sensor[i].slope_mul_tsens_factor);
 		pr_debug("offset:%d and slope:%d\n", tmdev->sensor[i].offset,
 				tmdev->sensor[i].slope_mul_tsens_factor);
-		INIT_WORK(&tmdev->sensor[i].work, notify_uspace_tsens_fn);
 		tmdev->prev_reading_avail = false;
 	}
 
@@ -1999,7 +1982,6 @@ compute_intercept_slope:
 		tmdev->sensor[i].offset = (tmdev->sensor[i].calib_data_point1 *
 			tmdev->tsens_factor) - (TSENS_CAL_DEGC_POINT1 *
 				tmdev->sensor[i].slope_mul_tsens_factor);
-		INIT_WORK(&tmdev->sensor[i].work, notify_uspace_tsens_fn);
 		tmdev->prev_reading_avail = false;
 	}
 
@@ -2156,7 +2138,6 @@ compute_intercept_slope:
 		tmdev->sensor[i].offset = (tmdev->sensor[i].calib_data_point1 *
 			tmdev->tsens_factor) - (TSENS_CAL_DEGC_POINT1 *
 				tmdev->sensor[i].slope_mul_tsens_factor);
-		INIT_WORK(&tmdev->sensor[i].work, notify_uspace_tsens_fn);
 		tmdev->prev_reading_avail = false;
 	}
 
@@ -2491,7 +2472,6 @@ compute_intercept_slope:
 			tmdev->tsens_factor) - (TSENS_CAL_DEGC_POINT1 *
 				tmdev->sensor[i].slope_mul_tsens_factor);
 		pr_debug("offset:%d\n", tmdev->sensor[i].offset);
-		INIT_WORK(&tmdev->sensor[i].work, notify_uspace_tsens_fn);
 		tmdev->prev_reading_avail = false;
 	}
 
@@ -2764,7 +2744,6 @@ compute_intercept_slope:
 			tmdev->tsens_factor) - (TSENS_CAL_DEGC_POINT1 *
 				tmdev->sensor[i].slope_mul_tsens_factor);
 		pr_debug("offset:%d\n", tmdev->sensor[i].offset);
-		INIT_WORK(&tmdev->sensor[i].work, notify_uspace_tsens_fn);
 		tmdev->prev_reading_avail = false;
 	}
 
@@ -2846,7 +2825,6 @@ static int tsens_calib_msmzirc_sensors(void)
 				tmdev->sensor[i].slope_mul_tsens_factor);
 		pr_debug("offset:%d and slope:%d\n", tmdev->sensor[i].offset,
 				tmdev->sensor[i].slope_mul_tsens_factor);
-		INIT_WORK(&tmdev->sensor[i].work, notify_uspace_tsens_fn);
 		tmdev->prev_reading_avail = false;
 	}
 
