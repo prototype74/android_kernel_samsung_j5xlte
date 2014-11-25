@@ -59,7 +59,6 @@
 u32 mdp_drm_intr_mask;
 EXPORT_SYMBOL(mdp_drm_intr_mask);
 
-#define CREATE_TRACE_POINTS
 #include "mdss_mdp_trace.h"
 
 #define AXI_HALT_TIMEOUT_US	0x4000

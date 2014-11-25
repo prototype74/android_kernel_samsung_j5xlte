@@ -53,6 +53,8 @@
 
 #include "mdss_fb.h"
 #include "mdss_mdp_splash_logo.h"
+#define CREATE_TRACE_POINTS
+#include "mdss_debug.h"
 
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 #include "samsung/ss_dsi_panel_common.h" /* UTIL HEADER */
@@ -1426,6 +1428,7 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 	int ret = 0;
 	int cur_power_state, req_power_state = MDSS_PANEL_POWER_OFF;
+	char trace_buffer[32];
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 	struct samsung_display_driver_data *vdd = samsung_get_vdd();
 #endif
@@ -1438,6 +1441,10 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 
 	pr_debug("%pS mode:%d\n", __builtin_return_address(0),
 		blank_mode);
+
+	snprintf(trace_buffer, sizeof(trace_buffer), "fb%d blank %d",
+		mfd->index, blank_mode);
+	ATRACE_BEGIN(trace_buffer);
 
 	cur_power_state = mfd->panel_power_state;
 
@@ -1513,6 +1520,8 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 		pr_info("mdss_fb_blank_sub called at panel off status\n");
 
 	sysfs_notify(&mfd->fbi->dev->kobj, NULL, "show_blank_event");
+
+	ATRACE_END(trace_buffer);
 
 	return ret;
 }
