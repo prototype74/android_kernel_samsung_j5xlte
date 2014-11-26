@@ -199,24 +199,21 @@ static inline int __msm_queue_find_command_ack_q(void *d1, void *d2)
 #if !defined(CONFIG_ARCH_MSM8939) && !defined(CONFIG_ARCH_MSM8929)
 static void msm_pm_qos_add_request(void)
 {
-	pr_err("%s: add request",__func__);
-	pm_qos_add_request(&msm_v4l2_pm_qos_request, PM_QOS_CPU_DMA_LATENCY,
-		PM_QOS_DEFAULT_VALUE);
+    pr_info("%s: add request",__func__);
+    pm_qos_add_request(&msm_v4l2_pm_qos_request, PM_QOS_CPU_DMA_LATENCY,
+        PM_QOS_DEFAULT_VALUE);
 }
 
 static void msm_pm_qos_remove_request(void)
 {
-	pr_err("%s: remove request",__func__);
-	msm_v4l2_pm_qos_request.type = PM_QOS_REQ_AFFINE_CORES;
-	msm_v4l2_pm_qos_request.cpus_affine.bits[0] = 0xF0;
-
-	pm_qos_remove_request(&msm_v4l2_pm_qos_request);
+    pr_info("%s: remove request",__func__);
+    pm_qos_remove_request(&msm_v4l2_pm_qos_request);
 }
 
 void msm_pm_qos_update_request(int val)
 {
-	pr_err("%s: update request %d",__func__,val);
-	pm_qos_update_request(&msm_v4l2_pm_qos_request, val);
+    pr_info("%s: update request %d",__func__,val);
+    pm_qos_update_request(&msm_v4l2_pm_qos_request, val);
 }
 #endif
 
