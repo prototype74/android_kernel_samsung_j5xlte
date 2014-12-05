@@ -44,6 +44,7 @@
 #include <linux/pm_opp.h>
 #include <linux/notifier.h>
 #include <linux/reboot.h>
+#include <soc/qcom/msm-core.h>
 
 #define CREATE_TRACE_POINTS
 #define TRACE_MSM_THERMAL
@@ -152,6 +153,7 @@ static int pending_cpu_freq = -1;
 static long *tsens_temp_at_panic;
 static u32 tsens_temp_print;
 static uint32_t bucket;
+static cpumask_t throttling_mask;
 
 static LIST_HEAD(devices_list);
 static LIST_HEAD(thresholds_list);
@@ -361,6 +363,49 @@ enum ocr_request {
 	ko_attr.store = store_mx_##_name; \
 	sysfs_attr_init(&ko_attr.attr); \
 	_attr_gp.attrs[0] = &ko_attr.attr;
+
+void get_cluster_mask(uint32_t cpu, cpumask_t *mask)
+{
+	int i;
+
+	cpumask_set_cpu(cpu, mask);
+	if (core_ptr) {
+		for (i = 0; i < core_ptr->entity_count; i++) {
+			struct cluster_info *cluster_ptr =
+				&core_ptr->child_entity_ptr[i];
+			if (*cluster_ptr->cluster_cores.bits & BIT(cpu)) {
+				cpumask_copy(mask,
+					&cluster_ptr->cluster_cores);
+				break;
+			}
+		}
+	}
+}
+
+uint32_t get_core_max_freq(uint32_t cpu)
+{
+	int i;
+	uint32_t max_freq = 0;
+
+	if (core_ptr) {
+		for (i = 0; i < core_ptr->entity_count; i++) {
+			struct cluster_info *cluster_ptr =
+				&core_ptr->child_entity_ptr[i];
+			if (*cluster_ptr->cluster_cores.bits & BIT(cpu)) {
+				if (cluster_ptr->freq_table)
+					max_freq =
+					cluster_ptr->freq_table
+					[cluster_ptr->freq_idx_high].frequency;
+				break;
+			}
+		}
+	} else {
+		if (table)
+			max_freq = table[limit_idx_high].frequency;
+	}
+
+	return max_freq;
+}
 
 uint32_t get_core_min_freq(uint32_t cpu)
 {
@@ -727,8 +772,19 @@ static struct notifier_block msm_thermal_cpufreq_notifier = {
 static void update_cpu_freq(int cpu)
 {
 	int ret = 0;
+	cpumask_t mask;
 
+	get_cluster_mask(cpu, &mask);
 	if (cpu_online(cpu)) {
+		if ((cpumask_intersects(&mask, &throttling_mask))
+			&& (cpus[cpu].limited_max_freq
+				>= get_core_max_freq(cpu))) {
+			cpumask_xor(&throttling_mask, &mask, &throttling_mask);
+			set_cpu_throttled(&mask, false);
+		} else if (!cpumask_intersects(&mask, &throttling_mask)) {
+			cpumask_or(&throttling_mask, &mask, &throttling_mask);
+			set_cpu_throttled(&mask, true);
+		}
 		trace_thermal_pre_frequency_mit(cpu,
 			cpus[cpu].limited_max_freq,
 			cpus[cpu].limited_min_freq);
