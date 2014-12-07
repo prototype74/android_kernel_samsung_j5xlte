@@ -46,7 +46,8 @@ int msm_isp_cfg_axi_stream(struct vfe_device *vfe_dev, void *arg);
 int msm_isp_release_axi_stream(struct vfe_device *vfe_dev, void *arg);
 int msm_isp_update_axi_stream(struct vfe_device *vfe_dev, void *arg);
 void msm_isp_axi_cfg_update(struct vfe_device *vfe_dev);
-
+int msm_isp_user_buf_done(struct vfe_device *vfe_dev,
+	struct msm_isp_event_data *buf_cmd);
 void msm_isp_axi_stream_update(struct vfe_device *vfe_dev,
 	uint8_t input_src);
 
