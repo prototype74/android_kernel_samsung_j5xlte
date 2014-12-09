@@ -520,6 +520,7 @@ struct mdss_panel_debugfs_info {
 	u32 yres;
 	struct lcd_panel_info lcdc;
 	struct dentry *parent;
+	struct fbc_panel_info fbc;
 	u32 override_flag;
 	char frame_rate;
 	struct mdss_panel_debugfs_info *next;
