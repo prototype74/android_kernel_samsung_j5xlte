@@ -51,6 +51,7 @@ struct mdss_dbg_xlog {
 	u32 xlog_enable;
 	u32 panic_on_err;
 	u32 enable_reg_dump;
+	struct mdss_debug_base *blk_arr[MDSS_DEBUG_BASE_MAX];
 } mdss_dbg_xlog;
 
 static inline bool mdss_xlog_is_enabled(u32 flag)
@@ -181,45 +182,50 @@ static void mdss_xlog_dump_all(void)
 	}
 }
 
-static void mdss_dump_reg(struct mdss_debug_base *dbg, u32 reg_dump_flag)
+u32 get_dump_range(struct dump_offset *range_node, size_t max_offset)
 {
-	char *addr;
-	u32 *dump_addr = NULL;
-	int len;
-	int i;
-	bool in_log, in_mem;
+	u32 length = 0;
 
-	if (!dbg || !dbg->base) {
-		pr_err("dbg base is null!\n");
-		return;
+	if ((range_node->start > range_node->end) ||
+		(range_node->end > max_offset) || (range_node->start == 0
+		&& range_node->end == 0)) {
+		length = max_offset;
+	} else {
+		length = range_node->end - range_node->start;
 	}
+
+	return length;
+}
+
+static void mdss_dump_reg(u32 reg_dump_flag,
+	char *addr, int len, u32 *dump_mem)
+{
+	bool in_log, in_mem;
+	u32 *dump_addr = NULL;
+	int i;
 
 	in_log = (reg_dump_flag & MDSS_REG_DUMP_IN_LOG);
 	in_mem = (reg_dump_flag & MDSS_REG_DUMP_IN_MEM);
 
-	addr = dbg->base;
-	len = dbg->max_offset;
+	pr_info("reg_dump_flag=%d in_log=%d in_mem=%d\n", reg_dump_flag, in_log,
+		in_mem);
 
 	if (len % 16)
 		len += 16;
 	len /= 16;
 
-	pr_info("reg_dump_flag=%d in_log=%d in_mem=%d\n", reg_dump_flag, in_log,
-		in_mem);
-	pr_info("%s:=========%s DUMP=========\n", __func__, dbg->name);
-
 	if (in_mem) {
-		if (!dbg->reg_dump)
-			dbg->reg_dump = kzalloc(len * 16, GFP_KERNEL);
+		if (!dump_mem)
+			dump_mem = kzalloc(len * 16, GFP_KERNEL);
 
-		if (dbg->reg_dump) {
-			dump_addr = dbg->reg_dump;
+		if (dump_mem) {
+			dump_addr = dump_mem;
 			pr_info("start_addr:%p end_addr:%p reg_addr=%p\n",
 				dump_addr, dump_addr + (u32)len * 16,
 				addr);
 		} else {
 			in_mem = false;
-			pr_err("reg_dump: kzalloc fails!\n");
+			pr_err("dump_mem: kzalloc fails!\n");
 		}
 	}
 
@@ -248,6 +254,44 @@ static void mdss_dump_reg(struct mdss_debug_base *dbg, u32 reg_dump_flag)
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF);
 }
 
+static void mdss_dump_reg_by_ranges(struct mdss_debug_base *dbg,
+	u32 reg_dump_flag)
+{
+	char *addr;
+	int len;
+	struct range_dump_node *xlog_node, *xlog_tmp;
+
+	if (!dbg || !dbg->base) {
+		pr_err("dbg base is null!\n");
+		return;
+	}
+
+	pr_info("%s:=========%s DUMP=========\n", __func__, dbg->name);
+
+	/* If there is a list to dump the registers by ranges, use the ranges */
+	if (!list_empty(&dbg->dump_list)) {
+		list_for_each_entry_safe(xlog_node, xlog_tmp,
+			&dbg->dump_list, head) {
+			len = get_dump_range(&xlog_node->offset,
+				dbg->max_offset);
+			addr = dbg->base + xlog_node->offset.start;
+			pr_info("%s: range_base=0x%p start=0x%x end=0x%x\n",
+				xlog_node->range_name,
+				addr, xlog_node->offset.start,
+				xlog_node->offset.end);
+			mdss_dump_reg(reg_dump_flag, addr, len,
+				xlog_node->reg_dump);
+		}
+	} else {
+		/* If there is no list to dump ranges, dump all registers */
+		pr_info("Ranges not found, will dump full registers");
+		pr_info("base:0x%p len:0x%zu\n", dbg->base, dbg->max_offset);
+		addr = dbg->base;
+		len = dbg->max_offset;
+		mdss_dump_reg(reg_dump_flag, addr, len, dbg->reg_dump);
+	}
+}
+
 static void mdss_dump_reg_by_blk(const char *blk_name)
 {
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
@@ -260,7 +304,8 @@ static void mdss_dump_reg_by_blk(const char *blk_name)
 	list_for_each_entry_safe(blk_base, tmp, &mdd->base_list, head) {
 		if (blk_base->name &&
 			!strcmp(blk_base->name, blk_name)) {
-			mdss_dump_reg(blk_base, mdss_dbg_xlog.enable_reg_dump);
+			mdss_dump_reg_by_ranges(blk_base,
+				mdss_dbg_xlog.enable_reg_dump);
 			break;
 		}
 	}
@@ -277,38 +322,47 @@ static void mdss_dump_reg_all(void)
 
 	list_for_each_entry_safe(blk_base, tmp, &mdd->base_list, head) {
 		if (blk_base->name)
-			mdss_dump_reg(blk_base,
-				mdss_dbg_xlog.enable_reg_dump);
+			mdss_dump_reg_by_blk(blk_base->name);
 	}
 }
 
-void mdss_xlog_tout_handler_default(const char *name, ...)
+static void clear_dump_blk_arr(struct mdss_debug_base *blk_arr[],
+	u32 blk_len)
 {
-	int i, dead = 0;
-	va_list args;
-	char *blk_name = NULL;
+	int i;
 
-	if (!mdss_xlog_is_enabled(MDSS_XLOG_DEFAULT))
-		return;
+	for (i = 0; i < blk_len; i++)
+		blk_arr[i] = NULL;
+}
 
-#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
-	if (!strcmp(name, "mdss_mdp_video_underrun_intr_done")) {
-		mdss_mdp_underrun_dump_info();
-		return;
+struct mdss_debug_base *get_dump_blk_addr(const char *blk_name)
+{
+	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
+	struct mdss_debug_data *mdd = mdata->debug_inf.debug_data;
+	struct mdss_debug_base *blk_base, *tmp;
+
+	if (!mdd)
+		return NULL;
+
+	list_for_each_entry_safe(blk_base, tmp, &mdd->base_list, head) {
+		if (blk_base->name &&
+			!strcmp(blk_base->name, blk_name))
+				return blk_base;
 	}
-#endif
-	va_start(args, name);
-	for (i = 0; i < MDSS_XLOG_MAX_DATA; i++) {
-		blk_name = va_arg(args, char*);
-		if (IS_ERR_OR_NULL(blk_name))
-			break;
 
-		mdss_dump_reg_by_blk(blk_name);
+	return NULL;
+}
 
-		if (!strcmp(blk_name, "panic"))
-			dead = 1;
+static void mdss_xlog_dump_array(struct mdss_debug_base *blk_arr[],
+	u32 len, bool dead, const char *name)
+{
+	int i;
+
+	for (i = 0; i < len; i++) {
+		if (blk_arr[i] != NULL)
+			mdss_dump_reg_by_ranges(blk_arr[i],
+				mdss_dbg_xlog.enable_reg_dump);
 	}
-	va_end(args);
 
 	mdss_xlog_dump_all();
 
@@ -317,11 +371,48 @@ void mdss_xlog_tout_handler_default(const char *name, ...)
 	mdss_samsung_dump_regs();
 	mdss_samsung_dsi_dump_regs(0);
 	mdss_samsung_dsi_dump_regs(1);
-	mdss_samsung_dsi_te_check();
 #endif
 
 	if (dead && mdss_dbg_xlog.panic_on_err)
 		panic(name);
+}
+
+void mdss_xlog_tout_handler_default(const char *name, ...)
+{
+	int i, index = 0;
+	bool dead = false;
+	va_list args;
+	char *blk_name = NULL;
+	struct mdss_debug_base *blk_base = NULL;
+	struct mdss_debug_base **blk_arr;
+	u32 blk_len;
+
+	if (!mdss_xlog_is_enabled(MDSS_XLOG_DEFAULT))
+		return;
+
+	blk_arr = &mdss_dbg_xlog.blk_arr[0];
+	blk_len = ARRAY_SIZE(mdss_dbg_xlog.blk_arr);
+
+	clear_dump_blk_arr(blk_arr, blk_len);
+
+	va_start(args, name);
+	for (i = 0; i < MDSS_XLOG_MAX_DATA; i++) {
+		blk_name = va_arg(args, char*);
+		if (IS_ERR_OR_NULL(blk_name))
+			break;
+
+		blk_base = get_dump_blk_addr(blk_name);
+		if (blk_base && (index < blk_len)) {
+			blk_arr[index] = blk_base;
+			index++;
+		}
+
+		if (!strcmp(blk_name, "panic"))
+			dead = true;
+	}
+	va_end(args);
+
+	mdss_xlog_dump_array(blk_arr, blk_len, dead, name);
 }
 
 int mdss_xlog_tout_handler_iommu(struct iommu_domain *domain,
