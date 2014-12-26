@@ -261,7 +261,7 @@ static void check_tlb_sync_state(struct msm_iommu_drvdata const *drvdata,
 {
 	int res;
 	unsigned int val;
-	void __iomem *base = drvdata->base;
+	void __iomem *base = drvdata->cb_base;
 	char const *name = drvdata->name;
 
 	pr_err("Timed out waiting for TLB SYNC to complete for %s (client: %s)\n",
