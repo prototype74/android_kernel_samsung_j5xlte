@@ -70,4 +70,8 @@ struct rtc_device *alarmtimer_get_rtcdev(void);
 int alarm_set_alarm_boot(char *alarm_data);
 #endif
 
+#ifdef CONFIG_RTC_DRV_QPNP
+extern bool poweron_alarm;
+#endif
+
 #endif
