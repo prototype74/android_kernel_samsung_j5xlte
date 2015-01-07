@@ -2161,7 +2161,7 @@ int mdss_mdp_pp_resume(struct mdss_mdp_ctl *ctl, u32 dspp_num)
 			pp_ad_input_write(&mdata->ad_off[dspp_num], ad);
 		}
 		if ((PP_AD_STATE_VSYNC & ad->state) && ad->calc_itr)
-			ctl->add_vsync_handler(ctl, &ad->handle);
+			ctl->ops.add_vsync_handler(ctl, &ad->handle);
 		mutex_unlock(&ad->lock);
 	}
 
@@ -2383,8 +2383,8 @@ static int pp_ad_shutdown_cleanup(struct msm_fb_data_type *mfd)
 
 	ad->mfd = NULL;
 	ctl = mfd_to_ctl(mfd);
-	if (ctl && ctl->remove_vsync_handler)
-		ctl->remove_vsync_handler(ctl, &ad->handle);
+	if (ctl && ctl->ops.remove_vsync_handler)
+		ctl->ops.remove_vsync_handler(ctl, &ad->handle);
 	cancel_work_sync(&ad->calc_work);
 
 	/* Check if any other AD config is active */
@@ -5195,11 +5195,11 @@ static int mdss_mdp_ad_setup(struct msm_fb_data_type *mfd)
 		ad->sts &= ~PP_AD_STS_DIRTY_VSYNC;
 		if (!(PP_AD_STATE_VSYNC & ad->state) && ad->calc_itr &&
 					(ad->state & PP_AD_STATE_RUN)) {
-			ctl->add_vsync_handler(ctl, &ad->handle);
+			ctl->ops.add_vsync_handler(ctl, &ad->handle);
 			ad->state |= PP_AD_STATE_VSYNC;
 		} else if ((PP_AD_STATE_VSYNC & ad->state) &&
 			(!ad->calc_itr || !(PP_AD_STATE_RUN & ad->state))) {
-			ctl->remove_vsync_handler(ctl, &ad->handle);
+			ctl->ops.remove_vsync_handler(ctl, &ad->handle);
 			ad->state &= ~PP_AD_STATE_VSYNC;
 		}
 	}
@@ -5279,7 +5279,7 @@ static void pp_ad_calc_worker(struct work_struct *work)
 
 	if (!ad->calc_itr) {
 		ad->state &= ~PP_AD_STATE_VSYNC;
-		ctl->remove_vsync_handler(ctl, &ad->handle);
+		ctl->ops.remove_vsync_handler(ctl, &ad->handle);
 	}
 	mutex_unlock(&ad->lock);
 	/* dspp3 doesn't have ad attached to it so following is safe */
