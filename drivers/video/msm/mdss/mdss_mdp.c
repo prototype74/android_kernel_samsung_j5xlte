@@ -1137,6 +1137,8 @@ static int mdss_mdp_debug_init(struct platform_device *pdev,
 
 static void mdss_mdp_hw_rev_caps_init(struct mdss_data_type *mdata)
 {
+	mdss_mdp_hw_rev_debug_caps_init(mdata);
+
 	switch (mdata->mdp_rev) {
 	case MDSS_MDP_HW_REV_105:
 	case MDSS_MDP_HW_REV_109:
