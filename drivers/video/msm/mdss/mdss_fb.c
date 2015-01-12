@@ -27,7 +27,6 @@
 #include <linux/init.h>
 #include <linux/ioport.h>
 #include <linux/kernel.h>
-#include <linux/leds.h>
 #include <linux/memory.h>
 #include <linux/mm.h>
 #include <linux/module.h>
