@@ -2231,7 +2231,6 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 
 
 	pr_debug("%s:  from_mdp=%d pid=%d\n", __func__, from_mdp, current->pid);
-	mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 1);
 
 	if (!(req->flags & CMD_REQ_DMA_TPG)) {
 		if (ctrl->mdss_util->bus_bandwidth_ctrl)
@@ -2250,6 +2249,8 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 			}
 		}
 	}
+
+	mdss_dsi_clk_ctrl(ctrl, DSI_ALL_CLKS, 1);
 
 	if (req->flags & CMD_REQ_HS_MODE)
 		mdss_dsi_set_tx_power_mode(0, &ctrl->panel_data);
