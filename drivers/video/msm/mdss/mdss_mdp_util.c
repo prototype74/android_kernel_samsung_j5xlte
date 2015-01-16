@@ -728,8 +728,8 @@ void mdss_mdp_data_free(struct mdss_mdp_data *data)
 
 int mdss_mdp_calc_phase_step(u32 src, u32 dst, u32 *out_phase)
 {
-	u32 unit, residue, result;
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
+	u32 unit, residue, result;
 
 	if (src == 0 || dst == 0)
 		return -EINVAL;
@@ -738,7 +738,7 @@ int mdss_mdp_calc_phase_step(u32 src, u32 dst, u32 *out_phase)
 	*out_phase = mult_frac(unit, src, dst);
 
 	/* check if overflow is possible */
-	if ((mdata->mdp_rev < MDSS_MDP_HW_REV_103) && src > dst) {
+	if (mdss_has_quirk(mdata, MDSS_QUIRK_DOWNSCALE_HANG) && src > dst) {
 		residue = *out_phase - unit;
 		result = (residue * dst) + residue;
 
