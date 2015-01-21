@@ -189,7 +189,7 @@ struct mdss_intf_recovery {
  * @MDSS_EVENT_DSI_CMDLIST_KOFF: acquire dsi_mdp_busy lock before kickoff.
  * @MDSS_EVENT_ENABLE_PARTIAL_ROI: Event to update ROI of the panel.
  * @MDSS_EVENT_DSI_STREAM_SIZE: Event to update DSI controller's stream size
- * @MDSS_EVENT_DSI_DYNAMIC_SWITCH: Event to update the dsi driver structures
+ * @MDSS_EVENT_DSI_UPDATE_PANEL_DATA: Event to update the dsi driver structures
  *				based on the dsi mode passed as argument.
  *				- 0: update to video mode
  *				- 1: update to command mode
@@ -198,6 +198,13 @@ struct mdss_intf_recovery {
  * @ MDSS_EVENT_DSI_PANEL_STATUS:Event to check the panel status
  *				<= 0: panel check fail
  *				>  0: panel check success
+ * @MDSS_EVENT_DSI_DYNAMIC_SWITCH: Send DCS command to panel to initiate
+ *				switching panel to new mode
+ *				- MIPI_VIDEO_PANEL: switch to video mode
+ *				- MIPI_CMD_PANEL: switch to command mode
+ * @MDSS_EVENT_DSI_RECONFIG_CMD: Setup DSI controller in new mode
+ *				- MIPI_VIDEO_PANEL: switch to video mode
+ *				- MIPI_CMD_PANEL: switch to command mode
  */
 enum mdss_intf_events {
 	MDSS_EVENT_RESET = 1,
@@ -219,9 +226,11 @@ enum mdss_intf_events {
 	MDSS_EVENT_DSI_CMDLIST_KOFF,
 	MDSS_EVENT_ENABLE_PARTIAL_ROI,
 	MDSS_EVENT_DSI_STREAM_SIZE,
-	MDSS_EVENT_DSI_DYNAMIC_SWITCH,
+	MDSS_EVENT_DSI_UPDATE_PANEL_DATA,
 	MDSS_EVENT_REGISTER_RECOVERY_HANDLER,
 	MDSS_EVENT_DSI_PANEL_STATUS,
+	MDSS_EVENT_DSI_DYNAMIC_SWITCH,
+	MDSS_EVENT_DSI_RECONFIG_CMD,
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 	MDSS_SAMSUNG_EVENT_FRAME_UPDATE,
 	MDSS_SAMSUNG_EVENT_FB_EVENT_CALLBACK,
@@ -261,7 +270,14 @@ struct mdss_dsi_phy_ctrl {
 	bool reg_ldo_mode;
 };
 
+enum dynamic_mode_switch {
+	DYNAMIC_MODE_SWITCH_DISABLED = 0,
+	DYNAMIC_MODE_SWITCH_SUSPEND_RESUME,
+	DYNAMIC_MODE_SWITCH_IMMEDIATE,
+};
+
 struct mipi_panel_info {
+	char boot_mode;	/* identify if mode switched from starting mode */
 	char mode;		/* video/cmd */
 	char interleave_mode;
 	char crc_check;
@@ -301,8 +317,9 @@ struct mipi_panel_info {
 	char stream;	/* 0 or 1 */
 	char mdp_trigger;
 	char dma_trigger;
-	/*Dynamic Switch Support*/
-	bool dynamic_switch_enabled;
+	/* Dynamic Switch Support */
+	enum dynamic_mode_switch dms_mode;
+
 	u32 pixel_packing;
 	u32 dsi_pclk_rate;
 	/* The packet-size should not bet changed */
