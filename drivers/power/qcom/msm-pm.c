@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2014,2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2015,2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -824,7 +824,7 @@ static int msm_pm_clk_init(struct platform_device *pdev)
 			if (cpu && synced_clocks)
 				return 0;
 			else
-				return PTR_ERR(clk);
+				clk = NULL;
 		}
 		per_cpu(cpu_clks, cpu) = clk;
 	}
