@@ -379,8 +379,11 @@ static int32_t msm_actuator_piezo_move_focus(
 		return -EFAULT;
 	}
 
-	if (num_steps == 0)
-		return rc;
+	if (num_steps <= 0 || num_steps > MAX_NUMBER_OF_STEPS) {
+		pr_err("num_steps out of range = %d\n",
+			num_steps);
+		return -EFAULT;
+	}
 
 	if (a_ctrl->i2c_reg_tbl == NULL) {
 		pr_err("failed. i2c reg tabl is NULL");
@@ -659,64 +662,66 @@ static int32_t msm_actuator_power_down(struct msm_actuator_ctrl_t *a_ctrl)
 }
 
 static void msm_actuator_set_position_tbl(
-  struct msm_actuator_ctrl_t *a_ctrl,
-  uint16_t pos, uint16_t delay)
+	struct msm_actuator_ctrl_t *a_ctrl,
+	uint16_t pos, uint16_t delay)
 {
-  uint16_t msb, lsb, reg_addr;
-  reg_addr = a_ctrl->reg_tbl[0].reg_addr;
-  CDBG("%s reg_addr = %d\n", __func__, reg_addr);
+	uint16_t msb, lsb, reg_addr;
+	reg_addr = a_ctrl->reg_tbl[0].reg_addr;
+	CDBG("%s reg_addr = %d\n", __func__, reg_addr);
 
-  msb = (pos>>8)&0x00ff;
-  lsb = pos&0x00ff;
+	msb = (pos>>8)&0x00ff;
+	lsb = pos&0x00ff;
 
-  CDBG("%s pos=%d msb= 0x%X, lsb=0x%X\n", __func__, pos, msb, lsb);
-  a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].reg_addr = reg_addr;
-  a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].reg_data = msb;
-  a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].delay = 0;
-  a_ctrl->i2c_tbl_index++;
+	CDBG("%s pos=%d msb= 0x%X, lsb=0x%X\n", __func__, pos, msb, lsb);
+	a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].reg_addr = reg_addr;
+	a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].reg_data = msb;
+	a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].delay = 0;
+	a_ctrl->i2c_tbl_index++;
 
-  a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].reg_addr = reg_addr+1;
-  a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].reg_data = lsb;
-  a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].delay = delay;
-  a_ctrl->i2c_tbl_index++;
-
+	a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].reg_addr = reg_addr+1;
+	a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].reg_data = lsb;
+	a_ctrl->i2c_reg_tbl[a_ctrl->i2c_tbl_index].delay = delay;
+	a_ctrl->i2c_tbl_index++;
 }
 
 static int32_t msm_actuator_vcm_set_position(
-    struct msm_actuator_ctrl_t *a_ctrl,
-    struct msm_actuator_set_position_t *set_pos)
+	struct msm_actuator_ctrl_t *a_ctrl,
+	struct msm_actuator_set_position_t *set_pos)
 {
+	int32_t rc = 0;
+	int32_t index;
+	uint16_t pos, delay;
+	struct msm_camera_i2c_reg_setting reg_setting;
 
-   int32_t rc = 0;
-   int32_t index;
-   uint16_t pos, delay;
-   struct msm_camera_i2c_reg_setting reg_setting;
+	CDBG("%s Enter : steps = %d\n", __func__, set_pos->number_of_steps);
 
-   CDBG("%s Enter : steps = %d\n", __func__, set_pos->number_of_steps);
+	if (set_pos->number_of_steps <= 0 ||
+		set_pos->number_of_steps > MAX_NUMBER_OF_STEPS) {
+		pr_err("num_steps out of range = %d\n",
+			set_pos->number_of_steps);
+		return -EFAULT;
+	}
 
-   if (set_pos->number_of_steps  == 0)
-     return rc;
+	a_ctrl->i2c_tbl_index = 0;
 
-   a_ctrl->i2c_tbl_index = 0;
+	for (index = 0; index < set_pos->number_of_steps; index++) {
+		pos = a_ctrl->step_position_table[set_pos->pos[index]];
+		delay = set_pos->delay[index];
+		msm_actuator_set_position_tbl(a_ctrl, pos, delay);
+	}
 
-   for (index = 0; index < set_pos->number_of_steps; index++) {
-      pos = a_ctrl->step_position_table[set_pos->pos[index]];
-      delay = set_pos->delay[index];
-      msm_actuator_set_position_tbl(a_ctrl, pos, delay);
-   }
+	reg_setting.reg_setting = a_ctrl->i2c_reg_tbl;
+	reg_setting.data_type = a_ctrl->i2c_data_type;
+	reg_setting.size = a_ctrl->i2c_tbl_index;
+	rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_write_table_w_microdelay(
+		&a_ctrl->i2c_client, &reg_setting);
+	if (rc < 0) {
+		pr_err("%s Failed I2C write Line %d\n", __func__, __LINE__);
+		return rc;
+	}
 
-   reg_setting.reg_setting = a_ctrl->i2c_reg_tbl;
-   reg_setting.data_type = a_ctrl->i2c_data_type;
-   reg_setting.size = a_ctrl->i2c_tbl_index;
-   rc = a_ctrl->i2c_client.i2c_func_tbl->i2c_write_table_w_microdelay(
-       &a_ctrl->i2c_client, &reg_setting);
-   if (rc < 0) {
-     pr_err("%s Failed I2C write Line %d\n", __func__, __LINE__);
-     return rc;
-   }
-
-   CDBG("%s exit %d\n", __func__, __LINE__);
-   return rc;
+	CDBG("%s exit %d\n", __func__, __LINE__);
+	return rc;
 }
 
 static int32_t msm_actuator_set_param(struct msm_actuator_ctrl_t *a_ctrl,
