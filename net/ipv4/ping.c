@@ -988,7 +988,6 @@ void ping_rcv(struct sk_buff *skb)
 		pr_debug("rcv on socket %p\n", sk);
 		if (skb2)
 			ping_queue_rcv_skb(sk, skb2);
-
 		sock_put(sk);
 		return;
 	}
