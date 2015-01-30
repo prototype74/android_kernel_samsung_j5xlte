@@ -55,6 +55,7 @@ void alarm_restart(struct alarm *alarm);
 int alarm_try_to_cancel(struct alarm *alarm);
 int alarm_cancel(struct alarm *alarm);
 void set_power_on_alarm(long secs, bool enable);
+void power_on_alarm_init(void);
 #ifdef CONFIG_RTC_AUTO_PWRON
 int alarm_set_alarm(char *alarm_data);
 #endif /* CONFIG_AUTO_PWRON */
