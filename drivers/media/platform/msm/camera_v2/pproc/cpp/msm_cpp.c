@@ -658,8 +658,8 @@ void msm_cpp_do_tasklet(unsigned long data)
 				if ((msg_id == MSM_CPP_MSG_ID_FRAME_ACK)
 					&& (atomic_read(&cpp_timer.used))) {
 					CPP_DBG("Frame done!!\n");
-					/* delete CPP timer */
 					CPP_DBG("delete timer.\n");
+					/* delete CPP timer */
 					msm_cpp_clear_timer(cpp_dev);
 					msm_cpp_notify_frame_done(cpp_dev);
 				} else if ((msg_id ==
@@ -1282,11 +1282,6 @@ static void msm_cpp_do_timeout_work(struct work_struct *work)
 		return;
 	}
 
-	if (!atomic_read(&cpp_timer.used)) {
-		pr_err("Delayed trigger, IRQ serviced\n");
-		return;
-	}
-
 	this_frame = cpp_timer.data.processed_frame;
 	atomic_set(&cpp_timer.used, 1);
 	pr_err("Starting timer to fire in %d ms. (jiffies=%lu)\n",
@@ -1296,10 +1291,6 @@ static void msm_cpp_do_timeout_work(struct work_struct *work)
 	if (ret)
 		pr_err("error in mod_timer\n");
 
-	if (!atomic_read(&cpp_timer.used)) {
-		pr_err("Delayed trigger, IRQ serviced\n");
-		return;
-	}
 
 	pr_err("Rescheduling for identity=0x%x, frame_id=%03d\n",
 		this_frame->identity, this_frame->frame_id);
