@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -43,6 +43,7 @@
 #define MAX_NUM_STATS_COMP_MASK 2
 #define MAX_INIT_FRAME_DROP 31
 #define ISP_Q2 (1 << 2)
+#define ISP_Q10 (1 << 10)
 
 #define AVTIMER_MSW_PHY_ADDR 0xFE05300C
 #define AVTIMER_LSW_PHY_ADDR 0xFE053008
@@ -615,6 +616,7 @@ struct vfe_device {
 	struct msm_isp_ub_info *ub_info;
 	uint32_t vfe_ub_policy;
 	uint32_t isp_sof_debug;
+	uint32_t bus_util_factor;
 };
 
 #endif
