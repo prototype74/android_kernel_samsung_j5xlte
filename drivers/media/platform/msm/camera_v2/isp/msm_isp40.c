@@ -39,10 +39,6 @@
 #define VFE40_TOTAL_WM_UB 1144 /* UB_SIZE - STATS SIZE */
 #define VFE40_TOTAL_WM_UB_8916 1656
 #define VFE40_TOTAL_WM_UB_8939 2680
-
-
-/* STATS_SIZE (BE + BG + BF+ RS + CS + IHIST + BHIST ) = 392 */
-#define VFE40_STATS_SIZE 392
 #define VFE40_WM_BASE(idx) (0x6C + 0x24 * idx)
 #define VFE40_RDI_BASE(idx) (0x2E8 + 0x4 * idx)
 #define VFE40_XBAR_BASE(idx) (0x58 + 0x4 * (idx / 2))
@@ -1435,6 +1431,9 @@ static void msm_vfe40_cfg_axi_ub_equal_slicing(
 	if (vfe_dev->vfe_hw_version == VFE40_8916_VERSION) {
 		vfe_dev->ub_info->wm_ub = VFE40_EQUAL_SLICE_UB_8916;
 		equal_slice_ub = VFE40_EQUAL_SLICE_UB_8916;
+	} else if (vfe_dev->vfe_hw_version == VFE40_8939_VERSION){
+		vfe_dev->ub_info->wm_ub = VFE40_EQUAL_SLICE_UB_8939;
+		equal_slice_ub = VFE40_EQUAL_SLICE_UB_8939;
 	} else {
 		vfe_dev->ub_info->wm_ub = VFE40_EQUAL_SLICE_UB;
 		equal_slice_ub = VFE40_EQUAL_SLICE_UB;
