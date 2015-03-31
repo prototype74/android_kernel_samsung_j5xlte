@@ -2671,10 +2671,7 @@ int sched_hmp_proc_update_handler(struct ctl_table *table, int write,
 		goto done;
 	}
 
-	if (data == (unsigned int *)&sysctl_sched_upmigrate_min_nice)
-		update_min_nice = 1;
-
-	if (update_min_nice) {
+	if (data == (unsigned int *)&sysctl_sched_upmigrate_min_nice) {
 		if ((*(int *)data) < -20 || (*(int *)data) > 19) {
 			*data = old_val;
 			ret = -EINVAL;
