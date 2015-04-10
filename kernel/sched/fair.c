@@ -1368,8 +1368,6 @@ static inline void decay_scaled_stat(struct sched_avg *sa, u64 periods);
 unsigned int __read_mostly sched_init_task_load_pelt;
 unsigned int __read_mostly sched_init_task_load_windows;
 unsigned int __read_mostly sysctl_sched_init_task_load_pct = 15;
-unsigned int sched_orig_load_balance_enable;
-unsigned int sched_orig_wakeup_load_balance_enable;
 
 /*
  * Keep these two below in sync. One is in unit of ns and the
@@ -1471,6 +1469,14 @@ static int __read_mostly sched_upmigrate_min_nice = 15;
 int __read_mostly sysctl_sched_upmigrate_min_nice = 15;
 
 /*
+ * The load scale factor of a CPU gets boosted when its max frequency
+ * is restricted due to which the tasks are migrating to higher capacity
+ * CPUs early. The sched_upmigrate threshold is auto-upgraded by
+ * rq->max_possible_freq/rq->max_freq of a lower capacity CPU.
+ */
+unsigned int up_down_migrate_scale_factor = 1024;
+
+/*
  * Scheduler boost is a mechanism to temporarily place tasks on CPUs
  * with higher capacity than those where a task would have normally
  * ended up with their load characteristics. Any entity enabling
@@ -1485,6 +1491,35 @@ static inline int available_cpu_capacity(int cpu)
 	return rq->capacity;
 }
 
+void update_up_down_migrate(void)
+{
+	unsigned int up_migrate = pct_to_real(sysctl_sched_upmigrate_pct);
+	unsigned int down_migrate = pct_to_real(sysctl_sched_downmigrate_pct);
+	unsigned int delta;
+
+	if (up_down_migrate_scale_factor == 1024)
+		goto done;
+
+	delta = up_migrate - down_migrate;
+
+	up_migrate /= NSEC_PER_USEC;
+	up_migrate *= up_down_migrate_scale_factor;
+	up_migrate >>= 10;
+	up_migrate *= NSEC_PER_USEC;
+
+	up_migrate = min(up_migrate, sched_ravg_window);
+
+	down_migrate /= NSEC_PER_USEC;
+	down_migrate *= up_down_migrate_scale_factor;
+	down_migrate >>= 10;
+	down_migrate *= NSEC_PER_USEC;
+
+	down_migrate = min(down_migrate, up_migrate - delta);
+done:
+	sched_upmigrate = up_migrate;
+	sched_downmigrate = down_migrate;
+}
+
 void set_hmp_defaults(void)
 {
 	sched_spill_load =
@@ -1493,11 +1528,7 @@ void set_hmp_defaults(void)
 	sched_small_task =
 		pct_to_real(sysctl_sched_small_task_pct);
 
-	sched_upmigrate =
-		pct_to_real(sysctl_sched_upmigrate_pct);
-
-	sched_downmigrate =
-		pct_to_real(sysctl_sched_downmigrate_pct);
+	update_up_down_migrate();
 
 #ifdef CONFIG_SCHED_FREQ_INPUT
 	sched_heavy_task =
@@ -5444,31 +5475,13 @@ select_task_rq_fair(struct task_struct *p, int sd_flag, int wake_flags)
 	if (p->nr_cpus_allowed == 1)
 		return prev_cpu;
 
-	if (sched_orig_load_balance_enable){
-		//8916 chipset goes to legacy load balancer code
-		if (sd_flag & SD_BALANCE_WAKE) {
-			if (cpumask_test_cpu(cpu, tsk_cpus_allowed(p)))
-				want_affine = 1;
-			new_cpu = prev_cpu;
-		}
-	} else if(sched_orig_wakeup_load_balance_enable){
-		//only wakeup case goes to legacy load balancer code
-		if (sd_flag & SD_BALANCE_WAKE) {
-			if (cpumask_test_cpu(cpu, tsk_cpus_allowed(p)))
-				want_affine = 1;
-				new_cpu = prev_cpu;
-		} else if(sched_enable_hmp)
-			return select_best_cpu(p, prev_cpu, 0, sync);
-	} else {
-		//rest cases goes to QC load balancer
-		if (sched_enable_hmp)
-			return select_best_cpu(p, prev_cpu, 0, sync);
+	if (sched_enable_hmp)
+		return select_best_cpu(p, prev_cpu, 0, sync);
 
-		if (sd_flag & SD_BALANCE_WAKE) {
-			if (cpumask_test_cpu(cpu, tsk_cpus_allowed(p)))
-				want_affine = 1;
-			new_cpu = prev_cpu;
-		}
+	if (sd_flag & SD_BALANCE_WAKE) {
+		if (cpumask_test_cpu(cpu, tsk_cpus_allowed(p)))
+			want_affine = 1;
+		new_cpu = prev_cpu;
 	}
 
 	rcu_read_lock();
@@ -8798,135 +8811,5 @@ __init void init_sched_fair_class(void)
 	cpu_notifier(sched_ilb_notifier, 0);
 #endif
 #endif /* SMP */
+
 }
-
-#ifdef CONFIG_SCHED_HMP
-static ssize_t write_sched_orig_load_balance_enable(struct file *file, const char __user *buf,
-									size_t count, loff_t *ppos)
-{
-
-	sched_orig_load_balance_enable = 0;
-	return count;
-
-	if (count) {
-		char c;
-		if(get_user(c, buf))
-			return -EFAULT;
-		if(c!='1' && c!='0'){
-			pr_err("Wrong value write to node\n");
-			return -EINVAL;
-		}
-	if(!sched_enable_hmp){
-		pr_err("Sched_enable_hmp must be turned on\n");
-		sched_orig_load_balance_enable=0;
-		return count;
-	}
-
-	if(c == '1')
-		sched_orig_load_balance_enable=1;
-	else
-		sched_orig_load_balance_enable=0;
-	}
-
-	return count;
-}
-
-static ssize_t write_sched_orig_wakeup_load_balance_enable(struct file *file, const char __user *buf,
-									size_t count, loff_t *ppos)
-{
-
-	sched_orig_wakeup_load_balance_enable=0;
-	return count;
-
-	if (count) {
-		char c;
-		if(get_user(c, buf))
-			return -EFAULT;
-		if(c!='1' && c!='0'){
-			pr_err("Wrong value write to node\n");
-			return -EINVAL;
-		}
-	if(!sched_enable_hmp){
-		pr_err("Sched_enable_hmp must be turned on\n");
-		sched_orig_wakeup_load_balance_enable=0;
-		return count;
-	}
-
-	if(c == '1')
-		sched_orig_wakeup_load_balance_enable=1;
-	else
-		sched_orig_wakeup_load_balance_enable=0;
-	}
-	return count;
-}
-
-static ssize_t read_sched_orig_load_balance_enable( struct file *filp, char *buf,
-									size_t count, loff_t *f_pos )
-{
-	char procfs_buffer[64];
-	ssize_t length;
-
-	length = scnprintf(procfs_buffer, 12, "%d\n", sched_orig_load_balance_enable);
-	return simple_read_from_buffer(buf, count, f_pos, procfs_buffer, length);
-}
-
-static ssize_t read_sched_orig_wakeup_load_balance_enable( struct file *filp, char *buf,
-									size_t count, loff_t *f_pos )
-{
-	char procfs_buffer[64];
-	ssize_t length;
-
-	length = scnprintf(procfs_buffer, 12, "%d\n", sched_orig_wakeup_load_balance_enable);
-	return simple_read_from_buffer(buf, count, f_pos, procfs_buffer, length);
-}
-
-static const struct file_operations proc_sched_orig_load_balance_enable_operations = {
-	.write	=	write_sched_orig_load_balance_enable,
-	.read	=	read_sched_orig_load_balance_enable,
-	.llseek	=	noop_llseek,
-};
-
-static const struct file_operations proc_sched_orig_wakeup_load_balance_enable_operations = {
-	.write	=	write_sched_orig_wakeup_load_balance_enable,
-	.read	=	read_sched_orig_wakeup_load_balance_enable,
-	.llseek	=	noop_llseek,
-};
-
-static __init int init_sched_orig_load_balance_enable(void)
-{
-
-	sched_orig_load_balance_enable = 0;
-	return 0;
-
-	if(!proc_create("sched_orig_load_balance_enable",S_IWUSR|S_IWGRP, NULL,
-					&proc_sched_orig_load_balance_enable_operations))
-		pr_err("Failed to register proc interface\n");
-	if(!sched_enable_hmp){
-		pr_err("Sched_enable_hmp must be turned on\n");
-		sched_orig_load_balance_enable=0;
-		return 0;
-	}
-	sched_orig_load_balance_enable=1;
-	return 0;
-}
-
-static __init int init_sched_orig_wakeup_load_balance_enable(void)
-{
-
-	sched_orig_wakeup_load_balance_enable = 0;
-	return 0;
-
-	if(!proc_create("sched_orig_wakeup_load_balance_enable",S_IWUSR|S_IWGRP, NULL,
-					&proc_sched_orig_wakeup_load_balance_enable_operations))
-		pr_err("Failed to register proc interface 'sched_orig_wakeup_load_balance_enable'\n");
-	if(!sched_enable_hmp){
-		pr_err("Sched_enable_hmp must be turned on\n");
-		sched_orig_wakeup_load_balance_enable=0;
-		return 0;
-	}
-	sched_orig_wakeup_load_balance_enable=0;
-	return 0;
-}
-late_initcall(init_sched_orig_load_balance_enable);
-late_initcall(init_sched_orig_wakeup_load_balance_enable);
-#endif
