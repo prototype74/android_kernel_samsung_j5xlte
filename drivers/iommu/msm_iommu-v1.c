@@ -266,7 +266,7 @@ static void check_tlb_sync_state(struct msm_iommu_drvdata const *drvdata,
 
 	pr_err("Timed out waiting for TLB SYNC to complete for %s (client: %s)\n",
 		name, priv->client_name);
-	blocking_notifier_call_chain(&msm_iommu_notifier_list, TLB_SYNC_TIMEOUT,
+	atomic_notifier_call_chain(&msm_iommu_notifier_list, TLB_SYNC_TIMEOUT,
 				(void *) priv->client_name);
 	res = __check_vbif_state(drvdata);
 	if (res)
