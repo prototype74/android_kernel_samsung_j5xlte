@@ -482,7 +482,8 @@ static void xlog_debug_work(struct work_struct *work)
 		mdss_dbg_xlog.work_dbgbus);
 }
 
-void mdss_xlog_tout_handler_default(bool queue, const char *name, ...)
+void mdss_xlog_tout_handler_default(bool enforce_dump, bool queue,
+	const char *name, ...)
 {
 	int i, index = 0;
 	bool dead = false;
@@ -493,7 +494,7 @@ void mdss_xlog_tout_handler_default(bool queue, const char *name, ...)
 	struct mdss_debug_base **blk_arr;
 	u32 blk_len;
 
-	if (!mdss_xlog_is_enabled(MDSS_XLOG_DEFAULT))
+	if (!mdss_xlog_is_enabled(MDSS_XLOG_DEFAULT) && !enforce_dump)
 		return;
 
 	if (queue && work_pending(&mdss_dbg_xlog.xlog_dump_work))
@@ -516,7 +517,7 @@ void mdss_xlog_tout_handler_default(bool queue, const char *name, ...)
 			index++;
 		}
 
-		if (!strcmp(blk_name, "dbg_bus"))
+		if (!strcmp(blk_name, "mdp_dbg_bus"))
 			dump_dbgbus = true;
 
 		if (!strcmp(blk_name, "panic"))
