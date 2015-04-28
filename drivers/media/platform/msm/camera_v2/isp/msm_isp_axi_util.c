@@ -439,16 +439,12 @@ void msm_isp_update_framedrop_reg(struct vfe_device *vfe_dev,
 				    (stream_info->framedrop_period + 1) + 1;
 				vfe_dev->hw_info->vfe_ops.axi_ops.
 					cfg_framedrop(vfe_dev, stream_info);
-				vfe_dev->hw_info->vfe_ops.core_ops.
-					reg_update(vfe_dev, 0xF);
 			} else {
 				stream_info->runtime_burst_frame_count--;
 				if (stream_info->
 				    runtime_burst_frame_count == 0) {
 					vfe_dev->hw_info->vfe_ops.axi_ops.
 					cfg_framedrop(vfe_dev, stream_info);
-					vfe_dev->hw_info->vfe_ops.core_ops.
-					 reg_update(vfe_dev, 0xF);
 				}
 			}
 		}
@@ -497,16 +493,17 @@ void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 		vfe_dev->axi_data.current_frame_src_mask[session_id] = 0;
 		switch (event_type) {
 		case ISP_EVENT_SOF:
-			if (vfe_dev->isp_sof_debug < 5)
-				pr_err("%s: frame id: %u\n", __func__,
-					vfe_dev->axi_data.frame_id[session_id]);
-			else
-				ISP_DBG("%s: frame id: %u\n", __func__,
-					vfe_dev->axi_data.frame_id[session_id]);
-			vfe_dev->isp_sof_debug++;
+			if ((frame_src == VFE_PIX_0) && (vfe_dev->isp_sof_debug < 5)) {
+				pr_err("%s: PIX0 frame id: %u\n", __func__,
+					vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id);
+				vfe_dev->isp_sof_debug++;
+			}
 			vfe_dev->axi_data.frame_id[session_id]++;
 			if (vfe_dev->axi_data.frame_id[session_id] == 0)
 				vfe_dev->axi_data.frame_id[session_id] = 1;
+			ISP_DBG("%s: frame_src %d frame id: %u\n", __func__,
+				frame_src,
+				vfe_dev->axi_data.frame_id[session_id]);
 			break;
 		default:
 			break;
@@ -518,8 +515,6 @@ void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 		vfe_dev->frame_id = vfe_dev->axi_data.frame_id[session_id];
 		vfe_dev->eof_event_occur = 0;
 		msm_isp_send_event(vfe_dev, event_type | frame_src, &event_data);
-		/*pr_debug("%s: frame id %d\n", __func__,
-			vfe_dev->axi_data.frame_id[session_id]);*/
 	}
 }
 #else
@@ -531,7 +526,7 @@ void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 	session_id = vfe_dev->axi_data.src_info[frame_src].session_id;
 	if (!(vfe_dev->axi_data.session_frame_src_mask[session_id]
 		& (1 << frame_src))) {
-		pr_err("%s: Ignoring the Sof for the sourece INTF %d\n",
+		pr_err("%s: Ignoring the Sof for the source INTF %d\n",
 			__func__, (1 << frame_src));
 		return;
 	}
@@ -547,9 +542,17 @@ void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 		vfe_dev->axi_data.current_frame_src_mask[session_id] = 0;
 		switch (event_type) {
 		case ISP_EVENT_SOF:
+			if ((frame_src == VFE_PIX_0) && (vfe_dev->isp_sof_debug < 5)) {
+				pr_err("%s: PIX0 frame id: %u\n", __func__,
+					vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id);
+				vfe_dev->isp_sof_debug++;
+			}
 			vfe_dev->axi_data.frame_id[session_id]++;
 			if (vfe_dev->axi_data.frame_id[session_id] == 0)
 				vfe_dev->axi_data.frame_id[session_id] = 1;
+			ISP_DBG("%s: frame_src %d frame id: %u\n", __func__,
+				frame_src,
+				vfe_dev->axi_data.frame_id[session_id]);
 			break;
 		default:
 			break;
@@ -559,14 +562,9 @@ void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 		event_data.frame_id = vfe_dev->axi_data.frame_id[session_id];
 		event_data.timestamp = ts->event_time;
 		event_data.mono_timestamp = ts->buf_time;
-
-		//pr_err("%s: AAAAA SOF frame id = %u\n",
-		//	   __func__, vfe_dev->axi_data.frame_id[session_id]);
 		vfe_dev->frame_id = vfe_dev->axi_data.frame_id[session_id];
 		vfe_dev->eof_event_occur = 0;
 		msm_isp_send_event(vfe_dev, event_type | frame_src, &event_data);
-		pr_debug("%s: frame id %d\n", __func__,
-			vfe_dev->axi_data.frame_id[session_id]);
 	}
 }
 
@@ -1704,7 +1702,8 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 		if (!wait_for_complete_for_this_stream) {
 			msm_isp_axi_stream_enable_cfg(vfe_dev, stream_info);
 			stream_info->state = INACTIVE;
-			vfe_dev->hw_info->vfe_ops.core_ops.reg_update(vfe_dev, 0xF);
+			vfe_dev->hw_info->vfe_ops.core_ops.
+				reg_update(vfe_dev, 0xF);
 		}
 		wait_for_complete |= wait_for_complete_for_this_stream;
 		session_id = stream_info->session_id;
@@ -1731,7 +1730,8 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 	}
 	if (wait_for_complete) {
 		vfe_dev->axi_data.stream_update = stream_cfg_cmd->num_streams;
-		vfe_dev->hw_info->vfe_ops.core_ops.reg_update(vfe_dev, 0xF);
+		vfe_dev->hw_info->vfe_ops.core_ops.
+				reg_update(vfe_dev, 0xF);
 #if defined(FAST_ISP_STREAM_OFF)
 		msm_isp_axi_stream_update_new(vfe_dev, DISABLE_CAMIF);
 		rc = msm_isp_axi_wait_for_cfg_done(vfe_dev, NO_UPDATE);
@@ -1745,8 +1745,10 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 				HANDLE_TO_IDX(
 					stream_cfg_cmd->stream_handle[i])];
 				stream_info->state = STOP_PENDING;
-				vfe_dev->hw_info->vfe_ops.core_ops.reg_update(vfe_dev, 0xF);
-				msm_isp_axi_stream_enable_cfg(vfe_dev, stream_info);
+				vfe_dev->hw_info->vfe_ops.core_ops.
+					reg_update(vfe_dev, 0xF);
+				msm_isp_axi_stream_enable_cfg(
+					vfe_dev, stream_info);
 				stream_info->state = INACTIVE;
 			}
 		rc = 0;

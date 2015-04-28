@@ -457,7 +457,7 @@ static void msm_vfe40_process_camif_irq(struct vfe_device *vfe_dev,
 	uint32_t irq_status0, uint32_t irq_status1,
 	struct msm_isp_timestamp *ts)
 {
-	int cnt;
+	int cnt = 0;
 
 	if (!(irq_status0 & 0xF))
 		return;
@@ -465,12 +465,13 @@ static void msm_vfe40_process_camif_irq(struct vfe_device *vfe_dev,
 	if (irq_status0 & (1 << 0)) {
 		ISP_DBG("%s: SOF IRQ\n", __func__);
 		cnt = vfe_dev->axi_data.src_info[VFE_PIX_0].raw_stream_count;
-		if (cnt > 0 && vfe_dev->axi_data.src_info[VFE_PIX_0].pix_stream_count == 0) {
+		if (cnt > 0 && vfe_dev->axi_data.src_info[VFE_PIX_0].
+			pix_stream_count == 0) {
 			msm_isp_notify(vfe_dev, ISP_EVENT_SOF, VFE_PIX_0, ts);
 			if (vfe_dev->axi_data.stream_update)
 				msm_isp_axi_stream_update(vfe_dev,
-					(1 << VFE_RAW_0));
-			msm_isp_update_framedrop_reg(vfe_dev, (1 << VFE_RAW_0));
+					(1 << VFE_PIX_0));
+			msm_isp_update_framedrop_reg(vfe_dev, (1 << VFE_PIX_0));
 		}
 	}
 	if (irq_status0 & (1 << 1))
@@ -711,16 +712,21 @@ static void msm_vfe40_process_reg_update(struct vfe_device *vfe_dev,
 	if (atomic_read(&vfe_dev->axi_data.axi_cfg_update))
 		msm_isp_axi_cfg_update(vfe_dev);
 	if (vfe_dev->axi_data.stream_update ||
-		atomic_read(&vfe_dev->stats_data.stats_update) || atomic_read(&vfe_dev->axi_data.axi_cfg_update)) {
+		atomic_read(&vfe_dev->stats_data.stats_update) ||
+		atomic_read(&vfe_dev->axi_data.axi_cfg_update)) {
 		if (input_src & (1 << VFE_PIX_0)) {
-			vfe_dev->hw_info->vfe_ops.core_ops.reg_update(vfe_dev, (1 << VFE_PIX_0));
+			vfe_dev->hw_info->vfe_ops.core_ops.
+			reg_update(vfe_dev, (1 << VFE_PIX_0));
 		}
 	}
 	msm_isp_update_framedrop_reg(vfe_dev, input_src);
 	//msm_isp_update_stats_framedrop_reg(vfe_dev);
 	msm_isp_update_error_frame_count(vfe_dev);
-	if ((input_src & (1 << VFE_RAW_0)) || (input_src & (1 << VFE_RAW_1)) || (input_src & (1 << VFE_RAW_2))) {
-		vfe_dev->hw_info->vfe_ops.core_ops.reg_update(vfe_dev, input_src);
+	if ((input_src & (1 << VFE_RAW_0)) ||
+		(input_src & (1 << VFE_RAW_1)) ||
+		(input_src & (1 << VFE_RAW_2))) {
+		vfe_dev->hw_info->vfe_ops.core_ops.
+			reg_update(vfe_dev, input_src);
 	}
 	return;
 }
