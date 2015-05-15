@@ -376,12 +376,9 @@ static inline bool __has_cursum_space(struct f2fs_journal *journal,
 #define F2FS_IOC_MOVE_RANGE		_IOWR(F2FS_IOCTL_MAGIC, 9,	\
 						struct f2fs_move_range)
 
-#define F2FS_IOC_SET_ENCRYPTION_POLICY					\
-		_IOR('f', 19, struct f2fs_encryption_policy)
-#define F2FS_IOC_GET_ENCRYPTION_PWSALT					\
-		_IOW('f', 20, __u8[16])
-#define F2FS_IOC_GET_ENCRYPTION_POLICY					\
-		_IOW('f', 21, struct f2fs_encryption_policy)
+#define F2FS_IOC_SET_ENCRYPTION_POLICY	FS_IOC_SET_ENCRYPTION_POLICY
+#define F2FS_IOC_GET_ENCRYPTION_POLICY	FS_IOC_GET_ENCRYPTION_POLICY
+#define F2FS_IOC_GET_ENCRYPTION_PWSALT	FS_IOC_GET_ENCRYPTION_PWSALT
 
 /*
  * should be same as XFS_IOC_GOINGDOWN.
@@ -418,25 +415,6 @@ struct f2fs_move_range {
  * For INODE and NODE manager
  */
 /* for directory operations */
-struct f2fs_str {
-	unsigned char *name;
-	u32 len;
-};
-
-struct f2fs_filename {
-	const struct qstr *usr_fname;
-	struct f2fs_str disk_name;
-	f2fs_hash_t hash;
-#ifdef CONFIG_F2FS_FS_ENCRYPTION
-	struct f2fs_str crypto_buf;
-#endif
-};
-
-#define FSTR_INIT(n, l)		{ .name = n, .len = l }
-#define FSTR_TO_QSTR(f)		QSTR_INIT((f)->name, (f)->len)
-#define fname_name(p)		((p)->disk_name.name)
-#define fname_len(p)		((p)->disk_name.len)
-
 struct f2fs_dentry_ptr {
 	struct inode *inode;
 	const void *bitmap;
@@ -569,15 +547,6 @@ struct f2fs_map_blocks {
 #define file_keep_isize(inode)	is_file(inode, FADVISE_KEEP_SIZE_BIT)
 #define file_set_keep_isize(inode) set_file(inode, FADVISE_KEEP_SIZE_BIT)
 
-/* Encryption algorithms */
-#define F2FS_ENCRYPTION_MODE_INVALID		0
-#define F2FS_ENCRYPTION_MODE_AES_256_XTS	1
-#define F2FS_ENCRYPTION_MODE_AES_256_GCM	2
-#define F2FS_ENCRYPTION_MODE_AES_256_CBC	3
-#define F2FS_ENCRYPTION_MODE_AES_256_CTS	4
-
-#include "f2fs_crypto.h"
-
 #define DEF_DIR_LEVEL		0
 
 struct f2fs_inode_info {
@@ -603,7 +572,6 @@ struct f2fs_inode_info {
 	struct list_head gdirty_list;	/* linked in global dirty list */
 	struct list_head inmem_pages;	/* inmemory pages managed by f2fs */
 	struct mutex inmem_lock;	/* lock for inmemory pages */
-
 	struct extent_tree *extent_tree;	/* cached extent_tree entry */
 	struct rw_semaphore dio_rwsem[2];/* avoid racing between dio and gc */
 };
@@ -2706,13 +2674,9 @@ void destroy_extent_cache(void);
 /*
  * crypto support
  */
-static inline int f2fs_encrypted_inode(struct inode *inode)
+static inline bool f2fs_encrypted_inode(struct inode *inode)
 {
-#ifdef CONFIG_F2FS_FS_ENCRYPTION
 	return file_is_encrypt(inode);
-#else
-	return 0;
-#endif
 }
 
 static inline void f2fs_set_encrypted_inode(struct inode *inode)
@@ -2724,20 +2688,12 @@ static inline void f2fs_set_encrypted_inode(struct inode *inode)
 
 static inline bool f2fs_bio_encrypted(struct bio *bio)
 {
-#ifdef CONFIG_F2FS_FS_ENCRYPTION
-	return unlikely(bio->bi_private != NULL);
-#else
-	return false;
-#endif
+	return bio->bi_private != NULL;
 }
 
 static inline int f2fs_sb_has_crypto(struct super_block *sb)
 {
-#ifdef CONFIG_F2FS_FS_ENCRYPTION
 	return F2FS_HAS_FEATURE(sb, F2FS_FEATURE_ENCRYPT);
-#else
-	return 0;
-#endif
 }
 
 static inline int f2fs_sb_mounted_blkzoned(struct super_block *sb)

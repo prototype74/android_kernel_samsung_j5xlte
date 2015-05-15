@@ -84,7 +84,7 @@ static unsigned long dir_block_index(unsigned int level,
 }
 
 static struct f2fs_dir_entry *find_in_block(struct page *dentry_page,
-				struct f2fs_filename *fname,
+				struct fscrypt_name *fname,
 				f2fs_hash_t namehash,
 				int *max_slots,
 				struct page **res_page)
@@ -105,15 +105,15 @@ static struct f2fs_dir_entry *find_in_block(struct page *dentry_page,
 	return de;
 }
 
-struct f2fs_dir_entry *find_target_dentry(struct f2fs_filename *fname,
+struct f2fs_dir_entry *find_target_dentry(struct fscrypt_name *fname,
 			f2fs_hash_t namehash, int *max_slots,
 			struct f2fs_dentry_ptr *d)
 {
 	struct f2fs_dir_entry *de;
 	unsigned long bit_pos = 0;
 	int max_len = 0;
-	struct f2fs_str de_name = FSTR_INIT(NULL, 0);
-	struct f2fs_str *name = &fname->disk_name;
+	struct fscrypt_str de_name = FSTR_INIT(NULL, 0);
+	struct fscrypt_str *name = &fname->disk_name;
 
 	if (max_slots)
 		*max_slots = 0;
@@ -160,7 +160,7 @@ found:
 
 static struct f2fs_dir_entry *find_in_level(struct inode *dir,
 					unsigned int level,
-					struct f2fs_filename *fname,
+					struct fscrypt_name *fname,
 					struct page **res_page)
 {
 	struct qstr name = FSTR_TO_QSTR(&fname->disk_name);
@@ -427,7 +427,7 @@ struct page *init_inode_metadata(struct inode *inode, struct inode *dir,
 			goto put_error;
 
 		if (f2fs_encrypted_inode(dir) && f2fs_may_encrypt(inode)) {
-			err = f2fs_inherit_context(dir, inode, page);
+			err = fscrypt_inherit_context(dir, inode, page, false);
 			if (err)
 				goto put_error;
 		}
@@ -817,7 +817,7 @@ bool f2fs_empty_dir(struct inode *dir)
 
 int f2fs_fill_dentries(struct file *file, void *dirent, filldir_t filldir,
 		struct f2fs_dentry_ptr *d, unsigned int n, unsigned int bit_pos,
-		struct f2fs_str *fstr)
+		struct fscrypt_str *fstr)
 {
 	unsigned int start_bit_pos = bit_pos;
 	unsigned char d_type;
@@ -880,7 +880,7 @@ static int f2fs_readdir(struct file *file, void *dirent, filldir_t filldir)
 	struct page *dentry_page = NULL;
 	struct file_ra_state *ra = &file->f_ra;
 	struct f2fs_dentry_ptr d;
-	struct f2fs_str fstr = FSTR_INIT(NULL, 0);
+	struct fscrypt_str fstr = FSTR_INIT(NULL, 0);
 	unsigned int n = 0;
 	int err = 0;
 
@@ -889,8 +889,7 @@ static int f2fs_readdir(struct file *file, void *dirent, filldir_t filldir)
 		if (err && err != -ENOKEY)
 			return err;
 
-		err = f2fs_fname_crypto_alloc_buffer(inode, F2FS_NAME_LEN,
-								&fstr);
+		err = fscrypt_fname_alloc_buffer(inode, F2FS_NAME_LEN, &fstr);
 		if (err < 0)
 			return err;
 	}
@@ -945,7 +944,7 @@ out:
 static int f2fs_dir_open(struct inode *inode, struct file *filp)
 {
 	if (f2fs_encrypted_inode(inode))
-		return f2fs_get_encryption_info(inode) ? -EACCES : 0;
+		return fscrypt_get_encryption_info(inode) ? -EACCES : 0;
 	return 0;
 }
 

@@ -178,7 +178,7 @@ static int f2fs_link(struct dentry *old_dentry, struct inode *dir,
 	int err;
 
 	if (f2fs_encrypted_inode(dir) &&
-		!f2fs_is_child_context_consistent_with_parent(dir, inode))
+			!fscrypt_has_permitted_context(dir, inode))
 		return -EPERM;
 
 	f2fs_balance_fs(sbi, true);
@@ -402,20 +402,20 @@ static int f2fs_symlink(struct inode *dir, struct dentry *dentry,
 	struct f2fs_sb_info *sbi = F2FS_I_SB(dir);
 	struct inode *inode;
 	size_t len = strlen(symname);
-	struct f2fs_str disk_link = FSTR_INIT((char *)symname, len + 1);
-	struct f2fs_encrypted_symlink_data *sd = NULL;
+	struct fscrypt_str disk_link = FSTR_INIT((char *)symname, len + 1);
+	struct fscrypt_symlink_data *sd = NULL;
 	int err;
 
 	if (f2fs_encrypted_inode(dir)) {
-		err = f2fs_get_encryption_info(dir);
+		err = fscrypt_get_encryption_info(dir);
 		if (err)
 			return err;
 
 		if (!fscrypt_has_encryption_key(dir))
 			return -ENOKEY;
 
-		disk_link.len = (f2fs_fname_encrypted_size(dir, len) +
-				sizeof(struct f2fs_encrypted_symlink_data));
+		disk_link.len = (fscrypt_fname_encrypted_size(dir, len) +
+				sizeof(struct fscrypt_symlink_data));
 	}
 
 	if (disk_link.len > dir->i_sb->s_blocksize)
@@ -443,7 +443,7 @@ static int f2fs_symlink(struct inode *dir, struct dentry *dentry,
 
 	if (f2fs_encrypted_inode(inode)) {
 		struct qstr istr = QSTR_INIT(symname, len);
-		struct f2fs_str ostr;
+		struct fscrypt_str ostr;
 
 		sd = kzalloc(disk_link.len, GFP_NOFS);
 		if (!sd) {
@@ -451,7 +451,7 @@ static int f2fs_symlink(struct inode *dir, struct dentry *dentry,
 			goto err_out;
 		}
 
-		err = f2fs_get_encryption_info(inode);
+		err = fscrypt_get_encryption_info(inode);
 		if (err)
 			goto err_out;
 
@@ -682,8 +682,7 @@ static int f2fs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		return -ENOKEY;
 
 	if ((old_dir != new_dir) && f2fs_encrypted_inode(new_dir) &&
-		!f2fs_is_child_context_consistent_with_parent(new_dir,
-							old_inode)) {
+			!fscrypt_has_permitted_context(new_dir, old_inode)) {
 		err = -EPERM;
 		goto out;
 	}
@@ -1024,7 +1023,7 @@ static void *f2fs_encrypted_follow_link(struct dentry *dentry,
 	u32 max_size = inode->i_sb->s_blocksize;
 	int res;
 
-	res = f2fs_get_encryption_info(inode);
+	res = fscrypt_get_encryption_info(inode);
 	if (res)
 		return ERR_PTR(res);
 
@@ -1034,7 +1033,7 @@ static void *f2fs_encrypted_follow_link(struct dentry *dentry,
 	caddr = kmap(cpage);
 
 	/* Symlink is encrypted */
-	sd = (struct f2fs_encrypted_symlink_data *)caddr;
+	sd = (struct fscrypt_symlink_data *)caddr;
 	cstr.name = sd->encrypted_path;
 	cstr.len = le16_to_cpu(sd->len);
 
@@ -1049,7 +1048,7 @@ static void *f2fs_encrypted_follow_link(struct dentry *dentry,
 		res = -EIO;
 		goto errout;
 	}
-	res = f2fs_fname_crypto_alloc_buffer(inode, cstr.len, &pstr);
+	res = fscrypt_fname_alloc_buffer(inode, cstr.len, &pstr);
 	if (res)
 		goto errout;
 
@@ -1073,7 +1072,7 @@ static void *f2fs_encrypted_follow_link(struct dentry *dentry,
 	page_cache_release(cpage);
 	return NULL;
 errout:
-	f2fs_fname_crypto_free_buffer(&pstr);
+	fscrypt_fname_free_buffer(&pstr);
 	kunmap(cpage);
 	page_cache_release(cpage);
 	return ERR_PTR(res);

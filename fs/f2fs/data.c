@@ -64,9 +64,9 @@ static void f2fs_read_end_io(struct bio *bio, int err)
 
 	if (f2fs_bio_encrypted(bio)) {
 		if (err) {
-			f2fs_release_crypto_ctx(bio->bi_private);
+			fscrypt_release_ctx(bio->bi_private);
 		} else {
-			f2fs_end_io_crypto_work(bio->bi_private, bio);
+			fscrypt_decrypt_bio_pages(bio->bi_private, bio);
 			return;
 		}
 	}
@@ -261,16 +261,10 @@ static bool __has_merged_page(struct f2fs_bio_info *io,
 
 	bio_for_each_segment_all(bvec, io->bio, i) {
 
-		if (bvec->bv_page->mapping) {
+		if (bvec->bv_page->mapping)
 			target = bvec->bv_page;
-		} else {
-			struct f2fs_crypto_ctx *ctx;
-
-			/* encrypted page */
-			ctx = (struct f2fs_crypto_ctx *)page_private(
-								bvec->bv_page);
-			target = ctx->w.control_page;
-		}
+		else
+			target = fscrypt_control_page(bvec->bv_page);
 
 		if (idx != target->index)
 			continue;
@@ -352,7 +346,8 @@ void f2fs_flush_merged_bios(struct f2fs_sb_info *sbi)
 int f2fs_submit_page_bio(struct f2fs_io_info *fio)
 {
 	struct bio *bio;
-	struct page *page = fio->encrypted_page ? fio->encrypted_page : fio->page;
+	struct page *page = fio->encrypted_page ?
+			fio->encrypted_page : fio->page;
 
 	trace_f2fs_submit_page_bio(page, fio);
 	f2fs_trace_ios(fio, 0);
@@ -1251,15 +1246,6 @@ next_page:
 	if (bio)
 		__submit_bio(F2FS_I_SB(inode), bio, DATA);
 	return 0;
-}
-
-static int get_data_block_bmap(struct inode *inode, sector_t iblock,
-			struct buffer_head *bh_result, int create)
-{
-	/* Block number less than F2FS MAX BLOCKS */
-	if (unlikely(iblock >= max_file_size(0)))
-		return -EFBIG;
-	return get_data_block_ro(inode, iblock, bh_result, create);
 }
 
 static int f2fs_read_data_page(struct file *file, struct page *page)

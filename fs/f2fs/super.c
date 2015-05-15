@@ -608,10 +608,6 @@ static struct inode *f2fs_alloc_inode(struct super_block *sb)
 
 	/* Will be used by directory only */
 	fi->i_dir_level = F2FS_SB(sb)->dir_level;
-
-#ifdef CONFIG_F2FS_FS_ENCRYPTION
-	fi->i_crypt_info = NULL;
-#endif
 	return &fi->vfs_inode;
 }
 
@@ -646,11 +642,7 @@ static int f2fs_drop_inode(struct inode *inode)
 
 			sb_end_intwrite(inode->i_sb);
 
-#ifdef CONFIG_F2FS_FS_ENCRYPTION
-			if (F2FS_I(inode)->i_crypt_info)
-				f2fs_free_encryption_info(inode,
-					F2FS_I(inode)->i_crypt_info);
-#endif
+			fscrypt_put_encryption_info(inode, NULL);
 			spin_lock(&inode->i_lock);
 			atomic_dec(&inode->i_count);
 		}
@@ -1926,6 +1918,7 @@ try_onemore:
 	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
 
 	sb->s_op = &f2fs_sops;
+	sb->s_cop = &f2fs_cryptops;
 	sb->s_xattr = f2fs_xattr_handlers;
 	sb->s_export_op = &f2fs_export_ops;
 	sb->s_magic = F2FS_SUPER_MAGIC;
@@ -2282,7 +2275,6 @@ static int __init init_f2fs_fs(void)
 		err = -ENOMEM;
 		goto free_extent_cache;
 	}
-
 	register_shrinker(&f2fs_shrinker_info);
 
 	err = register_filesystem(&f2fs_fs_type);
