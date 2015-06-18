@@ -26,8 +26,7 @@
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
 #define VFE40_BURST_LEN 1
-#define VFE40_BURST_LEN_8916_VERSION 2
-#define VFE40_BURST_LEN_8939_VERSION 3
+#define VFE40_BURST_LEN_8916_VERSION 3
 #define VFE40_STATS_BURST_LEN 1
 #define VFE40_STATS_BURST_LEN_8916_VERSION 2
 #define VFE40_UB_SIZE 1536 /* 1536 * 128 bits = 24KB */
@@ -1231,10 +1230,9 @@ static void msm_vfe40_axi_cfg_wm_reg(
 	uint32_t burst_len;
 	uint32_t wm_base = VFE40_WM_BASE(stream_info->wm[plane_idx]);
 
-	if (vfe_dev->vfe_hw_version == VFE40_8916_VERSION)
+	if (vfe_dev->vfe_hw_version == VFE40_8916_VERSION ||
+	    vfe_dev->vfe_hw_version == VFE40_8939_VERSION)
 		burst_len = VFE40_BURST_LEN_8916_VERSION;
-	else if(vfe_dev->vfe_hw_version == VFE40_8939_VERSION)
-		burst_len = VFE40_BURST_LEN_8939_VERSION;
 	else
 		burst_len = VFE40_BURST_LEN;
 
