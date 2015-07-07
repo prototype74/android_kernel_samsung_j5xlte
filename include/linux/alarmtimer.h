@@ -5,10 +5,12 @@
 #include <linux/hrtimer.h>
 #include <linux/timerqueue.h>
 #include <linux/rtc.h>
+#include <linux/types.h>
 
 enum alarmtimer_type {
 	ALARM_REALTIME,
 	ALARM_BOOTTIME,
+	ALARM_POWEROFF_REALTIME,
 
 	ALARM_NUMTYPE,
 };
@@ -21,6 +23,7 @@ enum alarmtimer_restart {
 
 #define ALARMTIMER_STATE_INACTIVE	0x00
 #define ALARMTIMER_STATE_ENQUEUED	0x01
+
 #define pr_alarm(debug_level_mask, args...) \
 	do { \
 		if (debug_mask & ANDROID_ALARM_PRINT_##debug_level_mask) { \
@@ -54,8 +57,9 @@ int alarm_start_relative(struct alarm *alarm, ktime_t start);
 void alarm_restart(struct alarm *alarm);
 int alarm_try_to_cancel(struct alarm *alarm);
 int alarm_cancel(struct alarm *alarm);
-void set_power_on_alarm(long secs, bool enable);
+void set_power_on_alarm(void);
 void power_on_alarm_init(void);
+enum alarmtimer_type clock2alarm(clockid_t clockid);
 #ifdef CONFIG_RTC_AUTO_PWRON
 int alarm_set_alarm(char *alarm_data);
 #endif /* CONFIG_AUTO_PWRON */
