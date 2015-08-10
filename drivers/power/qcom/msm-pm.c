@@ -40,7 +40,6 @@
 #ifdef CONFIG_VFP
 #include <asm/vfp.h>
 #endif
-#include <soc/qcom/jtag.h>
 #include "idle.h"
 #include "pm-boot.h"
 #include "../../../arch/arm/mach-msm/clock.h"
@@ -272,8 +271,6 @@ static bool __ref msm_pm_spm_power_collapse(
 		pr_info("CPU%u: %s: program vector to %p\n",
 			cpu, __func__, entry);
 
-	msm_jtag_save_state();
-
 #ifdef CONFIG_SEC_DEBUG
         secdbg_sched_msg("+pc(I:%d,R:%d)", from_idle, notify_rpm);
 #endif
@@ -284,8 +281,6 @@ static bool __ref msm_pm_spm_power_collapse(
 #ifdef CONFIG_SEC_DEBUG
         secdbg_sched_msg("-pc(%d)", collapsed);
 #endif
-
-	msm_jtag_restore_state();
 
 	if (collapsed)
 		local_fiq_enable();
