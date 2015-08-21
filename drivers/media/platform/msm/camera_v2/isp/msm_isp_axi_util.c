@@ -505,6 +505,9 @@ void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 				frame_src,
 				vfe_dev->axi_data.frame_id[session_id]);
 			break;
+		case ISP_EVENT_REG_UPDATE:
+			vfe_dev->axi_data.src_info[frame_src].last_updt_frm_id = 0;
+			break;
 		default:
 			break;
 		}
@@ -553,6 +556,9 @@ void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 			ISP_DBG("%s: frame_src %d frame id: %u\n", __func__,
 				frame_src,
 				vfe_dev->axi_data.frame_id[session_id]);
+			break;
+		case ISP_EVENT_REG_UPDATE:
+			vfe_dev->axi_data.src_info[frame_src].last_updt_frm_id = 0;
 			break;
 		default:
 			break;
@@ -634,7 +640,7 @@ void msm_isp_calculate_bandwidth(
 			(axi_data->src_info[VFE_PIX_0].pixel_clock /
 			axi_data->src_info[VFE_PIX_0].width) *
 			stream_info->max_width;
-		stream_info->bandwidth = stream_info->bandwidth *
+		stream_info->bandwidth = (unsigned long)stream_info->bandwidth *
 			stream_info->format_factor / ISP_Q2;
 	} else {
 		int rdi = SRC_TO_INTF(stream_info->stream_src);
