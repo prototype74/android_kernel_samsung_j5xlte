@@ -54,7 +54,7 @@
 #define TSENS2_SN_STATUS_ADDR(n)	((n) + 0x1044)
 #define TSENS2_SN_STATUS_VALID		BIT(14)
 #define TSENS2_SN_STATUS_VALID_MASK	0x4000
-#define TSENS2_TRDY_ADDR(n)		((n) + 0x84)
+#define TSENS2_TRDY_ADDR(n)		((n) + 0x1084)
 
 #define TSENS3_TRDY_ADDR(n)            ((n) + 0x1084)
 
@@ -1325,7 +1325,7 @@ static irqreturn_t tsens_irq_thread(int irq, void *data)
 	int sensor_sw_id = -EINVAL, rc = 0;
 	uint32_t idx = 0;
 
-	if ((tmdev->tsens_type == TSENS_TYPE2) |
+	if ((tmdev->tsens_type == TSENS_TYPE2) ||
 			(tmdev->tsens_type == TSENS_TYPE3))
 		sensor_status_addr = TSENS2_SN_STATUS_ADDR(tmdev->tsens_addr);
 	else
