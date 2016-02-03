@@ -2435,7 +2435,7 @@ static void layout_symtab(struct module *mod, struct load_info *info)
 
 	/* We'll tack temporary mod_kallsyms on the end. */
 	mod->init_size = ALIGN(mod->init_size,
-				      __alignof__(struct mod_kallsyms));
+			       __alignof__(struct mod_kallsyms));
 	info->mod_kallsyms_init_off = mod->init_size;
 	mod->init_size += sizeof(struct mod_kallsyms);
 	mod->init_size = debug_align(mod->init_size);
@@ -2461,7 +2461,7 @@ static void add_kallsyms(struct module *mod, const struct load_info *info)
 	mod->kallsyms->num_symtab = symsec->sh_size / sizeof(Elf_Sym);
 	/* Make sure we get permanent strtab: don't use info->strtab. */
 	mod->kallsyms->strtab = (void *)info->sechdrs[info->index.str].sh_addr;
-	
+
 	/* Set types up while we still have access to sections. */
 	for (i = 0; i < mod->kallsyms->num_symtab; i++)
 		mod->kallsyms->symtab[i].st_info
