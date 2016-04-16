@@ -39,25 +39,15 @@ static struct bio *next_bio(struct bio *bio, unsigned int nr_pages,
 	return new;
 }
 
-/**
- * blkdev_issue_discard - queue a discard
- * @bdev:	blockdev to issue discard for
- * @sector:	start sector
- * @nr_sects:	number of sectors to discard
- * @gfp_mask:	memory allocation flags (for bio_alloc)
- * @flags:	BLKDEV_IFL_* flags to control behaviour
- *
- * Description:
- *    Issue a discard request for the sectors in question.
- */
-int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
-		sector_t nr_sects, gfp_t gfp_mask, unsigned long flags)
+int __blkdev_issue_discard(struct block_device *bdev, sector_t sector,
+		sector_t nr_sects, gfp_t gfp_mask, unsigned long flags,
+		struct bio **biop)
 {
 	struct request_queue *q = bdev_get_queue(bdev);
+	struct bio *bio = *biop;
 	int type = REQ_WRITE | REQ_DISCARD | REQ_PRIO;
 	sector_t max_discard_sectors;
 	sector_t granularity, alignment;
-	struct bio *bio = NULL;
 
 	if (!q)
 		return -ENXIO;
@@ -65,7 +55,7 @@ int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 	if (!blk_queue_discard(q))
 		return -EOPNOTSUPP;
 
-	/* Zero-sector (unknown) and one-sector granularities are the same.  */
+	/* Zero-sector (unknown) and one-sector granularities are the same. */
 	granularity = max(q->limits.discard_granularity >> 9, 1U);
 	alignment = bdev_discard_alignment(bdev) >> 9;
 	alignment = sector_div(alignment, granularity);
@@ -88,7 +78,6 @@ int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 		type |= REQ_SECURE;
 	}
 
-	blk_start_plug(&plug);
 	while (nr_sects) {
 		unsigned int req_sects;
 		sector_t end_sect, tmp;
@@ -125,7 +114,35 @@ int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 		 */
 		cond_resched();
 	}
-	if (bio)
+
+	*biop = bio;
+	return 0;
+}
+EXPORT_SYMBOL(__blkdev_issue_discard);
+
+/**
+ * blkdev_issue_discard - queue a discard
+ * @bdev:	blockdev to issue discard for
+ * @sector:	start sector
+ * @nr_sects:	number of sectors to discard
+ * @gfp_mask:	memory allocation flags (for bio_alloc)
+ * @flags:	BLKDEV_IFL_* flags to control behaviour
+ *
+ * Description:
+ *    Issue a discard request for the sectors in question.
+ */
+int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
+		sector_t nr_sects, gfp_t gfp_mask, unsigned long flags)
+{
+	struct bio *bio = NULL;
+	struct blk_plug plug;
+	int type = REQ_WRITE | REQ_DISCARD | REQ_PRIO;
+	int ret;
+
+	blk_start_plug(&plug);
+	ret = __blkdev_issue_discard(bdev, sector, nr_sects, gfp_mask, flags,
+				     &bio);
+	if (!ret && bio)
 		ret = submit_bio_wait(type, bio);
 	blk_finish_plug(&plug);
 
