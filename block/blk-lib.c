@@ -26,6 +26,19 @@ static void bio_batch_end_io(struct bio *bio, int err)
 	bio_put(bio);
 }
 
+static struct bio *next_bio(struct bio *bio, unsigned int nr_pages,
+		int type, gfp_t gfp)
+{
+	struct bio *new = bio_alloc(gfp, nr_pages);
+
+	if (bio) {
+		bio_chain(bio, new);
+		submit_bio(type, bio);
+	}
+
+	return new;
+}
+
 /**
  * blkdev_issue_discard - queue a discard
  * @bdev:	blockdev to issue discard for
@@ -40,15 +53,11 @@ static void bio_batch_end_io(struct bio *bio, int err)
 int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 		sector_t nr_sects, gfp_t gfp_mask, unsigned long flags)
 {
-	DECLARE_COMPLETION_ONSTACK(wait);
 	struct request_queue *q = bdev_get_queue(bdev);
 	int type = REQ_WRITE | REQ_DISCARD | REQ_PRIO;
 	sector_t max_discard_sectors;
 	sector_t granularity, alignment;
-	struct bio_batch bb;
-	struct bio *bio;
-	int ret = 0;
-	struct blk_plug plug;
+	struct bio *bio = NULL;
 
 	if (!q)
 		return -ENXIO;
@@ -79,24 +88,14 @@ int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 		type |= REQ_SECURE;
 	}
 
-	atomic_set(&bb.done, 1);
-	bb.flags = 1 << BIO_UPTODATE;
-	bb.wait = &wait;
-
 	blk_start_plug(&plug);
 	while (nr_sects) {
 		unsigned int req_sects;
 		sector_t end_sect, tmp;
 
-		bio = bio_alloc(gfp_mask, 1);
-		if (!bio) {
-			ret = -ENOMEM;
-			break;
-		}
-
 		req_sects = min_t(sector_t, nr_sects, max_discard_sectors);
 
-		/*
+		/**
 		 * If splitting a request, and the next starting sector would be
 		 * misaligned, stop the discard at the previous aligned sector.
 		 */
@@ -110,17 +109,13 @@ int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 			req_sects = end_sect - sector;
 		}
 
+		bio = next_bio(bio, 1, type, gfp_mask);
 		bio->bi_sector = sector;
-		bio->bi_end_io = bio_batch_end_io;
 		bio->bi_bdev = bdev;
-		bio->bi_private = &bb;
 
 		bio->bi_size = req_sects << 9;
 		nr_sects -= req_sects;
 		sector = end_sect;
-
-		atomic_inc(&bb.done);
-		submit_bio(type, bio);
 
 		/*
 		 * We can loop for a long time in here, if someone does
@@ -130,16 +125,12 @@ int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 		 */
 		cond_resched();
 	}
+	if (bio)
+		ret = submit_bio_wait(type, bio);
 	blk_finish_plug(&plug);
 
-	/* Wait for bios in-flight */
-	if (!atomic_dec_and_test(&bb.done))
-		wait_for_completion_io(&wait);
 
-	if (!test_bit(BIO_UPTODATE, &bb.flags))
-		ret = -EIO;
-
-	return ret;
+	return ret != -EOPNOTSUPP ? ret : 0;
 }
 EXPORT_SYMBOL(blkdev_issue_discard);
 
