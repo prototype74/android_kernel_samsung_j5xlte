@@ -535,7 +535,7 @@ static int32_t msm_actuator_init_step_table(struct msm_actuator_ctrl_t *a_ctrl,
 	int16_t code_per_step = 0;
 	uint32_t qvalue = 0;
 	int16_t cur_code = 0;
-	int16_t step_index = 0, region_index = 0;
+	uint16_t step_index = 0, region_index = 0;
 	uint16_t step_boundary = 0;
 	uint32_t max_code_size = 1;
 	uint16_t data_size = set_info->actuator_params.data_size;
@@ -544,10 +544,9 @@ static int32_t msm_actuator_init_step_table(struct msm_actuator_ctrl_t *a_ctrl,
 	for (; data_size > 0; data_size--)
 		max_code_size *= 2;
 
-	if ((a_ctrl->actuator_state == ACTUATOR_POWER_UP) &&
-		(a_ctrl->step_position_table != NULL)) {
-		kfree(a_ctrl->step_position_table);
-	}
+	/* free the step_position_table to allocate a new one */
+	kfree(a_ctrl->step_position_table);
+
 	a_ctrl->step_position_table = NULL;
 
 	if (set_info->af_tuning_params.total_steps
@@ -576,17 +575,22 @@ static int32_t msm_actuator_init_step_table(struct msm_actuator_ctrl_t *a_ctrl,
 		step_boundary =
 			a_ctrl->region_params[region_index].
 			step_bound[MOVE_NEAR];
-		if (step_boundary > set_info->af_tuning_params.total_steps - 1) {
-			CDBG("%s: Error af steps mismatch!", __func__);
-			return -EFAULT;
+		if (step_boundary >
+			set_info->af_tuning_params.total_steps - 1) {
+			pr_err("invalid step_boundary = %d, max_val = %d",
+				step_boundary,
+				set_info->af_tuning_params.total_steps - 1);
+			kfree(a_ctrl->step_position_table);
+			a_ctrl->step_position_table = NULL;
+			return -EINVAL;
 		}
 		for (; step_index <= step_boundary; step_index++) {
-			if ( qvalue > 1 && qvalue <= MAX_QVALUE)
+			if (qvalue > 1 && qvalue <= MAX_QVALUE)
 				cur_code = step_index * code_per_step / qvalue;
 			else
 				cur_code = step_index * code_per_step;
 			cur_code += set_info->af_tuning_params.initial_code;
-			if (cur_code < max_code_size){
+			if (cur_code < max_code_size) {
 				a_ctrl->step_position_table[step_index] =
 					cur_code;
 			} else {
