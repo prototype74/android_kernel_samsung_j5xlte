@@ -38,6 +38,7 @@
 
 #include <sound/apr_audio-v2.h>
 #include <sound/q6asm-v2.h>
+#include <sound/q6core.h>
 #include <sound/q6audio-v2.h>
 #include <sound/audio_cal_utils.h>
 
@@ -1448,6 +1449,57 @@ static int32_t is_no_wait_cmd_rsp(uint32_t opcode, uint32_t *cmd_type)
 	return 0;
 }
 
+static void q6asm_process_mtmx_get_param_rsp(struct audio_client *ac,
+				struct asm_mtmx_strtr_get_params_cmdrsp *cmdrsp)
+{
+	struct asm_session_mtmx_strtr_param_session_time_v3_t *time;
+
+	if (cmdrsp->err_code) {
+		dev_err_ratelimited(ac->dev,
+				    "%s: err=%x, mod_id=%x, param_id=%x\n",
+				    __func__, cmdrsp->err_code,
+				    cmdrsp->param_info.module_id,
+				    cmdrsp->param_info.param_id);
+		return;
+	}
+	dev_dbg_ratelimited(ac->dev,
+			    "%s: mod_id=%x, param_id=%x\n", __func__,
+			    cmdrsp->param_info.module_id,
+			    cmdrsp->param_info.param_id);
+
+	switch (cmdrsp->param_info.module_id) {
+	case ASM_SESSION_MTMX_STRTR_MODULE_ID_AVSYNC:
+		switch (cmdrsp->param_info.param_id) {
+		case ASM_SESSION_MTMX_STRTR_PARAM_SESSION_TIME_V3:
+			time = &cmdrsp->param_data.session_time;
+			dev_vdbg(ac->dev, "%s: GET_TIME_V3, time_lsw=%x, time_msw=%x\n",
+				 __func__, time->session_time_lsw,
+				 time->session_time_msw);
+			ac->time_stamp = (uint64_t)(((uint64_t)
+					 time->session_time_msw << 32) |
+					 time->session_time_lsw);
+			if (time->flags &
+			    ASM_SESSION_MTMX_STRTR_PARAM_STIME_TSTMP_FLG_BMASK)
+				dev_warn_ratelimited(ac->dev,
+						     "%s: recv inval tstmp\n",
+						     __func__);
+			if (atomic_cmpxchg(&ac->time_flag, 1, 0))
+				wake_up(&ac->time_wait);
+
+			break;
+		default:
+			dev_err(ac->dev, "%s: unexpected param_id %x\n",
+				__func__, cmdrsp->param_info.param_id);
+			break;
+		}
+		break;
+	default:
+		dev_err(ac->dev, "%s: unexpected mod_id %x\n",  __func__,
+			cmdrsp->param_info.module_id);
+		break;
+	}
+}
+
 static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 {
 	int i = 0;
@@ -1768,6 +1820,9 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 				 __func__,
 				payload[0], payload[1], payload[2],
 				payload[3]);
+		break;
+	case ASM_SESSION_CMDRSP_GET_MTMX_STRTR_PARAMS_V2:
+		q6asm_process_mtmx_get_param_rsp(ac, (void *) payload);
 		break;
 	}
 	if (ac->cb)
@@ -2168,14 +2223,35 @@ int q6asm_open_write_compressed(struct audio_client *ac, uint32_t format,
 
 	switch (format) {
 	case FORMAT_AC3:
-		open.fmt_id = ASM_MEDIA_FMT_AC3_DEC;
-		break;
+		switch (q6core_get_avs_version()) {
+		case Q6_SUBSYS_AVS2_7:
+			open.fmt_id = ASM_MEDIA_FMT_AC3;
+			break;
+		case Q6_SUBSYS_AVS2_6:
+			open.fmt_id = ASM_MEDIA_FMT_AC3_DEC;
+			break;
+		case Q6_SUBSYS_INVALID:
+		default:
+			pr_err("%s: Invalid format[%d]\n",
+					 __func__, format);
+			rc = -EINVAL;
+			goto fail_cmd;
+		}
 	case FORMAT_EAC3:
-		open.fmt_id = ASM_MEDIA_FMT_EAC3_DEC;
-		break;
-	default:
-		pr_err("%s: Invalid format[%d]\n", __func__, format);
-		goto fail_cmd;
+		switch (q6core_get_avs_version()) {
+		case Q6_SUBSYS_AVS2_7:
+			open.fmt_id = ASM_MEDIA_FMT_EAC3;
+			break;
+		case Q6_SUBSYS_AVS2_6:
+			open.fmt_id = ASM_MEDIA_FMT_EAC3_DEC;
+			break;
+		case Q6_SUBSYS_INVALID:
+		default:
+			pr_err("%s: Invalid format[%d]\n",
+					 __func__, format);
+			rc = -EINVAL;
+			goto fail_cmd;
+		}
 	}
 	/*Below flag indicates the DSP that Compressed audio input
 	stream is not IEC 61937 or IEC 60958 packetizied*/
@@ -2216,6 +2292,7 @@ static int __q6asm_open_write(struct audio_client *ac, uint32_t format,
 				bool is_gapless_mode)
 {
 	int rc = 0x00;
+
 	struct asm_stream_cmd_open_write_v3 open;
 
 	if (ac == NULL) {
@@ -2291,10 +2368,36 @@ static int __q6asm_open_write(struct audio_client *ac, uint32_t format,
 		open.dec_fmt_id = ASM_MEDIA_FMT_MP3;
 		break;
 	case FORMAT_AC3:
-		open.dec_fmt_id = ASM_MEDIA_FMT_EAC3_DEC;
+		switch (q6core_get_avs_version()) {
+		case Q6_SUBSYS_AVS2_7:
+			open.dec_fmt_id = ASM_MEDIA_FMT_AC3;
+			break;
+		case Q6_SUBSYS_AVS2_6:
+			open.dec_fmt_id = ASM_MEDIA_FMT_AC3_DEC;
+			break;
+		case Q6_SUBSYS_INVALID:
+		default:
+			pr_err("%s: Invalid format[%d]\n",
+					 __func__, format);
+			rc = -EINVAL;
+			goto fail_cmd;
+		}
 		break;
 	case FORMAT_EAC3:
-		open.dec_fmt_id = ASM_MEDIA_FMT_EAC3_DEC;
+		switch (q6core_get_avs_version()) {
+		case Q6_SUBSYS_AVS2_7:
+			open.dec_fmt_id = ASM_MEDIA_FMT_EAC3;
+			break;
+		case Q6_SUBSYS_AVS2_6:
+			open.dec_fmt_id = ASM_MEDIA_FMT_EAC3_DEC;
+			break;
+		case Q6_SUBSYS_INVALID:
+		default:
+			pr_err("%s: Invalid format[%d]\n",
+					 __func__, format);
+			rc = -EINVAL;
+			goto fail_cmd;
+		}
 		break;
 	case FORMAT_MP2:
 		open.dec_fmt_id = ASM_MEDIA_FMT_MP2;
