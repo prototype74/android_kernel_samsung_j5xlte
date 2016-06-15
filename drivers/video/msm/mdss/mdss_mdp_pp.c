@@ -2050,7 +2050,7 @@ int mdss_mdp_pp_resume(struct mdss_mdp_ctl *ctl, u32 dspp_num)
 	struct msm_fb_data_type *bl_mfd;
 
 	if (!ctl || !ctl->mdata || !ctl->mfd) {
-		pr_err("invalid input: ctl = 0x%p, mdata = 0x%p, mfd = 0x%p\n",
+		pr_err("invalid input: ctl = 0x%pK, mdata = 0x%pK, mfd = 0x%pK\n",
 			ctl, (!ctl) ? NULL : ctl->mdata,
 			(!ctl) ? NULL : ctl->mfd);
 		return -EPERM;

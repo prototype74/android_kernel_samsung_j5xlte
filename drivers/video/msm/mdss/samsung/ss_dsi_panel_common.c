@@ -5097,7 +5097,7 @@ void mdss_mdp_underrun_dump_info(void)
 				pipe->dst.x, pipe->dst.y, pipe->dst.w, pipe->dst.h,
 				pipe->flags, pipe->src_fmt->format, pipe->src_fmt->bpp,
 				pipe->ndx);
-		LCD_ERR("pipe addr : %p\n", pipe);
+		LCD_ERR("pipe addr : %pK\n", pipe);
 		pcount--;
 		if (!pcount) break;
 	}

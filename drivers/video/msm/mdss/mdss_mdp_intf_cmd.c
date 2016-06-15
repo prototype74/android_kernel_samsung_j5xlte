@@ -1315,7 +1315,7 @@ static int mdss_mdp_cmd_ctx_setup(struct mdss_mdp_ctl *ctl,
 
 	ctx->intf_stopped = 0;
 
-	pr_debug("%s: ctx=%p num=%d\n", __func__, ctx, ctx->pp_num);
+	pr_debug("%s: ctx=%pK num=%d\n", __func__, ctx, ctx->pp_num);
 	MDSS_XLOG(ctl->num, atomic_read(&ctx->koff_cnt), ctx->clk_enabled,
 					ctx->rdptr_enabled);
 
