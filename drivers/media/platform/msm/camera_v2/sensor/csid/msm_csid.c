@@ -649,7 +649,7 @@ static int32_t msm_csid_cmd32(struct csid_device *csid_dev, void __user *arg)
 		csid_params.lut_params.num_cid = lut_par32.num_cid;
 
 		if (csid_params.lut_params.num_cid < 1 ||
-			csid_params.lut_params.num_cid > 16) {
+			csid_params.lut_params.num_cid > MAX_CID) {
 			pr_err("%s: %d num_cid outside range\n",
 				 __func__, __LINE__);
 			rc = -EINVAL;
