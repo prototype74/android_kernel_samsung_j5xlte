@@ -48,12 +48,17 @@ int __blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 	int type = REQ_WRITE | REQ_DISCARD | REQ_PRIO;
 	sector_t max_discard_sectors;
 	sector_t granularity, alignment;
+	sector_t bs_mask;
 
 	if (!q)
 		return -ENXIO;
 
 	if (!blk_queue_discard(q))
 		return -EOPNOTSUPP;
+
+	bs_mask = (bdev_logical_block_size(bdev) >> 9) - 1;
+	if ((sector | nr_sects) & bs_mask)
+		return -EINVAL;
 
 	/* Zero-sector (unknown) and one-sector granularities are the same. */
 	granularity = max(q->limits.discard_granularity >> 9, 1U);
