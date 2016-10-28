@@ -502,7 +502,7 @@ static int32_t msm_sensor_get_power_down_settings(void *setting,
 	/* Allocate memory for power down setting */
 	pd = kzalloc(sizeof(*pd) * size_down, GFP_KERNEL);
 	if (!pd) {
-		pr_err("failed: no memory power_setting %p", pd);
+		pr_err("failed: no memory power_setting %pK", pd);
 		return -EFAULT;
 	}
 
@@ -569,7 +569,7 @@ static int32_t msm_sensor_get_power_up_settings(void *setting,
 	/* Allocate memory for power up setting */
 	pu = kzalloc(sizeof(*pu) * size, GFP_KERNEL);
 	if (!pu) {
-		pr_err("failed: no memory power_setting %p", pu);
+		pr_err("failed: no memory power_setting %pK", pu);
 		return -ENOMEM;
 	}
 
@@ -662,7 +662,7 @@ int32_t msm_sensor_driver_probe(void *setting)
 	if (is_compat_task()) {
 		slave_info32 = kzalloc(sizeof(*slave_info32), GFP_KERNEL);
 		if (!slave_info32) {
-			pr_err("failed: no memory for slave_info32 %p\n",
+			pr_err("failed: no memory for slave_info32 %pK\n",
 				slave_info32);
 			rc = -ENOMEM;
 			kfree(slave_info);
@@ -1005,7 +1005,7 @@ static int32_t msm_sensor_driver_get_gpio_data(
 
 	/* Validate input paramters */
 	if (!sensordata || !of_node) {
-		pr_err("failed: invalid params sensordata %p of_node %p",
+		pr_err("failed: invalid params sensordata %pK of_node %pK",
 			sensordata, of_node);
 		return -EINVAL;
 	}

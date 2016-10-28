@@ -611,7 +611,7 @@ static int32_t msm_csid_cmd32(struct csid_device *csid_dev, void __user *arg)
 	cdata = &local_arg;
 
 	if (!csid_dev || !cdata) {
-		pr_err("%s:%d csid_dev %p, cdata %p\n", __func__, __LINE__,
+		pr_err("%s:%d csid_dev %pK, cdata %pK\n", __func__, __LINE__,
 			csid_dev, cdata);
 		return -EINVAL;
 	}
