@@ -247,6 +247,7 @@ static inline struct acc_dev *func_to_dev(struct usb_function *f)
 static struct usb_request *acc_request_new(struct usb_ep *ep, int buffer_size)
 {
 	struct usb_request *req = usb_ep_alloc_request(ep, GFP_KERNEL);
+
 	if (!req)
 		return NULL;
 
@@ -1089,7 +1090,9 @@ acc_function_unbind(struct usb_configuration *c, struct usb_function *f)
 static void acc_start_work(struct work_struct *data)
 {
 	char *envp[2] = { "ACCESSORY=START", NULL };
+
 	printk(KERN_INFO "usb: Send uevent, ACCESSORY=START \n");
+
 	kobject_uevent_env(&acc_device.this_device->kobj, KOBJ_CHANGE, envp);
 }
 
