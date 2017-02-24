@@ -1799,40 +1799,16 @@ static bool uuid_is_nonzero(__u8 u[16])
 
 static int f2fs_ioc_set_encryption_policy(struct file *filp, unsigned long arg)
 {
-#ifdef CONFIG_F2FS_FS_ENCRYPTION
-	struct f2fs_encryption_policy policy;
 	struct inode *inode = file_inode(filp);
-
-	if (copy_from_user(&policy, (struct f2fs_encryption_policy __user *)arg,
-				sizeof(policy)))
-		return -EFAULT;
 
 	f2fs_update_time(F2FS_I_SB(inode), REQ_TIME);
 
-	return fscrypt_process_policy(filp, &policy);
-#else
-	return -EOPNOTSUPP;
-#endif
+	return fscrypt_ioctl_set_policy(filp, (const void __user *)arg);
 }
 
 static int f2fs_ioc_get_encryption_policy(struct file *filp, unsigned long arg)
 {
-#ifdef CONFIG_F2FS_FS_ENCRYPTION
-	struct f2fs_encryption_policy policy;
-	struct inode *inode = file_inode(filp);
-	int err;
-
-	err = f2fs_get_policy(inode, &policy);
-	if (err)
-		return err;
-
-	if (copy_to_user((struct f2fs_encryption_policy __user *)arg, &policy,
-							sizeof(policy)))
-		return -EFAULT;
-	return 0;
-#else
-	return -EOPNOTSUPP;
-#endif
+	return fscrypt_ioctl_get_policy(filp, (void __user *)arg);
 }
 
 static int f2fs_ioc_get_encryption_pwsalt(struct file *filp, unsigned long arg)
@@ -2132,8 +2108,8 @@ static int f2fs_move_file_range(struct file *file_in, loff_t pos_in,
 	if (unlikely(f2fs_readonly(src->i_sb)))
 		return -EROFS;
 
-	if (S_ISDIR(src->i_mode) || S_ISDIR(dst->i_mode))
-		return -EISDIR;
+	if (!S_ISREG(src->i_mode) || !S_ISREG(dst->i_mode))
+		return -EINVAL;
 
 	if (f2fs_encrypted_inode(src) || f2fs_encrypted_inode(dst))
 		return -EOPNOTSUPP;

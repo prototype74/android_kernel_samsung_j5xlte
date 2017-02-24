@@ -2790,86 +2790,28 @@ static inline bool f2fs_may_encrypt(struct inode *inode)
 #endif
 }
 
-/* crypto_policy.c */
-int f2fs_is_child_context_consistent_with_parent(struct inode *,
-							struct inode *);
-int f2fs_inherit_context(struct inode *, struct inode *, struct page *);
-int f2fs_process_policy(const struct f2fs_encryption_policy *, struct inode *);
-int f2fs_get_policy(struct inode *, struct f2fs_encryption_policy *);
-
-/* crypt.c */
-extern struct kmem_cache *f2fs_crypt_info_cachep;
-bool f2fs_valid_contents_enc_mode(uint32_t);
-uint32_t f2fs_validate_encryption_key_size(uint32_t, uint32_t);
-struct f2fs_crypto_ctx *f2fs_get_crypto_ctx(struct inode *);
-void f2fs_release_crypto_ctx(struct f2fs_crypto_ctx *);
-struct page *f2fs_encrypt(struct inode *, struct page *);
-int f2fs_decrypt(struct page *);
-void f2fs_end_io_crypto_work(struct f2fs_crypto_ctx *, struct bio *);
-
-/* crypto_key.c */
-void f2fs_free_encryption_info(struct inode *, struct f2fs_crypt_info *);
-int _f2fs_get_encryption_info(struct inode *inode);
-
-/* crypto_fname.c */
-bool f2fs_valid_filenames_enc_mode(uint32_t);
-u32 f2fs_fname_crypto_round_up(u32, u32);
-unsigned f2fs_fname_encrypted_size(struct inode *, u32);
-int f2fs_fname_crypto_alloc_buffer(struct inode *, u32, struct f2fs_str *);
-int f2fs_fname_disk_to_usr(struct inode *, f2fs_hash_t *,
-			const struct f2fs_str *, struct f2fs_str *);
-int f2fs_fname_usr_to_disk(struct inode *, const struct qstr *,
-			struct f2fs_str *);
-
-#ifdef CONFIG_F2FS_FS_ENCRYPTION
-void f2fs_restore_and_release_control_page(struct page **);
-void f2fs_restore_control_page(struct page *);
-
-int __init f2fs_init_crypto(void);
-int f2fs_crypto_initialize(void);
-void f2fs_exit_crypto(void);
-
-int f2fs_has_encryption_key(struct inode *);
-
-static inline int f2fs_get_encryption_info(struct inode *inode)
-{
-	struct f2fs_crypt_info *ci = F2FS_I(inode)->i_crypt_info;
-
-	if (!ci ||
-		(ci->ci_keyring_key &&
-		 (ci->ci_keyring_key->flags & ((1 << KEY_FLAG_INVALIDATED) |
-					       (1 << KEY_FLAG_REVOKED) |
-					       (1 << KEY_FLAG_DEAD)))))
-		return _f2fs_get_encryption_info(inode);
-	return 0;
-}
-
-void f2fs_fname_crypto_free_buffer(struct f2fs_str *);
-int f2fs_fname_setup_filename(struct inode *, const struct qstr *,
-				int lookup, struct f2fs_filename *);
-void f2fs_fname_free_filename(struct f2fs_filename *);
-#else
-static inline void f2fs_restore_and_release_control_page(struct page **p) { }
-static inline void f2fs_restore_control_page(struct page *p) { }
-
-static inline int __init f2fs_init_crypto(void) { return 0; }
-static inline void f2fs_exit_crypto(void) { }
-
-static inline int f2fs_has_encryption_key(struct inode *i) { return 0; }
-static inline int f2fs_get_encryption_info(struct inode *i) { return 0; }
-static inline void f2fs_fname_crypto_free_buffer(struct f2fs_str *p) { }
-
-static inline int f2fs_fname_setup_filename(struct inode *dir,
-					const struct qstr *iname,
-					int lookup, struct f2fs_filename *fname)
-{
-	memset(fname, 0, sizeof(struct f2fs_filename));
-	fname->usr_fname = iname;
-	fname->disk_name.name = (unsigned char *)iname->name;
-	fname->disk_name.len = iname->len;
-	return 0;
-}
-
-static inline void f2fs_fname_free_filename(struct f2fs_filename *fname) { }
+#ifndef CONFIG_F2FS_FS_ENCRYPTION
+#define fscrypt_set_d_op(i)
+#define fscrypt_get_ctx			fscrypt_notsupp_get_ctx
+#define fscrypt_release_ctx		fscrypt_notsupp_release_ctx
+#define fscrypt_encrypt_page		fscrypt_notsupp_encrypt_page
+#define fscrypt_decrypt_page		fscrypt_notsupp_decrypt_page
+#define fscrypt_decrypt_bio_pages	fscrypt_notsupp_decrypt_bio_pages
+#define fscrypt_pullback_bio_page	fscrypt_notsupp_pullback_bio_page
+#define fscrypt_restore_control_page	fscrypt_notsupp_restore_control_page
+#define fscrypt_zeroout_range		fscrypt_notsupp_zeroout_range
+#define fscrypt_ioctl_set_policy	fscrypt_notsupp_ioctl_set_policy
+#define fscrypt_ioctl_get_policy	fscrypt_notsupp_ioctl_get_policy
+#define fscrypt_has_permitted_context	fscrypt_notsupp_has_permitted_context
+#define fscrypt_inherit_context		fscrypt_notsupp_inherit_context
+#define fscrypt_get_encryption_info	fscrypt_notsupp_get_encryption_info
+#define fscrypt_put_encryption_info	fscrypt_notsupp_put_encryption_info
+#define fscrypt_setup_filename		fscrypt_notsupp_setup_filename
+#define fscrypt_free_filename		fscrypt_notsupp_free_filename
+#define fscrypt_fname_encrypted_size	fscrypt_notsupp_fname_encrypted_size
+#define fscrypt_fname_alloc_buffer	fscrypt_notsupp_fname_alloc_buffer
+#define fscrypt_fname_free_buffer	fscrypt_notsupp_fname_free_buffer
+#define fscrypt_fname_disk_to_usr	fscrypt_notsupp_fname_disk_to_usr
+#define fscrypt_fname_usr_to_disk	fscrypt_notsupp_fname_usr_to_disk
 #endif
 #endif
