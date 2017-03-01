@@ -242,6 +242,10 @@ static ssize_t panel_debug_base_reg_read(struct file *file,
 		return -ENODEV;
 
 	mutex_lock(&mdss_debug_lock);
+	if (!dbg->cnt) {
+		mutex_unlock(&mdss_debug_lock);
+		return 0;
+	}
 
 	if (*ppos) {
 		mutex_unlock(&mdss_debug_lock);
@@ -286,7 +290,7 @@ static ssize_t panel_debug_base_reg_read(struct file *file,
 	}
 
 	if ((count < sizeof(to_user_buf))
-				|| copy_to_user(user_buf, to_user_buf, len)) {
+			|| copy_to_user(user_buf, to_user_buf, len)) {
 		mutex_unlock(&mdss_debug_lock);
 		return -EFAULT;
 	}
@@ -531,8 +535,8 @@ static ssize_t mdss_debug_base_reg_read(struct file *file,
 		dbg->buf = kzalloc(dbg->buf_len, GFP_KERNEL);
 
 		if (!dbg->buf) {
-			mutex_unlock(&mdss_debug_lock);
 			pr_err("not enough memory to hold reg dump\n");
+			mutex_unlock(&mdss_debug_lock);
 			return -ENOMEM;
 		}
 
