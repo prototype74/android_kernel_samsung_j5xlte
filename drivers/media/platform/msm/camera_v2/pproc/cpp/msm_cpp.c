@@ -1825,16 +1825,46 @@ static int msm_cpp_copy_from_ioctl_ptr(void *dst_ptr,
 }
 #endif
 
+static int msm_cpp_validate_ioctl_input(unsigned int cmd, void *arg,
+	struct msm_camera_v4l2_ioctl_t **ioctl_ptr)
+{
+	switch (cmd) {
+	case MSM_SD_SHUTDOWN:
+	case MSM_SD_NOTIFY_FREEZE:
+		break;
+	default:
+		if (ioctl_ptr == NULL) {
+			pr_err("Wrong ioctl_ptr for cmd %u\n", cmd);
+			return -EINVAL;
+		}
+
+		*ioctl_ptr = arg;
+		if (((*ioctl_ptr) == NULL) ||
+			((*ioctl_ptr)->ioctl_ptr == NULL) ||
+			((*ioctl_ptr)->len == 0)) {
+			pr_err("Error invalid ioctl argument cmd %u", cmd);
+			return -EINVAL;
+		}
+		break;
+	}
+	return 0;
+}
+
 long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 			unsigned int cmd, void *arg)
 {
 	struct cpp_device *cpp_dev = NULL;
-	struct msm_camera_v4l2_ioctl_t *ioctl_ptr = arg;
+	struct msm_camera_v4l2_ioctl_t *ioctl_ptr = NULL;
 	int rc = 0;
 
-	if ((sd == NULL) || (ioctl_ptr == NULL)) {
-		pr_err("Wrong ioctl_ptr %p, sd %p\n", ioctl_ptr, sd);
+	if (sd == NULL) {
+		pr_err("sd %pK\n", sd);
 		return -EINVAL;
+	}
+	rc = msm_cpp_validate_ioctl_input(cmd, arg, &ioctl_ptr);
+	if (rc != 0) {
+		pr_err("input validation failed\n");
+		return rc;
 	}
 
 	if (_IOC_DIR(cmd) == _IOC_NONE) {
@@ -2748,8 +2778,9 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 		cmd = MSM_SD_SHUTDOWN;
 		break;
 	default:
-		pr_debug("%s: unsupported compat type :%d\n", __func__, cmd);
-		break;
+		pr_err_ratelimited("%s: unsupported compat type :%d\n",
+				__func__, cmd);
+		return -EINVAL;
 	}
 
 	switch (cmd) {
@@ -2772,8 +2803,9 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 	case MSM_SD_NOTIFY_FREEZE:
 		break;
 	default:
-		pr_debug("%s: unsupported compat type :%d\n", __func__, cmd);
-		break;
+		pr_err_ratelimited("%s: unsupported compat type :%d\n",
+				__func__, cmd);
+		return -EINVAL;
 	}
 
 	if (is_copytouser_req) {
