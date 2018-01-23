@@ -654,6 +654,13 @@ static void sdcardfs_put_link(struct dentry *dentry, struct nameidata *nd,
 static int sdcardfs_permission(struct inode *inode, int mask)
 {
 	int err;
+	struct inode tmp;
+	struct sdcardfs_inode_data *top = top_data_get(SDCARDFS_I(inode));
+
+	if (IS_ERR(mnt))
+		return PTR_ERR(mnt);
+	if (!top)
+		return -EINVAL;
 
 	/*
 	 * Permission check on sdcardfs inode.
