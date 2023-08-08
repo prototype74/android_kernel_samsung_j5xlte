@@ -527,6 +527,10 @@ static struct socinfo_v1 dummy_socinfo = {
 	.version = 1,
 };
 
+#ifdef CONFIG_SEC_DEBUG_SUBSYS
+const char *soc_revision;
+EXPORT_SYMBOL(soc_revision);
+#endif
 uint32_t socinfo_get_id(void)
 {
 	return (socinfo) ? socinfo->v1.id : 0;
@@ -1096,6 +1100,20 @@ static void __init populate_soc_sysfs_files(struct device *msm_soc_device)
 	return;
 }
 
+#ifdef CONFIG_SEC_DEBUG_SUBSYS
+static void  __init soc_revision_populate(void)
+{
+	uint32_t soc_version = socinfo_get_version();
+
+	soc_revision = kasprintf(GFP_KERNEL, "%u.%u",
+			SOCINFO_VERSION_MAJOR(soc_version),
+			SOCINFO_VERSION_MINOR(soc_version));
+	pr_info("%s: soc_revision %s\n", __func__, soc_revision);
+	return;
+
+}
+#endif
+
 static void  __init soc_info_populate(struct soc_device_attribute *soc_dev_attr)
 {
 	uint32_t soc_version = socinfo_get_version();
@@ -1336,6 +1354,9 @@ int __init socinfo_init(void)
 	socinfo_print();
 	arch_read_hardware_id = msm_read_hardware_id;
 	socinfo_init_done = true;
+#ifdef CONFIG_SEC_DEBUG_SUBSYS
+	soc_revision_populate();
+#endif
 
 	return 0;
 }

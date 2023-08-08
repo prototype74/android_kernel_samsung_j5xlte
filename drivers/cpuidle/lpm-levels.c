@@ -42,11 +42,19 @@
 #include <asm/arch_timer.h>
 #include <asm/cacheflush.h>
 #include "lpm-levels.h"
+#ifdef CONFIG_CX_VOTE_TURBO
 #include "lpm-workarounds.h"
+#endif
 #include <trace/events/power.h>
+#include <linux/regulator/consumer.h>
+#include <linux/pinctrl/sec-pinmux.h>
+#include <linux/qpnp/pin.h>
+#ifdef CONFIG_SEC_GPIO_DVS
+#include <linux/secgpio_dvs.h>
+#endif
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/trace_msm_low_power.h>
-
 #define SCLK_HZ (32768)
 #define SCM_HANDOFF_LOCK_ID "S:7"
 static remote_spinlock_t scm_handoff_lock;
@@ -101,6 +109,12 @@ module_param_named(
 static int msm_pm_sleep_time_override;
 module_param_named(sleep_time_override,
 	msm_pm_sleep_time_override, int, S_IRUGO | S_IWUSR | S_IWGRP);
+
+#ifdef CONFIG_SEC_PM_DEBUG
+static int msm_pm_sleep_sec_debug;
+module_param_named(secdebug,
+	msm_pm_sleep_sec_debug, int, S_IRUGO | S_IWUSR | S_IWGRP);
+#endif
 
 static bool print_parsed_dt;
 module_param_named(
@@ -215,11 +229,13 @@ int set_l2_mode(struct low_power_ops *ops, int mode, bool notify_rpm)
 		break;
 	}
 
+#ifdef CONFIG_CX_VOTE_TURBO
 	/* Do not program L2 SPM enable bit. This will be set by TZ */
 	if (lpm_wa_get_skip_l2_spm())
 		rc = msm_spm_config_low_power_mode_addr(ops->spm, lpm,
 							true);
 	else
+#endif
 		rc = msm_spm_config_low_power_mode(ops->spm, lpm, true);
 
 	if (rc)
@@ -866,6 +882,34 @@ static int lpm_suspend_prepare(void)
 	msm_mpm_suspend_prepare();
 	lpm_stats_suspend_enter();
 
+#ifdef CONFIG_SEC_GPIO_DVS
+	/************************ Caution !!! ****************************
+	 * This functiongit a must be located in appropriate SLEEP position
+	 * in accordance with the specification of each BB vendor.
+	 ************************ Caution !!! ****************************/
+	gpio_dvs_check_sleepgpio();
+#ifdef SECGPIO_SLEEP_DEBUGGING
+	/************************ Caution !!! ****************************/
+	/* This func. must be located in an appropriate position for GPIO SLEEP debugging
+	 * in accordance with the specification of each BB vendor, and
+	 * the func. must be called after calling the function "gpio_dvs_check_sleepgpio"
+	 */
+	/************************ Caution !!! ****************************/
+	gpio_dvs_set_sleepgpio();
+#endif
+#endif
+
+#ifdef CONFIG_SEC_PM
+	regulator_showall_enabled();
+#endif
+
+#ifdef CONFIG_SEC_PM_DEBUG
+	if (msm_pm_sleep_sec_debug) {
+		msm_gpio_print_enabled();
+		qpnp_debug_suspend_show();
+	}
+#endif
+
 	return 0;
 }
 
@@ -971,7 +1015,6 @@ static int lpm_probe(struct platform_device *pdev)
 				__func__);
 		goto failed;
 	}
-
 	return 0;
 failed:
 	free_cluster_node(lpm_root_node);

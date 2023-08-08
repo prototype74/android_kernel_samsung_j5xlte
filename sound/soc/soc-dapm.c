@@ -2170,6 +2170,7 @@ static struct snd_soc_dapm_widget *dapm_find_widget(
 	return NULL;
 }
 
+#ifdef CONFIG_SND_SOC_MSM8X16_ARIZONA
 static int snd_soc_dapm_set_pin(struct snd_soc_dapm_context *dapm,
 				const char *pin, int status)
 {
@@ -2189,6 +2190,27 @@ static int snd_soc_dapm_set_pin(struct snd_soc_dapm_context *dapm,
 
 	return 0;
 }
+#else
+static int snd_soc_dapm_set_pin(struct snd_soc_dapm_context *dapm,
+				const char *pin, int status)
+{
+	struct snd_soc_dapm_widget *w = dapm_find_widget(dapm, pin, true);
+
+	if (!w) {
+		dev_err(dapm->dev, "ASoC: DAPM unknown pin %s\n", pin);
+		return -EINVAL;
+	}
+
+	if (w->connected != status)
+		dapm_mark_dirty(w, "pin configuration");
+
+	w->connected = status;
+	if (status == 0)
+		w->force = 0;
+
+	return 0;
+}
+#endif
 
 /**
  * snd_soc_dapm_sync - scan and power dapm paths

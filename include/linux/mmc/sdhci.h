@@ -297,6 +297,7 @@ struct sdhci_host {
 	bool async_int_supp;  /* async support to rxv int, when clks are off */
 	bool disable_sdio_irq_deferred; /* status of disabling sdio irq */
 	u32 auto_cmd_err_sts;
+	u32 hc_pwrctrl_reg;
 	struct ratelimit_state dbg_dump_rs;
 	int reset_wa_applied; /* reset workaround status */
 	ktime_t reset_wa_t; /* time when the reset workaround is applied */

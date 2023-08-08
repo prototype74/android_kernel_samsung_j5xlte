@@ -45,6 +45,38 @@ DEFINE_PER_CPU(struct tick_sched, tick_cpu_sched);
  */
 static ktime_t last_jiffies_update;
 
+/*
+ * Conversion from ktime to sched_clock is error prone. Use this
+ * as a safetly margin when calculating the sched_clock value at
+ * a particular jiffy as last_jiffies_update uses ktime.
+ */
+#define SCHED_CLOCK_MARGIN 100000
+
+static u64 ns_since_jiffy(void)
+{
+	ktime_t delta;
+
+	delta = ktime_sub(ktime_get(), last_jiffies_update);
+
+	return ktime_to_ns(delta);
+}
+
+u64 jiffy_to_sched_clock(u64 *now, u64 *jiffy_sched_clock)
+{
+	u64 cur_jiffies;
+	unsigned long seq;
+
+	do {
+		seq = read_seqbegin(&jiffies_lock);
+		*now = sched_clock();
+		*jiffy_sched_clock = *now -
+			(ns_since_jiffy() + SCHED_CLOCK_MARGIN);
+		cur_jiffies = get_jiffies_64();
+	} while (read_seqretry(&jiffies_lock, seq));
+
+	return cur_jiffies;
+}
+
 struct tick_sched *tick_get_tick_sched(int cpu)
 {
 	return &per_cpu(tick_cpu_sched, cpu);
@@ -1210,6 +1242,17 @@ void tick_setup_sched_timer(void)
 #endif /* HIGH_RES_TIMERS */
 
 #if defined CONFIG_NO_HZ_COMMON || defined CONFIG_HIGH_RES_TIMERS
+
+static inline void clear_tick_sched(struct tick_sched *ts)
+{
+	ktime_t idle_sleeptime = ts->idle_sleeptime;
+	ktime_t iowait_sleeptime = ts->iowait_sleeptime;
+
+	memset(ts, 0, sizeof(*ts));
+	ts->idle_sleeptime = idle_sleeptime;
+	ts->iowait_sleeptime = iowait_sleeptime;
+}
+
 void tick_cancel_sched_timer(int cpu)
 {
 	struct tick_sched *ts = &per_cpu(tick_cpu_sched, cpu);
@@ -1219,7 +1262,7 @@ void tick_cancel_sched_timer(int cpu)
 		hrtimer_cancel(&ts->sched_timer);
 # endif
 
-	memset(ts, 0, sizeof(*ts));
+	clear_tick_sched(ts);
 }
 #endif
 

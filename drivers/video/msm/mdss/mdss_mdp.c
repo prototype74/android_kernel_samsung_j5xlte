@@ -54,6 +54,10 @@
 #include "mdss_debug.h"
 #include "mdss_mdp_debug.h"
 
+// irq_mask set by DRM driver
+u32 mdp_drm_intr_mask;
+EXPORT_SYMBOL(mdp_drm_intr_mask);
+
 #define CREATE_TRACE_POINTS
 #include "mdss_mdp_trace.h"
 
@@ -98,7 +102,7 @@ static struct mdss_panel_intf pan_types[] = {
 	{"edp", MDSS_PANEL_INTF_EDP},
 	{"hdmi", MDSS_PANEL_INTF_HDMI},
 };
-static char mdss_mdp_panel[MDSS_MAX_PANEL_LEN];
+char mdss_mdp_panel[MDSS_MAX_PANEL_LEN];
 
 struct mdss_iommu_map_type mdss_iommu_map[MDSS_IOMMU_MAX_DOMAIN] = {
 	[MDSS_IOMMU_DOMAIN_UNSECURE] = {
@@ -242,6 +246,7 @@ static irqreturn_t mdss_irq_handler(int irq, void *ptr)
 
 	mdss_mdp_hw.irq_info->irq_buzy = true;
 
+	MDSS_XLOG(intr);
 	if (intr & MDSS_INTR_MDP) {
 		spin_lock(&mdp_lock);
 		mdata->mdss_util->irq_dispatch(MDSS_HW_MDP, irq, ptr);
@@ -316,7 +321,9 @@ static void mdss_mdp_bus_scale_unregister(struct mdss_data_type *mdata)
 		mdata->reg_bus_hdl = 0;
 	}
 }
-
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+u64 bus_ab_quota_dbg, bus_ib_quota_dbg;
+#endif
 static int mdss_mdp_bus_scale_set_quota(u64 ab_quota_rt, u64 ab_quota_nrt,
 		u64 ib_quota_rt, u64 ib_quota_nrt)
 {
@@ -385,7 +392,10 @@ static int mdss_mdp_bus_scale_set_quota(u64 ab_quota_rt, u64 ab_quota_nrt,
 			vect = &bw_table->usecase[new_uc_idx].vectors[i];
 			vect->ab = ab_quota[i];
 			vect->ib = ib_quota[i];
-
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+			bus_ab_quota_dbg = vect->ab;
+			bus_ib_quota_dbg = vect->ib;
+#endif
 			pr_debug("uc_idx=%d %s path idx=%d ab=%llu ib=%llu\n",
 				new_uc_idx, (i < rt_axi_port_cnt) ? "rt" : "nrt"
 				, i, vect->ab, vect->ib);
@@ -520,9 +530,10 @@ void mdss_mdp_irq_disable(u32 intr_type, u32 intf_num)
 	} else {
 		mdata->mdp_irq_mask &= ~irq;
 
-		writel_relaxed(mdata->mdp_irq_mask, mdata->mdp_base +
-			MDSS_MDP_REG_INTR_EN);
+		writel_relaxed(mdata->mdp_irq_mask | mdp_drm_intr_mask,
+				mdata->mdp_base + MDSS_MDP_REG_INTR_EN);
 		if ((mdata->mdp_irq_mask == 0) &&
+			(mdp_drm_intr_mask == 0) &&
 			(mdata->mdp_hist_irq_mask == 0))
 			mdata->mdss_util->disable_irq(&mdss_mdp_hw);
 	}
@@ -826,6 +837,7 @@ void mdss_mdp_clk_ctrl(int enable)
 	if (enable && changed)
 		mdss_mdp_idle_pc_restore();
 }
+EXPORT_SYMBOL(mdss_mdp_clk_ctrl);
 
 static inline int mdss_mdp_irq_clk_register(struct mdss_data_type *mdata,
 					    char *clk_name, int clk_idx)
@@ -895,7 +907,8 @@ static int mdss_mdp_irq_clk_setup(struct mdss_data_type *mdata)
 	pr_debug("max mdp clk rate=%d\n", mdata->max_mdp_clk_rate);
 
 	ret = devm_request_irq(&mdata->pdev->dev, mdss_mdp_hw.irq_info->irq,
-				mdss_irq_handler, IRQF_DISABLED, "MDSS", mdata);
+				mdss_irq_handler,
+				IRQF_DISABLED | IRQF_SHARED, "MDSS", mdata);
 	if (ret) {
 		pr_err("mdp request_irq() failed!\n");
 		return ret;
@@ -1128,6 +1141,8 @@ int mdss_hw_init(struct mdss_data_type *mdata)
 	char *offset;
 	struct mdss_mdp_pipe *vig;
 
+	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON);
+
 	mdss_hw_rev_init(mdata);
 
 	/* Restoring Secure configuration during boot-up */
@@ -1166,12 +1181,18 @@ int mdss_hw_init(struct mdss_data_type *mdata)
 		writel_relaxed(1, offset + 16);
 	}
 
+	/* initialize csc matrix default value */
+	for (i = 0; i < mdata->nvig_pipes; i++)
+		vig[i].csc_coeff_set = MDSS_MDP_CSC_YUV2RGB_709L;
+
 	mdata->nmax_concurrent_ad_hw =
 		(mdata->mdp_rev < MDSS_MDP_HW_REV_103) ? 1 : 2;
 
 	if (mdata->mdp_rev == MDSS_MDP_HW_REV_200)
 		for (i = 0; i < mdata->nvig_pipes; i++)
 			mdss_mdp_hscl_init(&vig[i]);
+
+		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF);
 
 	pr_debug("MDP hw init done\n");
 
@@ -1203,7 +1224,7 @@ static u32 mdss_mdp_res_init(struct mdss_data_type *mdata)
 
 	mdata->iclient = msm_ion_client_create(mdata->pdev->name);
 	if (IS_ERR_OR_NULL(mdata->iclient)) {
-		pr_err("msm_ion_client_create() return error (%p)\n",
+		pr_err("msm_ion_client_create() return error (%pK)\n",
 				mdata->iclient);
 		mdata->iclient = NULL;
 	}
@@ -1419,10 +1440,29 @@ static ssize_t mdss_mdp_show_capabilities(struct device *dev,
 	return cnt;
 }
 
+static ssize_t mdss_mdp_store_max_limit_bw(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t len)
+{
+	struct mdss_data_type *mdata = dev_get_drvdata(dev);
+	u32 data = 0;
+
+	if (kstrtouint(buf, 0, &data)) {
+		pr_info("Not able scan to bw_mode_bitmap\n");
+	} else {
+		mdata->bw_mode_bitmap = data;
+		pr_debug("limit use case, bw_mode_bitmap = %d\n", data);
+	}
+
+	return len;
+}
+
 static DEVICE_ATTR(caps, S_IRUGO, mdss_mdp_show_capabilities, NULL);
+static DEVICE_ATTR(bw_mode_bitmap, S_IRUGO | S_IWUSR | S_IWGRP, NULL,
+		mdss_mdp_store_max_limit_bw);
 
 static struct attribute *mdp_fs_attrs[] = {
 	&dev_attr_caps.attr,
+	&dev_attr_bw_mode_bitmap.attr,
 	NULL
 };
 
@@ -1468,6 +1508,17 @@ static int mdss_mdp_probe(struct platform_device *pdev)
 	atomic_set(&mdata->sd_client_count, 0);
 	atomic_set(&mdata->active_intf_cnt, 0);
 
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "mdp_phys");
+	if (!res) {
+		pr_err("unable to get MDP base address\n");
+		rc = -ENOMEM;
+		goto probe_done;
+	}
+
+	mdata->mdp_reg_size = resource_size(res);
+	mdata->mdss_base = devm_ioremap(&pdev->dev, res->start,
+				       mdata->mdp_reg_size);
+
 	mdss_res->mdss_util = mdss_get_util_intf();
 	if (mdss_res->mdss_util == NULL) {
 		pr_err("Failed to get mdss utility functions\n");
@@ -1490,6 +1541,7 @@ static int mdss_mdp_probe(struct platform_device *pdev)
 		(int) (unsigned long) mdata->mdss_io.base,
 		mdata->mdss_io.len);
 
+
 	rc = msm_dss_ioremap_byname(pdev, &mdata->vbif_io, "vbif_phys");
 	if (rc) {
 		pr_err("unable to map MDSS VBIF base\n");
@@ -1503,7 +1555,7 @@ static int mdss_mdp_probe(struct platform_device *pdev)
 	if (rc)
 		pr_debug("unable to map MDSS VBIF non-realtime base\n");
 	else
-		pr_debug("MDSS VBIF NRT HW Base addr=%p len=0x%x\n",
+		pr_debug("MDSS VBIF NRT HW Base addr=%pK len=0x%x\n",
 			mdata->vbif_nrt_io.base, mdata->vbif_nrt_io.len);
 
 	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
@@ -1653,6 +1705,10 @@ int mdss_mdp_parse_dt_hw_settings(struct platform_device *pdev)
 			hws, vbif_nrt_len);
 	mdss_mdp_parse_dt_regs_array(mdp_arr, &mdata->mdss_io,
 		hws + vbif_len, mdp_len);
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	mdata->mdss_io.base = mdata->mdss_base;
+#endif
 
 	mdata->hw_settings = hws;
 
@@ -1917,7 +1973,7 @@ static int mdss_mdp_parse_dt_pipe(struct platform_device *pdev)
 	if (!mdata->vig_pipes) {
 		pr_err("no mem for vig_pipes: kzalloc fail\n");
 		rc = -ENOMEM;
-		goto vig_alloc_fail;
+		goto parse_fail;
 	}
 
 	mdata->rgb_pipes = devm_kzalloc(&mdata->pdev->dev,
@@ -1925,7 +1981,7 @@ static int mdss_mdp_parse_dt_pipe(struct platform_device *pdev)
 	if (!mdata->rgb_pipes) {
 		pr_err("no mem for rgb_pipes: kzalloc fail\n");
 		rc = -ENOMEM;
-		goto rgb_alloc_fail;
+		goto parse_fail;
 	}
 
 	if (mdata->ndma_pipes) {
@@ -1935,7 +1991,7 @@ static int mdss_mdp_parse_dt_pipe(struct platform_device *pdev)
 		if (!mdata->dma_pipes) {
 			pr_err("no mem for dma_pipes: kzalloc fail\n");
 			rc = -ENOMEM;
-			goto dma_alloc_fail;
+			goto parse_fail;
 		}
 	}
 
@@ -2112,7 +2168,7 @@ static int mdss_mdp_parse_dt_pipe(struct platform_device *pdev)
 		if (!mdata->cursor_pipes) {
 			pr_err("no mem for cursor_pipes: kzalloc fail\n");
 			rc = -ENOMEM;
-			goto cursor_alloc_fail;
+			goto parse_fail;
 		}
 		rc = mdss_mdp_parse_dt_handler(pdev,
 			"qcom,mdss-pipe-cursor-off", offsets,
@@ -2136,18 +2192,8 @@ static int mdss_mdp_parse_dt_pipe(struct platform_device *pdev)
 		pr_info("dedicated vp cursors detected, num=%d\n",
 			mdata->ncursor_pipes);
 	}
-	goto parse_done;
 
 parse_fail:
-	kfree(mdata->cursor_pipes);
-cursor_alloc_fail:
-	kfree(mdata->dma_pipes);
-dma_alloc_fail:
-	kfree(mdata->rgb_pipes);
-rgb_alloc_fail:
-	kfree(mdata->vig_pipes);
-parse_done:
-vig_alloc_fail:
 	kfree(xin_id);
 xin_alloc_fail:
 	kfree(ftch_id);
@@ -2570,6 +2616,105 @@ static void mdss_mdp_parse_vbif_qos(struct platform_device *pdev)
 	}
 }
 
+static void mdss_mdp_parse_max_bw_array(const u32 *arr,
+		struct mdss_max_bw_settings *max_bw_settings, int count)
+{
+	int i;
+	for (i = 0; i < count; i++) {
+		max_bw_settings->mdss_max_bw_mode = be32_to_cpu(arr[i*2]);
+		max_bw_settings->mdss_max_bw_val = be32_to_cpu(arr[(i*2)+1]);
+		max_bw_settings++;
+	}
+}
+
+static void mdss_mdp_parse_max_bandwidth(struct platform_device *pdev)
+{
+	struct mdss_data_type *mdata = platform_get_drvdata(pdev);
+	struct mdss_max_bw_settings *max_bw_settings;
+	int max_bw_settings_cnt = 0;
+	const u32 *max_bw;
+
+	max_bw = of_get_property(pdev->dev.of_node, "qcom,max-bw-settings",
+			&max_bw_settings_cnt);
+
+	if (!max_bw || !max_bw_settings_cnt) {
+		pr_debug("MDSS max bandwidth settings not found\n");
+		return;
+	}
+
+	max_bw_settings_cnt /= 2 * sizeof(u32);
+
+	max_bw_settings = devm_kzalloc(&pdev->dev, sizeof(*max_bw_settings)
+			* max_bw_settings_cnt, GFP_KERNEL);
+	if (!max_bw_settings) {
+		pr_err("Memory allocation failed for max_bw_settings\n");
+		return;
+	}
+
+	mdss_mdp_parse_max_bw_array(max_bw, max_bw_settings,
+			max_bw_settings_cnt);
+
+	mdata->max_bw_settings = max_bw_settings;
+	mdata->max_bw_settings_cnt = max_bw_settings_cnt;
+}
+
+static void mdss_mdp_parse_per_pipe_bandwidth(struct platform_device *pdev)
+{
+
+	struct mdss_data_type *mdata = platform_get_drvdata(pdev);
+	struct mdss_max_bw_settings *max_bw_per_pipe_settings;
+	int max_bw_settings_cnt = 0;
+	const u32 *max_bw_settings;
+	u32 max_bw, min_bw, threshold, i = 0;
+
+	max_bw_settings = of_get_property(pdev->dev.of_node,
+			"qcom,max-bandwidth-per-pipe-kbps",
+			&max_bw_settings_cnt);
+
+	if (!max_bw_settings || !max_bw_settings_cnt) {
+		pr_debug("MDSS per pipe max bandwidth settings not found\n");
+		return;
+	}
+
+	/* Support targets where a common per pipe max bw is provided */
+	if ((max_bw_settings_cnt / sizeof(u32)) == 1) {
+		mdata->max_bw_per_pipe = be32_to_cpu(max_bw_settings[0]);
+		mdata->max_per_pipe_bw_settings = NULL;
+		pr_debug("Common per pipe max bandwidth provided\n");
+		return;
+	}
+
+	max_bw_settings_cnt /= 2 * sizeof(u32);
+
+	max_bw_per_pipe_settings = devm_kzalloc(&pdev->dev,
+		    sizeof(struct mdss_max_bw_settings) * max_bw_settings_cnt,
+		    GFP_KERNEL);
+	if (!max_bw_per_pipe_settings) {
+		pr_err("Memory allocation failed for max_bw_settings\n");
+		return;
+	}
+
+	mdss_mdp_parse_max_bw_array(max_bw_settings, max_bw_per_pipe_settings,
+					max_bw_settings_cnt);
+	mdata->max_per_pipe_bw_settings = max_bw_per_pipe_settings;
+	mdata->mdss_per_pipe_bw_cnt = max_bw_settings_cnt;
+
+	/* Calculate min and max allowed per pipe BW */
+	min_bw = mdata->max_bw_high;
+	max_bw = 0;
+
+	while (i < max_bw_settings_cnt) {
+		threshold = mdata->max_per_pipe_bw_settings[i].mdss_max_bw_val;
+		if (threshold > max_bw)
+			max_bw = threshold;
+		if (threshold < min_bw)
+			min_bw = threshold;
+		++i;
+	}
+	mdata->max_bw_per_pipe = max_bw;
+	mdata->min_bw_per_pipe = min_bw;
+}
+
 static int mdss_mdp_parse_dt_misc(struct platform_device *pdev)
 {
 	struct mdss_data_type *mdata = platform_get_drvdata(pdev);
@@ -2688,10 +2833,9 @@ static int mdss_mdp_parse_dt_misc(struct platform_device *pdev)
 	if (rc)
 		pr_debug("max bandwidth (high) property not specified\n");
 
-	rc = of_property_read_u32(pdev->dev.of_node,
-		"qcom,max-bandwidth-per-pipe-kbps", &mdata->max_bw_per_pipe);
-	if (rc)
-		pr_debug("max bandwidth (per pipe) property not specified\n");
+	mdss_mdp_parse_per_pipe_bandwidth(pdev);
+
+	mdss_mdp_parse_max_bandwidth(pdev);
 
 	mdata->nclk_lvl = mdss_mdp_parse_dt_prop_len(pdev,
 					"qcom,mdss-clk-levels");
@@ -3018,6 +3162,14 @@ static void mdss_mdp_footswitch_ctrl(struct mdss_data_type *mdata, int on)
 		mdata->fs_ena = false;
 	}
 }
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+void mdss_mdp_underrun_clk_info(void)
+{
+	pr_info(" mdp_clk = %ld, bus_ab = %llu, bus_ib = %llu\n",
+		mdss_mdp_get_clk_rate(MDSS_CLK_MDP_SRC), bus_ab_quota_dbg, bus_ib_quota_dbg);
+}
+#endif
 
 int mdss_mdp_secure_display_ctrl(unsigned int enable)
 {

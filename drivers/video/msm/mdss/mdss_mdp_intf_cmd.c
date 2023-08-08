@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,13 +25,13 @@
 
 #define SPLIT_MIXER_OFFSET 0x800
 /* wait for at most 2 vsync for lowest refresh rate (24hz) */
-#define KOFF_TIMEOUT msecs_to_jiffies(84)
+#define KOFF_TIMEOUT msecs_to_jiffies(1000)
 
 #define STOP_TIMEOUT(hz) msecs_to_jiffies((1000 / hz) * (VSYNC_EXPIRE_TICK + 2))
 #define POWER_COLLAPSE_TIME msecs_to_jiffies(100)
 
 static DEFINE_MUTEX(cmd_clk_mtx);
-
+#if !defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 struct mdss_mdp_cmd_ctx {
 	struct mdss_mdp_ctl *ctl;
 	u32 pp_num;
@@ -55,7 +55,7 @@ struct mdss_mdp_cmd_ctx {
 	struct mdss_mdp_cmd_ctx *sync_ctx; /* for partial update */
 	u32 pp_timeout_report_cnt;
 };
-
+#endif
 struct mdss_mdp_cmd_ctx mdss_mdp_cmd_ctx_list[MAX_SESSIONS];
 
 static int mdss_mdp_cmd_do_notifier(struct mdss_mdp_cmd_ctx *ctx);
@@ -415,7 +415,9 @@ static void pingpong_done_work(struct work_struct *work)
 		while (atomic_add_unless(&ctx->pp_done_cnt, -1, 0))
 			mdss_mdp_ctl_notify(ctx->ctl, MDP_NOTIFY_FRAME_DONE);
 
+#if !defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 		mdss_mdp_ctl_perf_release_bw(ctx->ctl);
+#endif
 	}
 }
 
@@ -550,6 +552,12 @@ int mdss_mdp_cmd_reconfigure_splash_done(struct mdss_mdp_ctl *ctl, bool handoff)
 
 	pdata = ctl->panel_data;
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	/* Turning off panel & mdp to initialize panel init-seq at kick-off*/
+	mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_BLANK, NULL);
+	mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_PANEL_OFF, NULL);
+#endif
+
 	mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_PANEL_CLK_CTRL, (void *)0);
 
 	pdata->panel_info.cont_splash_enabled = 0;
@@ -581,7 +589,7 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 			ctx->rdptr_enabled, ctl->roi_bkup.w,
 			ctl->roi_bkup.h);
 
-	pr_debug("%s: intf_num=%d ctx=%p koff_cnt=%d\n", __func__,
+	pr_debug("%s: intf_num=%d ctx=%pK koff_cnt=%d\n", __func__,
 			ctl->intf_num, ctx, atomic_read(&ctx->koff_cnt));
 
 	rc = wait_event_timeout(ctx->pp_waitq,
@@ -1164,7 +1172,7 @@ static int mdss_mdp_cmd_intfs_setup(struct mdss_mdp_ctl *ctl,
 
 	ctx->intf_stopped = 0;
 
-	pr_debug("%s: ctx=%p num=%d mixer=%d\n", __func__,
+	pr_debug("%s: ctx=%pK num=%d mixer=%d\n", __func__,
 				ctx, ctx->pp_num, mixer->num);
 	MDSS_XLOG(ctl->num, atomic_read(&ctx->koff_cnt), ctx->clk_enabled,
 					ctx->rdptr_enabled);
@@ -1208,4 +1216,3 @@ int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 
 	return 0;
 }
-

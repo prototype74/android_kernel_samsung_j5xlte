@@ -416,7 +416,7 @@ config INET_DIAG
 	  Support for INET (TCP, DCCP, etc) socket monitoring interface used by
 	  native Linux tools such as ss. ss is included in iproute2, currently
 	  downloadable at:
-	  
+
 	    http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2
 
 	  If unsure, say Y.
@@ -432,6 +432,19 @@ config INET_UDP_DIAG
 	---help---
 	  Support for UDP socket monitoring interface used by the ss tool.
 	  If unsure, say Y.
+
+config INET_DIAG_DESTROY
+	bool "INET: allow privileged process to administratively close sockets"
+	depends on INET_DIAG
+	default n
+	---help---
+	  Provides a SOCK_DESTROY_BACKPORT operation that allows privileged processes
+	  (e.g., a connection manager or a network administration tool such as
+	  ss) to close sockets opened by other processes. Closing a socket in
+	  this way interrupts any blocking read/write/connect operations on
+	  the socket and causes future socket calls to behave as if the socket
+	  had been disconnected.
+	  If unsure, say N.
 
 menuconfig TCP_CONG_ADVANCED
 	bool "TCP: advanced congestion control"
@@ -549,7 +562,7 @@ config TCP_CONG_VENO
 	distinguishing to circumvent the difficult judgment of the packet loss
 	type. TCP Veno cuts down less congestion window in response to random
 	loss packets.
-	See <http://ieeexplore.ieee.org/xpl/freeabs_all.jsp?arnumber=1177186> 
+	See <http://ieeexplore.ieee.org/xpl/freeabs_all.jsp?arnumber=1177186>
 
 config TCP_CONG_YEAH
 	tristate "YeAH TCP"
@@ -639,3 +652,11 @@ config TCP_MD5SIG
 	  on the Internet.
 
 	  If unsure, say N.
+
+config SEC_DELLPC_FIT
+	bool "DELL PC FIT support"
+	default n
+	---help---
+	  RIL asked AP-CP Interface team to apply kernel patch to solve
+	  the Dell PC FIT TEST Issue
+

@@ -102,6 +102,21 @@ struct voice_rec_route_state {
 	u16 dl_flag;
 };
 
+#ifdef CONFIG_SAMSUNG_AUDIO
+struct voice_dha_data {
+	short dha_mode;
+	short dha_select;
+	short dha_params[12];
+};
+
+enum {
+	LOOPBACK_DISABLE = 0,
+	LOOPBACK_ENABLE,
+	LOOPBACK_NODELAY,
+	LOOPBACK_MAX,
+};
+#endif /* CONFIG_SAMSUNG_AUDIO */
+
 enum {
 	VOC_INIT = 0,
 	VOC_RUN,
@@ -797,6 +812,76 @@ struct vss_icommon_cmd_set_ui_property_enable_t {
 	/* Reserved, set to 0. */
 };
 
+#ifdef CONFIG_SAMSUNG_AUDIO
+#define VOICE_MODULE_DHA        0x10001020
+#define VOICE_PARAM_DHA_DYNAMIC  0x10001022
+
+#define VOICEPROC_MODULE_VENC          0x00010F07
+#define VOICE_PARAM_LOOPBACK_ENABLE  0x00010E18
+
+#define VSS_ICOMMON_CMD_DHA_SET 0x0001128A
+
+#define VOICE_ADDMODE_MODULE	0x10001001
+#define VOICE_ADDMODE_PARAM	0x10001023
+
+struct vss_icommon_cmd_set_loopback_enable_t {
+	uint32_t module_id;
+	/* Unique ID of the module. */
+	uint32_t param_id;
+	/* Unique ID of the parameter. */
+	uint16_t param_size;
+	/* Size of the parameter in bytes: MOD_ENABLE_PARAM_LEN */
+	uint16_t reserved;
+	/* Reserved; set to 0. */
+	uint16_t loopback_enable;
+	uint16_t reserved_field;
+	/* Reserved, set to 0. */
+};
+
+struct oem_dha_parm_send_t {
+	uint32_t module_id;
+	/* Unique ID of the module. */
+	uint32_t param_id;
+	/* Unique ID of the parameter. */
+	uint16_t param_size;
+	/* Size of the parameter in bytes: MOD_ENABLE_PARAM_LEN */
+	uint16_t reserved;
+	/* Reserved; set to 0. */
+	uint16_t eq_mode;
+	uint16_t select;
+	int16_t param[12];
+} __packed;
+
+struct oem_dha_parm_send_cmd {
+	struct apr_hdr hdr;
+	uint32_t mem_handle;
+	uint64_t mem_address;
+	uint32_t mem_size;
+	struct oem_dha_parm_send_t dha_send;
+} __packed;
+
+struct oem_addMode_parm_send_t {
+	uint32_t module_id;
+	/* Unique ID of the module. */
+	uint32_t param_id;
+	/* Unique ID of the parameter. */
+	uint16_t param_size;
+	/* Size of the parameter in bytes: MOD_ENABLE_PARAM_LEN */
+	uint16_t reserved;
+	/* Reserved; set to 0. */
+	uint16_t enable;
+	uint16_t reserved_field;
+} __packed;
+
+struct oem_addMode_parm_send_cmd {
+	struct apr_hdr hdr;
+	uint32_t mem_handle;
+	uint64_t mem_address;
+	uint32_t mem_size;
+	struct oem_addMode_parm_send_t addMode_send;
+} __packed;
+#endif /* CONFIG_SAMSUNG_AUDIO */
+
 /*
  * Event sent by the stream to the client that enables Rx DTMF
  * detection whenever DTMF is detected in the Rx path.
@@ -926,6 +1011,16 @@ struct cvs_dec_buffer_ready_cmd {
 struct cvs_enc_buffer_consumed_cmd {
 	struct apr_hdr hdr;
 } __packed;
+
+#ifdef CONFIG_SAMSUNG_AUDIO
+struct cvs_set_loopback_enable_cmd {
+	struct apr_hdr hdr;
+	uint32_t mem_handle;
+	uint64_t mem_address;
+	uint32_t mem_size;
+	struct vss_icommon_cmd_set_loopback_enable_t vss_set_loopback;
+} __packed;
+#endif /* CONFIG_SAMSUNG_AUDIO */
 
 struct vss_istream_cmd_set_oob_packet_exchange_config_t {
 	struct apr_hdr hdr;
@@ -1530,6 +1625,10 @@ struct voice_data {
 	struct voice_rec_route_state rec_route_state;
 
 	struct power_supply *psy;
+
+#ifdef CONFIG_SAMSUNG_AUDIO
+	struct voice_dha_data sec_dha_data;
+#endif /* CONFIG_SAMSUNG_AUDIO */
 };
 
 struct cal_mem {
@@ -1538,7 +1637,7 @@ struct cal_mem {
 	void *buf;
 };
 
-#define MAX_VOC_SESSIONS 6
+#define MAX_VOC_SESSIONS 8
 
 struct common_data {
 	/* these default values are for all devices */
@@ -1629,6 +1728,8 @@ enum {
 #define VOC_PATH_VOICE2_PASSIVE 3
 #define VOC_PATH_QCHAT_PASSIVE 4
 #define VOC_PATH_VOWLAN_PASSIVE 5
+#define VOC_PATH_VOICEMMODE1_PASSIVE 6
+#define VOC_PATH_VOICEMMODE2_PASSIVE 7
 
 #define MAX_SESSION_NAME_LEN 32
 #define VOICE_SESSION_NAME   "Voice session"
@@ -1637,18 +1738,29 @@ enum {
 #define VOICE2_SESSION_NAME  "Voice2 session"
 #define QCHAT_SESSION_NAME   "QCHAT session"
 #define VOWLAN_SESSION_NAME  "VoWLAN session"
+#define VOICEMMODE1_NAME     "VoiceMMode1"
+#define VOICEMMODE2_NAME     "VoiceMMode2"
 
-#define VOICE2_SESSION_VSID_STR "10DC1000"
-#define QCHAT_SESSION_VSID_STR "10803000"
-#define VOWLAN_SESSION_VSID_STR "10002000"
-#define VOICE_SESSION_VSID  0x10C01000
-#define VOICE2_SESSION_VSID 0x10DC1000
-#define VOLTE_SESSION_VSID  0x10C02000
-#define VOIP_SESSION_VSID   0x10004000
-#define QCHAT_SESSION_VSID  0x10803000
-#define VOWLAN_SESSION_VSID 0x10002000
-#define ALL_SESSION_VSID    0xFFFFFFFF
-#define VSID_MAX            ALL_SESSION_VSID
+#define VOICE2_SESSION_VSID_STR      "10DC1000"
+#define QCHAT_SESSION_VSID_STR       "10803000"
+#define VOWLAN_SESSION_VSID_STR      "10002000"
+#define VOICEMMODE1_VSID_STR         "11C05000"
+#define VOICEMMODE2_VSID_STR         "11DC5000"
+#define VOICE_SESSION_VSID           0x10C01000
+#define VOICE2_SESSION_VSID          0x10DC1000
+#define VOLTE_SESSION_VSID           0x10C02000
+#define VOIP_SESSION_VSID            0x10004000
+#define QCHAT_SESSION_VSID           0x10803000
+#define VOWLAN_SESSION_VSID          0x10002000
+#define VOICEMMODE1_VSID             0x11C05000
+#define VOICEMMODE2_VSID             0x11DC5000
+#define ALL_SESSION_VSID             0xFFFFFFFF
+#define VSID_MAX                     ALL_SESSION_VSID
+#ifdef CONFIG_SAMSUNG_AUDIO
+int voice_sec_set_dha_data(uint32_t session_id, short mode,
+					short select, short *parameters);
+int voice_sec_set_addMode_data(uint32_t session_id, short enable);
+#endif /* CONFIG_SAMSUNG_AUDIO */
 
 #define APP_ID_MASK         0x3F000
 #define APP_ID_SHIFT		12
@@ -1726,4 +1838,9 @@ uint32_t voice_get_topology(uint32_t topology_idx);
 int voc_set_sound_focus(struct sound_focus_param sound_focus_param);
 int voc_get_sound_focus(struct sound_focus_param *soundFocusData);
 int voc_get_source_tracking(struct source_tracking_param *sourceTrackingData);
+
+#ifdef CONFIG_SAMSUNG_AUDIO
+int voc_get_loopback_enable(void);
+void voc_set_loopback_enable(int loopback_enable);
+#endif /* CONFIG_SAMSUNG_AUDIO */
 #endif

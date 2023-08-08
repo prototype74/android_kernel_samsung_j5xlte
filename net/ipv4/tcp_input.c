@@ -68,6 +68,7 @@
 #include <linux/module.h>
 #include <linux/sysctl.h>
 #include <linux/kernel.h>
+#include <linux/reciprocal_div.h>
 #include <net/dst.h>
 #include <net/tcp.h>
 #include <net/inet_common.h>
@@ -87,7 +88,7 @@ int sysctl_tcp_adv_win_scale __read_mostly = 1;
 EXPORT_SYMBOL(sysctl_tcp_adv_win_scale);
 
 /* rfc5961 challenge ack rate limiting */
-int sysctl_tcp_challenge_ack_limit = 100;
+int sysctl_tcp_challenge_ack_limit = 1000;
 
 int sysctl_tcp_stdurg __read_mostly;
 int sysctl_tcp_rfc1337 __read_mostly;
@@ -3288,12 +3289,19 @@ static void tcp_send_challenge_ack(struct sock *sk)
 	static u32 challenge_timestamp;
 	static unsigned int challenge_count;
 	u32 now = jiffies / HZ;
+	u32 count;
 
 	if (now != challenge_timestamp) {
+		u32 half = (sysctl_tcp_challenge_ack_limit + 1) >> 1;
+
 		challenge_timestamp = now;
-		challenge_count = 0;
+		ACCESS_ONCE(challenge_count) = half +
+				  reciprocal_divide(prandom_u32(),
+					sysctl_tcp_challenge_ack_limit);
 	}
-	if (++challenge_count <= sysctl_tcp_challenge_ack_limit) {
+	count = ACCESS_ONCE(challenge_count);
+	if (count > 0) {
+		ACCESS_ONCE(challenge_count) = count - 1;
 		NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPCHALLENGEACK);
 		tcp_send_ack(sk);
 	}
@@ -4580,6 +4588,7 @@ restart:
 static void tcp_collapse_ofo_queue(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	u32 range_truesize, sum_tiny = 0;
 	struct sk_buff *skb = skb_peek(&tp->out_of_order_queue);
 	struct sk_buff *head;
 	u32 start, end;
@@ -4589,6 +4598,7 @@ static void tcp_collapse_ofo_queue(struct sock *sk)
 
 	start = TCP_SKB_CB(skb)->seq;
 	end = TCP_SKB_CB(skb)->end_seq;
+	range_truesize = skb->truesize;
 	head = skb;
 
 	for (;;) {
@@ -4603,14 +4613,24 @@ static void tcp_collapse_ofo_queue(struct sock *sk)
 		if (!skb ||
 		    after(TCP_SKB_CB(skb)->seq, end) ||
 		    before(TCP_SKB_CB(skb)->end_seq, start)) {
-			tcp_collapse(sk, &tp->out_of_order_queue,
-				     head, skb, start, end);
+			/* Do not attempt collapsing tiny skbs */
+			if (range_truesize != head->truesize ||
+			    end - start >= SKB_WITH_OVERHEAD(SK_MEM_QUANTUM)) {
+				tcp_collapse(sk, &tp->out_of_order_queue,
+					     head, skb, start, end);
+			} else {
+				sum_tiny += range_truesize;
+				if (sum_tiny > sk->sk_rcvbuf >> 3)
+					return;
+			}
+
 			head = skb;
 			if (!skb)
 				break;
 			/* Start new segment */
 			start = TCP_SKB_CB(skb)->seq;
 			end = TCP_SKB_CB(skb)->end_seq;
+			range_truesize = skb->truesize;
 		} else {
 			if (before(TCP_SKB_CB(skb)->seq, start))
 				start = TCP_SKB_CB(skb)->seq;
@@ -4665,6 +4685,9 @@ static int tcp_prune_queue(struct sock *sk)
 		tcp_clamp_window(sk);
 	else if (sk_under_memory_pressure(sk))
 		tp->rcv_ssthresh = min(tp->rcv_ssthresh, 4U * tp->advmss);
+ 
+	if (atomic_read(&sk->sk_rmem_alloc) <= sk->sk_rcvbuf)
+		return 0;
 
 	tcp_collapse_ofo_queue(sk);
 	if (!skb_queue_empty(&sk->sk_receive_queue))
@@ -4932,7 +4955,7 @@ static int tcp_copy_to_iovec(struct sock *sk, struct sk_buff *skb, int hlen)
 		err = skb_copy_datagram_iovec(skb, hlen, tp->ucopy.iov, chunk);
 	else
 		err = skb_copy_and_csum_datagram_iovec(skb, hlen,
-						       tp->ucopy.iov);
+						       tp->ucopy.iov, chunk);
 
 	if (!err) {
 		tp->ucopy.len -= chunk;
@@ -5286,7 +5309,7 @@ slow_path:
 	if (len < (th->doff << 2) || tcp_checksum_complete_user(sk, skb))
 		goto csum_error;
 
-	if (!th->ack && !th->rst)
+	if (!th->ack && !th->rst && !th->syn)
 		goto discard;
 
 	/*

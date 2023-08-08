@@ -55,7 +55,7 @@
 #define C0_G_Y		0	/* G/luma */
 
 /* wait for at most 2 vsync for lowest refresh rate (24hz) */
-#define KOFF_TIMEOUT msecs_to_jiffies(84)
+#define KOFF_TIMEOUT msecs_to_jiffies(1000)
 
 #define OVERFETCH_DISABLE_TOP		BIT(0)
 #define OVERFETCH_DISABLE_BOTTOM	BIT(1)
@@ -113,10 +113,14 @@ enum mdss_mdp_block_type {
 };
 
 enum mdss_mdp_csc_type {
-	MDSS_MDP_CSC_RGB2RGB,
-	MDSS_MDP_CSC_YUV2RGB,
-	MDSS_MDP_CSC_RGB2YUV,
+	MDSS_MDP_CSC_YUV2RGB_601L,
+	MDSS_MDP_CSC_YUV2RGB_601FR,
+	MDSS_MDP_CSC_YUV2RGB_709L,
+	MDSS_MDP_CSC_RGB2YUV_601L,
+	MDSS_MDP_CSC_RGB2YUV_601FR,
+	MDSS_MDP_CSC_RGB2YUV_709L,
 	MDSS_MDP_CSC_YUV2YUV,
+	MDSS_MDP_CSC_RGB2RGB,
 	MDSS_MDP_MAX_CSC
 };
 
@@ -184,6 +188,9 @@ struct mdss_mdp_ctl {
 	u32 num;
 	char __iomem *base;
 	char __iomem *wb_base;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	resource_size_t physical_base;
+#endif
 	u32 ref_cnt;
 	int power_state;
 
@@ -241,6 +248,7 @@ struct mdss_mdp_ctl {
 	int (*display_fnc) (struct mdss_mdp_ctl *ctl, void *arg);
 	int (*wait_fnc) (struct mdss_mdp_ctl *ctl, void *arg);
 	int (*wait_pingpong) (struct mdss_mdp_ctl *ctl, void *arg);
+	int (*wait_video_pingpong) (struct mdss_mdp_ctl *ctl, void *arg);
 	u32 (*read_line_cnt_fnc) (struct mdss_mdp_ctl *);
 	int (*add_vsync_handler) (struct mdss_mdp_ctl *,
 					struct mdss_mdp_vsync_handler *);
@@ -464,6 +472,9 @@ struct mdss_mdp_pipe {
 	struct mdp_scale_data scale;
 	u8 chroma_sample_h;
 	u8 chroma_sample_v;
+	u8 csc_coeff_set;
+
+	wait_queue_head_t free_waitq;
 };
 
 struct mdss_mdp_writeback_arg {
@@ -489,6 +500,7 @@ struct mdss_overlay_private {
 	struct list_head overlay_list;
 	struct list_head pipes_used;
 	struct list_head pipes_cleanup;
+	struct list_head pipes_destroy;
 	struct list_head rot_proc_list;
 	bool mixer_swap;
 
@@ -515,6 +527,34 @@ struct mdss_mdp_commit_cb {
 	int (*commit_cb_fnc) (enum mdp_commit_stage_type commit_state,
 		void *data);
 };
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+struct mdss_mdp_cmd_ctx {
+	struct mdss_mdp_ctl *ctl;
+	u32 pp_num;
+	u8 ref_cnt;
+	struct completion stop_comp;
+	wait_queue_head_t pp_waitq;
+	struct list_head vsync_handlers;
+	int panel_power_state;
+	atomic_t koff_cnt;
+	u32 intf_stopped;
+	int clk_enabled;
+	int vsync_enabled;
+	int rdptr_enabled;
+	struct mutex clk_mtx;
+	spinlock_t clk_lock;
+	spinlock_t koff_lock;
+	struct work_struct clk_work;
+	struct work_struct pp_done_work;
+	atomic_t pp_done_cnt;
+	struct mdss_intf_recovery intf_recovery;
+	struct mdss_mdp_cmd_ctx *sync_ctx; /* for partial update */
+	u32 pp_timeout_report_cnt;
+};
+#endif
+
+
 
 /**
  * enum mdss_screen_state - Screen states that MDP can be forced into
@@ -730,6 +770,19 @@ static inline u32 left_lm_w_from_mfd(struct msm_fb_data_type *mfd)
 	return (ctl && ctl->mixer_left) ? ctl->mixer_left->width : 0;
 }
 
+static inline uint8_t pp_vig_csc_pipe_val(struct mdss_mdp_pipe *pipe)
+{
+	switch (pipe->csc_coeff_set) {
+	case MDP_CSC_ITU_R_601:
+		return MDSS_MDP_CSC_YUV2RGB_601L;
+	case MDP_CSC_ITU_R_601_FR:
+		return MDSS_MDP_CSC_YUV2RGB_601FR;
+	case MDP_CSC_ITU_R_709:
+	default:
+		return  MDSS_MDP_CSC_YUV2RGB_709L;
+	}
+}
+
 irqreturn_t mdss_mdp_isr(int irq, void *ptr);
 void mdss_mdp_irq_clear(struct mdss_data_type *mdata,
 		u32 intr_type, u32 intf_num);
@@ -886,6 +939,8 @@ struct mdss_mdp_pipe *mdss_mdp_pipe_search(struct mdss_data_type *mdata,
 int mdss_mdp_pipe_map(struct mdss_mdp_pipe *pipe);
 void mdss_mdp_pipe_unmap(struct mdss_mdp_pipe *pipe);
 struct mdss_mdp_pipe *mdss_mdp_pipe_alloc_dma(struct mdss_mdp_mixer *mixer);
+int mdss_mdp_get_pipe_info(struct mdss_data_type *mdata, u32 type,
+	struct mdss_mdp_pipe **pipe_pool);
 
 u32 mdss_mdp_smp_calc_num_blocks(struct mdss_mdp_pipe *pipe);
 u32 mdss_mdp_smp_get_size(struct mdss_mdp_pipe *pipe, u32 num_planes);
@@ -963,4 +1018,8 @@ int mdss_mdp_wb_set_secure(struct msm_fb_data_type *mfd, int enable);
 int mdss_mdp_wb_get_secure(struct msm_fb_data_type *mfd, uint8_t *enable);
 void mdss_mdp_ctl_restore(void);
 int  mdss_mdp_ctl_reset(struct mdss_mdp_ctl *ctl);
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+void mdss_dsi_check_te(void);
+void mdss_mdp_underrun_clk_info(void);
+#endif
 #endif /* MDSS_MDP_H */

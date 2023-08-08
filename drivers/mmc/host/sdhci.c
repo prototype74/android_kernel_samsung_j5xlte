@@ -105,9 +105,14 @@ static void sdhci_dump_state(struct sdhci_host *host)
 		mmc_hostname(mmc), host->clock, mmc->clk_gated,
 		mmc->claimer->comm, host->pwr);
 	sdhci_dump_rpm_info(host);
+	if (mmc->card) {
+		pr_info("%s: card->cid : %08x%08x%08x%08x\n", mmc_hostname(mmc), 
+				mmc->card->raw_cid[0], mmc->card->raw_cid[1], 
+				mmc->card->raw_cid[2], mmc->card->raw_cid[3]);
+	}
 }
 
-static void sdhci_dumpregs(struct sdhci_host *host)
+void sdhci_dumpregs(struct sdhci_host *host)
 {
 	pr_info(DRIVER_NAME ": =========== REGISTER DUMP (%s)===========\n",
 		mmc_hostname(host->mmc));
@@ -327,6 +332,9 @@ retry_reset:
 		host->ops->reset_workaround(host, 0);
 		host->reset_wa_applied = 0;
 	}
+
+
+
 	/* clear pending normal/error interrupt status */
 	sdhci_writel(host, sdhci_readl(host, SDHCI_INT_STATUS),
 			SDHCI_INT_STATUS);
@@ -346,9 +354,11 @@ static void sdhci_init(struct sdhci_host *host, int soft)
 {
 	if (soft)
 		sdhci_reset(host, SDHCI_RESET_CMD|SDHCI_RESET_DATA);
-	else
+	else {
+		pr_info("%s: before SDHCI_RESET_ALL, PWRCTL_REG = 0x%x\n",
+				mmc_hostname(host->mmc), sdhci_readl(host, 0x1AC));
 		sdhci_reset(host, SDHCI_RESET_ALL);
-
+	}
 	sdhci_clear_set_irqs(host, SDHCI_INT_ALL_MASK,
 		SDHCI_INT_BUS_POWER | SDHCI_INT_DATA_END_BIT |
 		SDHCI_INT_DATA_CRC | SDHCI_INT_DATA_TIMEOUT | SDHCI_INT_INDEX |
@@ -1779,6 +1789,11 @@ static void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		else
 			present = sdhci_readl(host, SDHCI_PRESENT_STATE) &
 					SDHCI_CARD_PRESENT;
+	} 
+	/* For flooding detection pin. If exists card structure, the card is always present. */
+	else if(!present) { 
+		if(host->mmc->card)
+			present = 1;
 	}
 
 	spin_lock_irqsave(&host->lock, flags);
@@ -2109,10 +2124,11 @@ static void sdhci_do_set_ios(struct sdhci_host *host, struct mmc_ios *ios)
 	 */
 	if (ios->power_mode == MMC_POWER_OFF) {
 		sdhci_writel(host, 0, SDHCI_SIGNAL_ENABLE);
+		host->hc_pwrctrl_reg = sdhci_readl(host, HC_VENDOR_SPEC_PWR_REG);
+		pr_err("%s: %s: HC_VEN_PWR_REG before reset all 0x%x\n",
+				mmc_hostname(host->mmc), __func__, host->hc_pwrctrl_reg);
 		sdhci_reinit(host);
-		vdd_bit = sdhci_set_power(host, -1);
-		if (host->vmmc && vdd_bit != -1)
-			mmc_regulator_set_ocr(host->mmc, host->vmmc, vdd_bit);
+		host->pwr = 0;
 	}
 	if (!ios->clock) {
 		if (host->async_int_supp && host->mmc->card &&
@@ -3672,7 +3688,10 @@ int sdhci_add_host(struct sdhci_host *host)
 			>> SDHCI_CLOCK_BASE_SHIFT;
 
 	host->max_clk *= 1000000;
-	sdhci_update_power_policy(host, SDHCI_PERFORMANCE_MODE_INIT);
+	if (mmc->caps2 & MMC_CAP2_CLK_SCALE)
+		sdhci_update_power_policy(host, SDHCI_PERFORMANCE_MODE_INIT);
+	else
+		sdhci_update_power_policy(host, SDHCI_PERFORMANCE_MODE);
 	if (host->max_clk == 0 || host->quirks &
 			SDHCI_QUIRK_CAP_CLOCK_BASE_BROKEN) {
 		if (!host->ops->get_max_clock) {

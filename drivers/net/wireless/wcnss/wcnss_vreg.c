@@ -25,6 +25,13 @@
 #include <linux/slab.h>
 #include <linux/clk.h>
 #include <linux/leds.h>
+#include <linux/unistd.h>
+#include <linux/syscalls.h>
+#include <linux/fcntl.h>
+#include <asm/uaccess.h>
+#include <linux/file.h>
+#include <linux/fs.h>
+#include <linux/stat.h>
 
 
 static void __iomem *msm_wcnss_base;
@@ -136,9 +143,8 @@ static struct vregs_info iris_vregs_pronto_v2[] = {
 
 /* WCNSS regulators for Pronto v2 hardware */
 static struct vregs_info pronto_vregs_pronto_v2[] = {
-	{"qcom,pronto-vddmx",  VREG_NULL_CONFIG,
-		RPM_REGULATOR_CORNER_SUPER_TURBO,  0,
-		RPM_REGULATOR_CORNER_SUPER_TURBO, 0,    NULL},
+	{"qcom,pronto-vddmx",  VREG_NULL_CONFIG, 1287500,  0,
+		1287500, 0,    NULL},
 	{"qcom,pronto-vddcx",  VREG_NULL_CONFIG, RPM_REGULATOR_CORNER_NORMAL,
 		RPM_REGULATOR_CORNER_NONE, RPM_REGULATOR_CORNER_SUPER_TURBO,
 		0,             NULL},
@@ -268,7 +274,65 @@ void  wcnss_iris_reset(u32 reg, void __iomem *pmu_conf_reg)
 	reg &= ~WCNSS_PMU_CFG_IRIS_RESET;
 	writel_relaxed(reg, pmu_conf_reg);
 }
+static void chipset_version(u32 reg)
+{
+	struct file *file;
+	loff_t pos = 0;
+	int fd;
+	u32 chipset_id;
+	char chipset[15];
+	char path[32] = "/persist/.wifichipset.info";
 
+	mm_segment_t old_fs = get_fs();
+
+	chipset_id = reg >> 16;
+
+	switch (chipset_id) {
+	case WCN3660:
+		memcpy(chipset, "WCN3660", sizeof("WCN3660"));
+		break;
+	case WCN3660A:
+		memcpy(chipset, "WCN3660A", sizeof("WCN3660A"));
+		break;
+	case WCN3660B:
+		memcpy(chipset, "WCN3660B", sizeof("WCN3660B"));
+		break;
+	case WCN3620:
+		memcpy(chipset, "WCN3620", sizeof("WCN3620"));
+		break;
+	case WCN3620A:
+		memcpy(chipset, "WCN3620A", sizeof("WCN3620A"));
+		break;
+	case WCN3610:
+		memcpy(chipset, "WCN3610", sizeof("WCN3610"));
+		break;
+	case WCN3610V1:
+		memcpy(chipset, "WCN3610V1", sizeof("WCN3610V1"));
+		break;
+	}
+
+	pr_info("wcnss: chipset: %s\n", chipset);
+
+	set_fs(KERNEL_DS);
+	fd = sys_open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
+
+	if(fd >=0){
+		file = fget(fd);
+		sys_fchmod(fd, 0644);
+
+		if(file){
+			vfs_write(file, chipset, strlen(chipset), &pos);
+			fput(file);
+		}
+		sys_close(fd);
+	}
+	else {
+		pr_err("Couldn't open (%s)\n", path);
+	}
+	set_fs(old_fs);
+
+	return;
+}
 static int
 configure_iris_xo(struct device *dev,
 			struct wcnss_wlan_config *cfg,
@@ -362,9 +426,9 @@ configure_iris_xo(struct device *dev,
 						WCNSS_PMU_CFG_IRIS_XO_READ_STS)
 					cpu_relax();
 
-				iris_reg = readl_relaxed(iris_read_reg);
-				pr_info("wcnss: IRIS Reg: %08x\n", iris_reg);
-
+			iris_reg = readl_relaxed(iris_read_reg);
+			pr_info("wcnss: IRIS Reg: %08x\n", iris_reg);
+			chipset_version(iris_reg);
 				if (validate_iris_chip_id(iris_reg) && i >= 4) {
 					pr_info("wcnss: IRIS Card absent/invalid\n");
 					auto_detect = WCNSS_XO_INVALID;
@@ -605,6 +669,121 @@ fail:
 
 }
 
+#if defined(CONFIG_MACH_A5U_EUR_OPEN)
+static struct vregs_info pronto_ldo18_info =
+{"qcom,pronto-ldo18",  VREG_NULL_CONFIG, 2700000, 0,
+	2700000, 10000,  NULL};
+
+void wcnss_ldo18_off (void)
+{
+
+	int rc=0;
+
+	if (pronto_ldo18_info.state == VREG_NULL_CONFIG)
+		return;
+
+	/* Remove PWM mode */
+	if (pronto_ldo18_info.state & VREG_OPTIMUM_MODE_MASK) {
+		rc = regulator_set_optimum_mode(
+				pronto_ldo18_info.regulator, 0);
+		if (rc < 0)
+			pr_err("regulator_set_optimum_mode failed\n");
+	}
+
+	/* Set voltage to lowest level */
+	if (pronto_ldo18_info.state & VREG_SET_VOLTAGE_MASK) {
+		rc = regulator_set_voltage(pronto_ldo18_info.regulator,
+				pronto_ldo18_info.low_power_min,
+				pronto_ldo18_info.max_voltage);
+		if (rc)
+			pr_err("regulator_set_voltage(%s) failed (%d)\n",
+					pronto_ldo18_info.name, rc);
+	}
+
+	/* Disable regulator */
+	if (pronto_ldo18_info.state & VREG_ENABLE_MASK) {
+		rc = regulator_disable(pronto_ldo18_info.regulator);
+		if (rc < 0)
+			pr_err("vreg %s disable failed (%d)\n",
+					pronto_ldo18_info.name, rc);
+	}
+
+	/* Free the regulator source */
+	if (pronto_ldo18_info.state & VREG_GET_REGULATOR_MASK)
+		regulator_put(pronto_ldo18_info.regulator);
+
+	pronto_ldo18_info.state = VREG_NULL_CONFIG;
+
+}
+EXPORT_SYMBOL(wcnss_ldo18_off);
+
+
+int wcnss_ldo18_on(void)
+{
+
+	int rc = 0, reg_cnt=0;
+	struct platform_device *pdev = wcnss_get_platform_device();
+
+	if (IS_ERR(pdev))
+	{
+		rc = PTR_ERR (pdev);
+		pr_err("failed to wcnss_get_platform_device()\n");
+		goto fail;
+	}
+
+	/* Get regulator source */
+	pronto_ldo18_info.regulator = regulator_get(&pdev->dev, pronto_ldo18_info.name);
+	if (IS_ERR(pronto_ldo18_info.regulator)) {
+		rc = PTR_ERR(pronto_ldo18_info.regulator);
+		pr_err("regulator get failed\n");
+		goto fail;
+	}
+
+	pronto_ldo18_info.state |= VREG_GET_REGULATOR_MASK;
+	reg_cnt = regulator_count_voltages(pronto_ldo18_info.regulator);
+	/* Set voltage to nominal. Exclude swtiches e.g. LVS */
+	if ((pronto_ldo18_info.nominal_min || pronto_ldo18_info.max_voltage)
+			&& (reg_cnt > 0)) {
+		rc = regulator_set_voltage(pronto_ldo18_info.regulator,
+				pronto_ldo18_info.nominal_min,
+				pronto_ldo18_info.max_voltage);
+		if (rc) {
+			pr_err("regulator_set_voltage(%s) failed (%d)\n",pronto_ldo18_info.name, rc);
+
+			goto fail;
+		}
+		pronto_ldo18_info.state |= VREG_SET_VOLTAGE_MASK;
+	}
+
+	/* Vote for PWM/PFM mode if needed */
+	if (pronto_ldo18_info.uA_load && (reg_cnt > 0)) {
+		rc = regulator_set_optimum_mode(pronto_ldo18_info.regulator,
+				pronto_ldo18_info.uA_load);
+		if (rc < 0) {
+			pr_err("regulator_set_optimum_mode failed\n");
+			goto fail;
+		}
+		pronto_ldo18_info.state |= VREG_OPTIMUM_MODE_MASK;
+	}
+
+	/* Enable the regulator */
+	rc = regulator_enable(pronto_ldo18_info.regulator);
+	if (rc) {
+		pr_err("vreg enable failed\n");
+		goto fail;
+	}
+	pronto_ldo18_info.state |= VREG_ENABLE_MASK;
+
+	return rc;
+
+fail:
+	wcnss_ldo18_off();
+	return rc;
+
+}
+EXPORT_SYMBOL(wcnss_ldo18_on);
+
+#endif  /* CONFIG_MACH_A5U_EUR_OPEN */
 static void wcnss_iris_vregs_off(enum wcnss_hw_type hw_type,
 					struct wcnss_wlan_config *cfg)
 {

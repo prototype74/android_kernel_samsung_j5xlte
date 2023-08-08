@@ -53,6 +53,10 @@
  * Length of descriptive name associated with Interrupt
  */
 #define TZBSP_MAX_INT_DESC 16
+
+#ifdef CONFIG_SEC_DEBUG_ENABLE_QSEE
+extern int sec_debug_set_qsee_address(unsigned int address);
+#endif
 /*
  * VMID Table
  */
@@ -402,6 +406,7 @@ static int _disp_log_stats(struct tzdbg_log_t *log,
 	int max_len;
 	int len = 0;
 	int i = 0;
+	int retry = 2;
 
 	wrap_start = log_start->wrap;
 	wrap_end = log->log_pos.wrap;
@@ -435,6 +440,10 @@ static int _disp_log_stats(struct tzdbg_log_t *log,
 			/* Some event woke us up, so let's quit */
 			return 0;
 		}
+
+                retry--;
+                if (!retry)
+                        return 0;
 
 		if (buf_idx == TZDBG_LOG)
 			memcpy_fromio((void *)tzdbg.diag_buf, tzdbg.virt_iobase,
@@ -477,7 +486,6 @@ static int _disp_tz_log_stats(size_t count)
 static int _disp_qsee_log_stats(size_t count)
 {
 	static struct tzdbg_log_pos_t log_start = {0};
-
 	return _disp_log_stats(g_qsee_log, &log_start,
 			QSEE_LOG_BUF_SIZE - sizeof(struct tzdbg_log_pos_t),
 			count, TZDBG_QSEE_LOG);
@@ -611,6 +619,11 @@ static void tzdbg_register_qsee_log_buf(void)
 		__func__, resp.result);
 		goto err2;
 	}
+
+#ifdef CONFIG_SEC_DEBUG_ENABLE_QSEE
+	/* QSEE Logs */
+	ret = sec_debug_set_qsee_address((uint32_t)pa);
+#endif
 
 	g_qsee_log =
 		(struct tzdbg_log_t *)ion_map_kernel(g_ion_clnt, g_ihandle);

@@ -369,6 +369,19 @@ int clk_enable(struct clk *clk)
 		return -EINVAL;
 	name = clk->dbg_name;
 
+#if 0
+	if (!strcmp(clk->dbg_name, "gcc_ce1_clk")) {
+		WARN(1, "Someone enabled gcc_ce1_clk!");
+	}
+
+	if (!strcmp(clk->dbg_name, "gcc_ce2_clk")) {
+		WARN(1, "Someone enabled gcc_ce2_clk!");
+	}
+
+	if (!strcmp(clk->dbg_name, "gcc_crypto_clk")) {
+		WARN(1, "Someone enabled gcc_crypto_clk!");
+	}
+#endif
 	spin_lock_irqsave(&clk->lock, flags);
 	WARN(!clk->prepare_count,
 			"%s: Don't call enable on unprepared clocks\n", name);
@@ -403,6 +416,7 @@ err_enable_parent:
 }
 EXPORT_SYMBOL(clk_enable);
 
+extern void *j_debug;
 void clk_disable(struct clk *clk)
 {
 	const char *name;
@@ -411,7 +425,19 @@ void clk_disable(struct clk *clk)
 	if (IS_ERR_OR_NULL(clk))
 		return;
 	name = clk->dbg_name;
+#if 0
+	if (!strcmp(clk->dbg_name, "gcc_ce1_clk")) {
+		WARN(1, "Someone disabled gcc_ce1_clk!");
+	}
 
+	if (!strcmp(clk->dbg_name, "gcc_ce2_clk")) {
+		WARN(1, "Someone disabled gcc_ce2_clk!");
+	}
+
+	if (!strcmp(clk->dbg_name, "gcc_crypto_clk")) {
+		WARN(1, "Someone disabled gcc_crypto_clk!");
+	}
+#endif
 	spin_lock_irqsave(&clk->lock, flags);
 	WARN(!clk->prepare_count,
 			"%s: Never called prepare or calling disable after unprepare\n",
@@ -428,6 +454,13 @@ void clk_disable(struct clk *clk)
 		clk_disable(parent);
 	}
 	clk->count--;
+
+	if (!strcmp(name, "gcc_crypto_axi_clk")) {
+//			pr_info("QMCK: gcc_crypto_axi_clk->count(%d) after dec\n", clk->count);
+			if (j_debug && !clk->count)
+				dump_stack();
+	}
+
 out:
 	spin_unlock_irqrestore(&clk->lock, flags);
 }
@@ -1128,6 +1161,15 @@ static int __init clock_late_init(void)
 	}
 
 	list_for_each_entry_safe(h, h_temp, &handoff_list, list) {
+#ifdef CONFIG_SEC_MATISSEVE_PROJECT /*temp:gpio-clock for backlight: it should be alived in the first kernel */
+		if (!strcmp("gcc_gp3_clk", h->clk->dbg_name)) {
+			pr_info("%s: prepare_count[%d] enable[%d]\n",__func__,
+					h->clk->prepare_count, h->clk->count);
+			list_del(&h->list);
+			kfree(h);
+			continue;
+		}
+#endif
 		clk_disable_unprepare(h->clk);
 		list_del(&h->list);
 		kfree(h);

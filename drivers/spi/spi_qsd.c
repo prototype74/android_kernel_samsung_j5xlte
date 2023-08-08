@@ -2446,6 +2446,18 @@ struct msm_spi_platform_data *msm_spi_dt_to_pdata(
 		}
 	}
 
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+	/* Even if you set the bam setting,
+	 * you can't access bam when you use tsspi in fingerprint
+	 *
+	 */
+	if (pdata->master_id == CONFIG_SENSORS_FP_MASTER_ID) {
+		pdata->use_bam = false;
+		pr_info("%s: disable bam for BLSP tzspi, master_id(%d)\n",
+				__func__, pdata->master_id);
+	}
+#endif
+
 	if (pdata->use_bam) {
 		if (!pdata->bam_consumer_pipe_index) {
 			dev_warn(&pdev->dev,
@@ -2639,6 +2651,270 @@ err_clk_get:
 	mutex_unlock(&dd->core_lock);
 	return rc;
 }
+
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+int fp_spi_clock_set_rate(struct spi_device *spidev)
+{
+	struct msm_spi *dd;
+
+	if (!spidev) {
+		pr_err("%s: spidev pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	dd = spi_master_get_devdata(spidev->master);
+	if (!dd) {
+		pr_err("%s: spi master pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	msm_spi_clock_set(dd, spidev->max_speed_hz);
+
+	pr_info("%s sucess\n", __func__);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(fp_spi_clock_set_rate);
+
+int fp_spi_clock_enable(struct spi_device *spidev)
+{
+	struct msm_spi *dd;
+	int rc;
+
+	if (!spidev) {
+		pr_err("%s: spidev pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	dd = spi_master_get_devdata(spidev->master);
+	if (!dd) {
+		pr_err("%s: spi master pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	rc = clk_prepare_enable(dd->clk);
+	if (rc) {
+		pr_err("%s: unable to enable core_clk\n", __func__);
+		return rc;
+	}
+
+	rc = clk_prepare_enable(dd->pclk);
+	if (rc) {
+		pr_err("%s: unable to enable iface_clk\n", __func__);
+		return rc;
+	}
+	pr_info("%s sucess\n", __func__);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(fp_spi_clock_enable);
+
+int fp_spi_clock_disable(struct spi_device *spidev)
+{
+	struct msm_spi *dd;
+
+	if (!spidev) {
+		pr_err("%s: spidev pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	dd = spi_master_get_devdata(spidev->master);
+	if (!dd) {
+		pr_err("%s: spi master pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	clk_disable_unprepare(dd->clk);
+	clk_disable_unprepare(dd->pclk);
+
+	pr_info("%s sucess\n", __func__);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(fp_spi_clock_disable);
+
+int fp_spi_request_gpios(struct spi_device *spidev)
+{
+	int i = 0;
+	int result = 0;
+	struct msm_spi *dd;
+
+	if (!spidev) {
+		pr_err("%s: spidev pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	dd = spi_master_get_devdata(spidev->master);
+	if (!dd) {
+		pr_err("%s: spi master pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	if (!dd->pdata->use_pinctrl) {
+		for (i = 0; i < ARRAY_SIZE(spi_rsrcs); ++i) {
+			if (dd->spi_gpios[i] >= 0) {
+				result = gpio_request(dd->spi_gpios[i],
+						spi_rsrcs[i]);
+				if (result) {
+					dev_err(dd->dev,
+					"%s: gpio_request for pin %d "
+					"failed with error %d\n"
+					, __func__, dd->spi_gpios[i], result);
+					goto error;
+				}
+			}
+		}
+	} else {
+		result = pinctrl_select_state(dd->pinctrl, dd->pins_active);
+		if (result) {
+			dev_err(dd->dev, "%s: Can not set %s pins\n",
+			__func__, PINCTRL_STATE_DEFAULT);
+			goto error;
+		}
+	}
+	pr_info("%s sucess\n", __func__);
+	return 0;
+error:
+	pr_err("%s error\n", __func__);
+	if (!dd->pdata->use_pinctrl) {
+		for (; --i >= 0;) {
+			if (dd->spi_gpios[i] >= 0)
+				gpio_free(dd->spi_gpios[i]);
+		}
+	}
+	return result;
+}
+EXPORT_SYMBOL_GPL(fp_spi_request_gpios);
+#endif
+
+#if (defined CONFIG_ESE_P61) || (defined CONFIG_ESE_P3)
+int ese_spi_clock_set_rate(struct spi_device *spidev)
+{
+	struct msm_spi *dd;
+
+	if (!spidev) {
+		pr_err("%s: spidev pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	dd = spi_master_get_devdata(spidev->master);
+	if (!dd) {
+		pr_err("%s: spi master pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	msm_spi_clock_set(dd, spidev->max_speed_hz);
+
+	pr_info("%s sucess\n", __func__);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ese_spi_clock_set_rate);
+
+int ese_spi_clock_enable(struct spi_device *spidev)
+{
+	struct msm_spi *dd;
+	int rc;
+
+	if (!spidev) {
+		pr_err("%s: spidev pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	dd = spi_master_get_devdata(spidev->master);
+	if (!dd) {
+		pr_err("%s: spi master pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	rc = clk_prepare_enable(dd->clk);
+	if (rc) {
+		pr_err("%s: unable to enable core_clk\n", __func__);
+		return rc;
+	}
+
+	rc = clk_prepare_enable(dd->pclk);
+	if (rc) {
+		pr_err("%s: unable to enable iface_clk\n", __func__);
+		return rc;
+	}
+	pr_info("%s sucess\n", __func__);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ese_spi_clock_enable);
+
+int ese_spi_clock_disable(struct spi_device *spidev)
+{
+	struct msm_spi *dd;
+
+	if (!spidev) {
+		pr_err("%s: spidev pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	dd = spi_master_get_devdata(spidev->master);
+	if (!dd) {
+		pr_err("%s: spi master pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	clk_disable_unprepare(dd->clk);
+	clk_disable_unprepare(dd->pclk);
+
+	pr_info("%s sucess\n", __func__);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ese_spi_clock_disable);
+
+int ese_spi_request_gpios(struct spi_device *spidev)
+{
+	int i = 0;
+	int result = 0;
+	struct msm_spi *dd;
+
+	if (!spidev) {
+		pr_err("%s: spidev pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	dd = spi_master_get_devdata(spidev->master);
+	if (!dd) {
+		pr_err("%s: spi master pointer is NULL\n", __func__);
+		return -EFAULT;
+	}
+
+	if (!dd->pdata->use_pinctrl) {
+		for (i = 0; i < ARRAY_SIZE(spi_rsrcs); ++i) {
+			if (dd->spi_gpios[i] >= 0) {
+				result = gpio_request(dd->spi_gpios[i],
+						spi_rsrcs[i]);
+				if (result) {
+					dev_err(dd->dev,
+					"%s: gpio_request for pin %d "
+					"failed with error %d\n"
+					, __func__, dd->spi_gpios[i], result);
+					goto error;
+				}
+			}
+		}
+	} else {
+		result = pinctrl_select_state(dd->pinctrl, dd->pins_active);
+		if (result) {
+			dev_err(dd->dev, "%s: Can not set %s pins\n",
+			__func__, PINCTRL_STATE_DEFAULT);
+			goto error;
+		}
+	}
+	pr_info("%s sucess\n", __func__);
+	return 0;
+error:
+	pr_err("%s error\n", __func__);
+	if (!dd->pdata->use_pinctrl) {
+		for (; --i >= 0;) {
+			if (dd->spi_gpios[i] >= 0)
+				gpio_free(dd->spi_gpios[i]);
+		}
+	}
+	return result;
+}
+EXPORT_SYMBOL_GPL(ese_spi_request_gpios);
+#endif
 
 static int msm_spi_probe(struct platform_device *pdev)
 {

@@ -60,6 +60,11 @@ struct mdss_hw_settings {
 	u32 val;
 };
 
+struct mdss_max_bw_settings {
+	u32 mdss_max_bw_mode;
+	u32 mdss_max_bw_val;
+};
+
 struct mdss_debug_inf {
 	void *debug_data;
 	void (*debug_enable_clock)(int on);
@@ -125,6 +130,10 @@ struct mdss_data_type {
 	u32 max_mdp_clk_rate;
 	struct mdss_util_intf *mdss_util;
 	struct mdss_panel_data *pdata;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	char __iomem *mdss_base;
+	size_t mdp_reg_size;
+#endif
 
 	struct platform_device *pdev;
 	struct dss_io_data mdss_io;
@@ -188,6 +197,7 @@ struct mdss_data_type {
 	struct mdss_fudge_factor ib_factor;
 	struct mdss_fudge_factor ib_factor_overlap;
 	struct mdss_fudge_factor ib_factor_cmd;
+        struct mdss_fudge_factor ib_factor_single;
 	struct mdss_fudge_factor clk_factor;
 
 	u32 disable_prefill;
@@ -258,6 +268,14 @@ struct mdss_data_type {
 
 	u64 ab[MDSS_MAX_BUS_CLIENTS];
 	u64 ib[MDSS_MAX_BUS_CLIENTS];
+
+	struct mdss_max_bw_settings *max_bw_settings;
+	u32 bw_mode_bitmap;
+	u32 max_bw_settings_cnt;
+
+	struct mdss_max_bw_settings *max_per_pipe_bw_settings;
+	u32 mdss_per_pipe_bw_cnt;
+	u32 min_bw_per_pipe;
 };
 extern struct mdss_data_type *mdss_res;
 

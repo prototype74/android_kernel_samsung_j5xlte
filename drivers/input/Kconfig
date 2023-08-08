@@ -200,6 +200,20 @@ config SENSORS_HALL
 	 Say y here if you want to use this hall sensor driver, it
 	 is like a switch. For example, lid.
 
+config COMMON_INPUT_BOOSTER
+	tristate "input booster"
+	depends on INPUT
+	help
+	  Say Y here if you want to boost shen some keys and touches are pressed. If unsure, say N.
+
+config INPUT_BOOSTER
+	tristate "input booster"
+	depends on INPUT
+	default n
+	help
+	  Say Y here if you want to boost when some keys and touches are pressed. If unsure, say N.
+
+
 comment "Input Device Drivers"
 
 source "drivers/input/keyboard/Kconfig"

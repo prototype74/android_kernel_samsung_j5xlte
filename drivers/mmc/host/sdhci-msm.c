@@ -2327,6 +2327,8 @@ void sdhci_msm_dump_pwr_ctrl_regs(struct sdhci_host *host)
 		readl_relaxed(msm_host->core_mem + CORE_PWRCTL_CTL));
 }
 
+void sdhci_dumpregs(struct sdhci_host *host);
+static int sdhci_msm_enable_controller_clock(struct sdhci_host *host);
 static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 {
 	struct sdhci_host *host = (struct sdhci_host *)data;
@@ -2339,9 +2341,21 @@ static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 	unsigned long flags;
 	int retry = 10;
 
+	if (!IS_ERR(msm_host->pclk)) {
+		ret = clk_prepare_enable(msm_host->pclk);
+		if (ret)
+			pr_err("%s: %s: failed to enable the pclk with error %d\n",
+				mmc_hostname(host->mmc), __func__, ret);
+	}
+
 	irq_status = readb_relaxed(msm_host->core_mem + CORE_PWRCTL_STATUS);
 	pr_debug("%s: Received IRQ(%d), status=0x%x\n",
 		mmc_hostname(msm_host->mmc), irq, irq_status);
+
+	if ((irq_status & msm_host->curr_pwr_state) ||
+		(irq_status & msm_host->curr_io_level))
+		pr_err("spurious IRQ 0x%x pwr_ctrl_reg 0x%x\n", irq_status,
+			readl_relaxed(msm_host->core_mem + CORE_PWRCTL_CTL));
 
 	/* Clear the interrupt */
 	writeb_relaxed(irq_status, (msm_host->core_mem + CORE_PWRCTL_CLEAR));
@@ -2458,6 +2472,9 @@ static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 		msm_host->curr_io_level = io_level;
 	complete(&msm_host->pwr_irq_completion);
 	spin_unlock_irqrestore(&host->lock, flags);
+
+	if (!IS_ERR(msm_host->pclk)) 
+		clk_disable_unprepare(msm_host->pclk);
 
 	return IRQ_HANDLED;
 }
@@ -3120,6 +3137,33 @@ void sdhci_msm_dump_vendor_regs(struct sdhci_host *host)
 	/* Disable test bus */
 	writel_relaxed(~CORE_TESTBUS_ENA, msm_host->core_mem +
 			CORE_TESTBUS_CONFIG);
+
+	pr_info("PWRCTL_STATUS: 0x%08x | PWRCTL_MASK: 0x%08x | PWRCTL_CTL: 0x%08x\n",
+			readl_relaxed(msm_host->core_mem + CORE_PWRCTL_STATUS),
+			readl_relaxed(msm_host->core_mem + CORE_PWRCTL_MASK),
+			readl_relaxed(msm_host->core_mem + CORE_PWRCTL_CTL));
+
+	pr_info("-------- MCI Registers -------- \n");
+
+	for(i = 0;i < 0x1C0;i+=16) {
+		pr_info("0x%08X: 0x%08X 0x%08X 0x%08X 0x%08X\n",
+				i,
+				readl_relaxed(msm_host->core_mem + i),
+				readl_relaxed(msm_host->core_mem + i + 4),
+				readl_relaxed(msm_host->core_mem + i + 8),
+				readl_relaxed(msm_host->core_mem + i + 12));
+	}
+
+	pr_info("-------- HC Registers -------- \n");
+
+	for(i = 0;i < 0x1C0 ;i+=16) {
+		pr_info("0x%08X: 0x%08X 0x%08X 0x%08X 0x%08X\n",
+				i,
+				readl_relaxed(host->ioaddr + i),
+				readl_relaxed(host->ioaddr + i + 4),
+				readl_relaxed(host->ioaddr + i + 8),
+				readl_relaxed(host->ioaddr + i + 12));
+	}
 }
 
 void sdhci_msm_reset_workaround(struct sdhci_host *host, u32 enable)
@@ -3178,6 +3222,7 @@ static struct sdhci_ops sdhci_msm_ops = {
 	.config_auto_tuning_cmd = sdhci_msm_config_auto_tuning_cmd,
 	.enable_controller_clock = sdhci_msm_enable_controller_clock,
 	.reset_workaround = sdhci_msm_reset_workaround,
+
 };
 
 static int sdhci_msm_cfg_mpm_pin_wakeup(struct sdhci_host *host, unsigned mode)
@@ -3275,6 +3320,125 @@ static void sdhci_set_default_hw_caps(struct sdhci_msm_host *msm_host,
 	caps &= ~CORE_SYS_BUS_SUPPORT_64_BIT;
 	writel_relaxed(caps, host->ioaddr + CORE_VENDOR_SPEC_CAPABILITIES0);
 }
+
+/* SYSFS about SD Card Detection */
+extern struct class *sec_class;
+static struct device *t_flash_detect_dev;
+
+static ssize_t t_flash_detect_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct sdhci_msm_host *msm_host = dev_get_drvdata(dev);
+#if (defined(CONFIG_NO_DETECT_PIN) || defined(CONFIG_SEC_HYBRID_TRAY))
+	if (msm_host->mmc->card) {
+		printk(KERN_DEBUG "SD card inserted.\n");
+		return sprintf(buf, "Insert\n");
+	} else {
+		if (gpio_is_valid(msm_host->pdata->status_gpio) &&
+				gpio_get_value(msm_host->pdata->status_gpio)) {
+			printk(KERN_DEBUG "SD slot tray Removed.\n");
+			return sprintf(buf, "Notray\n");
+		}
+		printk(KERN_DEBUG "SD card removed.\n");
+		return sprintf(buf, "Remove\n");
+	}
+#else
+	unsigned int detect;
+
+	if (gpio_is_valid(msm_host->pdata->status_gpio))
+		detect = gpio_get_value(msm_host->pdata->status_gpio);
+
+	else {
+		pr_info("%s : External  SD detect pin Error\n", __func__);
+		return sprintf(buf, "Error\n");
+	}
+
+	pr_info("%s : detect = %d.\n", __func__, detect);
+	if (!detect) {
+		printk(KERN_DEBUG "SD card inserted.\n");
+		return sprintf(buf, "Insert\n");
+	} else {
+		printk(KERN_DEBUG "SD card removed.\n");
+		return sprintf(buf, "Remove\n");
+	}
+#endif
+}
+
+static ssize_t sd_detect_cnt_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct sdhci_msm_host *msm_host = dev_get_drvdata(dev);
+
+	dev_info(dev, "%s : CD count is = %u\n", __func__, msm_host->mmc->card_detect_cnt);
+	return  sprintf(buf, "%u", msm_host->mmc->card_detect_cnt);
+}
+
+#ifdef CONFIG_MMC_DS_TOOL
+static ssize_t t_flash_register_show(struct device *dev,
+                struct device_attribute *attr, char *buf)
+{
+        int clk, cmd, data;
+        int ds_reg;
+
+        // TLMM_SDC2_HDRV_PULL_CTL = 0x01109000
+        void __iomem *ioaddr= devm_ioremap(dev, 0x01109000, 0x2000);
+        ds_reg = readl_relaxed(ioaddr);
+        if(!ioaddr) {
+                pr_err("[MMCTOOL]: Failed to remap TLMM registers\n");
+                return 1;
+        }
+
+        clk = ds_reg & (7 << 6);
+        cmd = ds_reg & (7 << 3);
+        data = ds_reg & (7 << 0);
+
+        clk = clk >> 6;
+        cmd = cmd >> 3;
+
+        iounmap(ioaddr);
+        printk("[MMCTOOL] Read SD DS register= %x, clk= %d, cmd= %d, data= %d \n",ds_reg, clk, cmd, data);
+        return sprintf(buf, "%1d%1d%1d \n",clk,cmd,data);
+}
+
+static ssize_t t_flash_register_store(struct device *dev, struct device_attribute *attr,
+                          const char *buf, size_t count)
+{
+        int clk, cmd, data;
+        int ds_reg;
+
+        // TLMM_SDC2_HDRV_PULL_CTL = 0x01109000
+        void __iomem *ioaddr= devm_ioremap(dev, 0x01109000, 0x2000);
+        if(!ioaddr) {
+                pr_err("[MMCTOOL]: Failed to remap TLMM registers\n");
+                return 1;
+        }
+
+        ds_reg = readl_relaxed(ioaddr);
+        ds_reg &= ~0x1ff;       //bit clear 0~8
+
+        sscanf(buf, "%1d%1d%1d", &clk, &cmd, &data);
+
+        if(clk > 7 || clk < 0 || cmd > 7 || cmd < 0 || data > 7 || data < 0) {
+                pr_err("[MMCTOOL]: invalid drive stregnth value, %d %d %d\n", clk, cmd, data);
+                return 1;
+        }
+
+        ds_reg |= (clk << 6);
+        ds_reg |= (cmd << 3);
+        ds_reg |= data;
+
+        writel_relaxed(ds_reg, ioaddr);
+
+        iounmap(ioaddr);
+        pr_err("[MMCTOOL]: Write SD DS register= %x clk= %d cmd= %d data= %d\n", ds_reg, clk, cmd, data);
+        return count;
+}
+
+static DEVICE_ATTR(register, 0777, t_flash_register_show, t_flash_register_store);
+#endif
+
+static DEVICE_ATTR(status, 0444, t_flash_detect_show, NULL);
+static DEVICE_ATTR(cd_cnt, 0444, sd_detect_cnt_show, NULL);
 
 static int sdhci_msm_probe(struct platform_device *pdev)
 {
@@ -3547,14 +3711,14 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	msm_host->mmc->caps |= msm_host->pdata->caps;
 	msm_host->mmc->caps |= MMC_CAP_WAIT_WHILE_BUSY;
 	msm_host->mmc->caps2 |= msm_host->pdata->caps2;
-	msm_host->mmc->caps2 |= MMC_CAP2_CORE_RUNTIME_PM;
-	msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR;
-	msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR_CONTROL;
+	//msm_host->mmc->caps2 |= MMC_CAP2_CORE_RUNTIME_PM;
+	//msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR;
+	//msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR_CONTROL;
 	msm_host->mmc->caps2 |= (MMC_CAP2_BOOTPART_NOACC |
 				MMC_CAP2_DETECT_ON_ERR);
 	msm_host->mmc->caps2 |= MMC_CAP2_CACHE_CTRL;
 	msm_host->mmc->caps2 |= MMC_CAP2_POWEROFF_NOTIFY;
-	msm_host->mmc->caps2 |= MMC_CAP2_CLK_SCALE;
+	//msm_host->mmc->caps2 |= MMC_CAP2_CLK_SCALE;
 	msm_host->mmc->caps2 |= MMC_CAP2_STOP_REQUEST;
 	msm_host->mmc->caps2 |= MMC_CAP2_ASYNC_SDIO_IRQ_4BIT_MODE;
 	msm_host->mmc->pm_caps |= MMC_PM_KEEP_POWER | MMC_PM_WAKE_SDIO_IRQ;
@@ -3575,7 +3739,7 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 		 * weird/inconsistent state resulting in flood of interrupts.
 		 */
 		sdhci_msm_setup_pins(msm_host->pdata, true);
-
+		mdelay(10);
 		ret = mmc_gpio_request_cd(msm_host->mmc,
 				msm_host->pdata->status_gpio);
 		if (ret) {
@@ -3583,6 +3747,38 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 					__func__, ret);
 			goto vreg_deinit;
 		}
+	}
+	/* SYSFS about SD Card Detection by soonil.lim */
+#if (defined(CONFIG_NO_DETECT_PIN) || defined(CONFIG_MACH_KLEOS_EUR))
+	if (t_flash_detect_dev == NULL && !strcmp(host->hw_name, "7864900.sdhci")) {
+#else
+	if (t_flash_detect_dev == NULL && gpio_is_valid(msm_host->pdata->status_gpio)) {
+#endif
+		printk(KERN_DEBUG "%s : Change sysfs Card Detect\n", __func__);
+
+		t_flash_detect_dev = device_create(sec_class,
+				NULL, 0, NULL, "sdcard");
+		if (IS_ERR(t_flash_detect_dev))
+			pr_err("%s : Failed to create device!\n", __func__);
+
+		if (device_create_file(t_flash_detect_dev,
+			&dev_attr_status) < 0)
+			pr_err("%s : Failed to create device file(%s)!\n",
+					__func__, dev_attr_status.attr.name);
+
+        if (device_create_file(t_flash_detect_dev,
+            &dev_attr_cd_cnt) < 0)
+            pr_err("%s : Failed to create device file(%s)!\n",
+                    __func__, dev_attr_cd_cnt.attr.name);
+
+#ifdef CONFIG_MMC_DS_TOOL
+                if (device_create_file(t_flash_detect_dev,
+                        &dev_attr_register) < 0)
+                        pr_err("%s : Failed to create device file(%s)!\n",
+                                        __func__, dev_attr_register.attr.name);
+#endif
+
+		dev_set_drvdata(t_flash_detect_dev, msm_host);
 	}
 
 	if ((sdhci_readl(host, SDHCI_CAPABILITIES) & SDHCI_CAN_64BIT) &&

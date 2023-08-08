@@ -2928,7 +2928,7 @@ static int wm8994_aif_mute(struct snd_soc_dai *codec_dai, int mute)
 		return -EINVAL;
 	}
 
-	if (mute)
+	if (mute && !codec_dai->active)
 		reg = WM8994_AIF1DAC1_MUTE;
 	else
 		reg = 0;
@@ -3340,7 +3340,7 @@ int wm8994_mic_detect(struct snd_soc_codec *codec, struct snd_soc_jack *jack,
 		dev_warn(codec->dev, "Failed to configure MICBIAS%d: %d\n",
 			 micbias, ret);
 
-	dev_dbg(codec->dev, "Configuring microphone detection on %d %p\n",
+	dev_dbg(codec->dev, "Configuring microphone detection on %d %pK\n",
 		micbias, jack);
 
 	/* Store the configuration */

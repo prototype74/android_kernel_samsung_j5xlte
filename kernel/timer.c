@@ -48,6 +48,9 @@
 #include <asm/div64.h>
 #include <asm/timex.h>
 #include <asm/io.h>
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
 
 #include "time/tick-internal.h"
 
@@ -1111,7 +1114,7 @@ static int cascade(struct tvec_base *base, struct tvec *tv, int index)
 static void call_timer_fn(struct timer_list *timer, void (*fn)(unsigned long),
 			  unsigned long data)
 {
-	int preempt_count = preempt_count();
+	int count = preempt_count();
 
 #ifdef CONFIG_LOCKDEP
 	/*
@@ -1133,21 +1136,27 @@ static void call_timer_fn(struct timer_list *timer, void (*fn)(unsigned long),
 	lock_map_acquire(&lockdep_map);
 
 	trace_timer_expire_entry(timer);
+#ifdef CONFIG_SEC_DEBUG
+	secdbg_msg("timer %pS entry", fn);
+#endif
 	fn(data);
+#ifdef CONFIG_SEC_DEBUG
+	secdbg_msg("timer %pS exit", fn);
+#endif
 	trace_timer_expire_exit(timer);
 
 	lock_map_release(&lockdep_map);
 
-	if (preempt_count != preempt_count()) {
+	if (count != preempt_count()) {
 		WARN_ONCE(1, "timer: %pF preempt leak: %08x -> %08x\n",
-			  fn, preempt_count, preempt_count());
+			   fn, count, preempt_count());
 		/*
 		 * Restore the preempt count. That gives us a decent
 		 * chance to survive and extract information. If the
 		 * callback kept a lock held, bad luck, but not worse
 		 * than the BUG() we had.
 		 */
-		preempt_count() = preempt_count;
+		preempt_count_set(count);
 	}
 }
 

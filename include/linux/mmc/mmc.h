@@ -278,9 +278,20 @@ struct _mmc_csd {
 #define EXT_CSD_BKOPS_SUPPORT		502	/* RO */
 #define EXT_CSD_HPI_FEATURES		503	/* RO */
 
+/* additional : eMMC v5.0 or later Only */
+#define EXT_CSD_DEVICE_LIFE_TIME_EST_TYPE_B	269	/* RO */
+#define EXT_CSD_DEVICE_LIFE_TIME_EST_TYPE_A	268	/* RO */
+#define EXT_CSD_PRE_EOL_INFO			267	/* RO */
+#define EXT_CSD_OPTIMAL_TRIM_UNIT_SIZE		264	/* RO */
+#define EXT_CSD_DEVICE_VERSION			262	/* RO, 2Byte */
+#define EXT_CSD_FIRMWARE_VERSION		254	/* RO, 8Byte */
+
 /*
  * EXT_CSD field definitions
  */
+
+#define EXT_CSD_BKOPS_EN_MANUAL_EN	BIT(0)
+#define EXT_CSD_BKOPS_EN_AUTO_EN	BIT(1)
 
 #define EXT_CSD_WR_REL_PARAM_EN		(1<<2)
 #define EXT_CSD_WR_REL_PARAM_EN_RPMB	(1<<4)

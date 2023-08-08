@@ -16,6 +16,7 @@
 
 #include <linux/list.h>
 #include <linux/mdss_io_util.h>
+#include <mach/scm-io.h>
 #include <linux/irqreturn.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/gpio.h>
@@ -90,6 +91,10 @@ enum dsi_panel_bl_ctrl {
 	BL_PWM,
 	BL_WLED,
 	BL_DCS_CMD,
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	BL_SS_PWM,
+#endif
+
 	UNKNOWN_CTRL,
 };
 
@@ -98,6 +103,9 @@ enum dsi_panel_status_mode {
 	ESD_REG,
 	ESD_REG_NT35596,
 	ESD_TE,
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	ESD_REG_IRQ,
+#endif
 	ESD_MAX,
 };
 
@@ -151,9 +159,9 @@ enum dsi_pm_type {
 #define DSI_CMD_DST_FORMAT_RGB666	7
 #define DSI_CMD_DST_FORMAT_RGB888	8
 
-#define DSI_INTR_DESJEW_MASK			BIT(31)
-#define DSI_INTR_DYNAMIC_REFRESH_MASK		BIT(29)
-#define DSI_INTR_DYNAMIC_REFRESH_DONE		BIT(28)
+#define DSI_INTR_DESJEW_MASK		BIT(31)
+#define DSI_INTR_DYNAMIC_REFRESH_MASK	BIT(29)
+#define DSI_INTR_DYNAMIC_REFRESH_DONE	BIT(28)
 #define DSI_INTR_ERROR_MASK		BIT(25)
 #define DSI_INTR_ERROR			BIT(24)
 #define DSI_INTR_BTA_DONE_MASK          BIT(21)
@@ -243,13 +251,16 @@ struct dsi_clk_desc {
 	u32 pre_div_func;
 };
 
-
 struct dsi_panel_cmds {
 	char *buf;
 	int blen;
 	struct dsi_cmd_desc *cmds;
 	int cmd_cnt;
 	int link_state;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	char *read_size;
+	char *read_startoffset;
+#endif
 };
 
 struct dsi_kickoff_action {
@@ -262,6 +273,7 @@ struct dsi_drv_cm_data {
 	struct regulator *vdd_vreg;
 	struct regulator *vdd_io_vreg;
 	struct regulator *vdda_vreg;
+	int broadcast_enable;
 };
 
 struct dsi_pinctrl_res {
@@ -282,6 +294,10 @@ enum {
 	DSI_CTRL_MAX,
 };
 
+/* DSI controller #0 is always treated as a master in broadcast mode */
+#define DSI_CTRL_MASTER		DSI_CTRL_0
+#define DSI_CTRL_SLAVE		DSI_CTRL_1
+
 #define DSI_CTRL_LEFT		DSI_CTRL_0
 #define DSI_CTRL_RIGHT		DSI_CTRL_1
 #define DSI_CTRL_CLK_SLAVE	DSI_CTRL_RIGHT
@@ -299,6 +315,33 @@ enum {
 #define DSI_EV_STOP_HS_CLK_LANE		0x40000000
 #define DSI_EV_MDP_BUSY_RELEASE		0x80000000
 
+struct mdss_dsi_panel_cmd_list {
+	struct dsi_panel_cmds panel_manufacture_id_cmds;
+	struct dsi_panel_cmds panel_manufacture_id_register_set_cmds;
+	struct dsi_panel_cmds disp_on_seq;
+	struct dsi_panel_cmds disp_off_seq;
+	struct dsi_panel_cmds disp_on_cmd;
+	struct dsi_panel_cmds disp_off_cmd;
+	struct dsi_panel_cmds display_off_cmd;
+	struct dsi_panel_cmds hsync_on_seq;
+	struct dsi_panel_cmds partialdisp_on_cmd;
+	struct dsi_panel_cmds partialdisp_off_cmd;
+	struct dsi_panel_cmds mtp_enable_cmd;
+	struct dsi_panel_cmds mtp_disable_cmd;
+	struct dsi_panel_cmds rddpm_cmd;
+	struct dsi_panel_cmds brightness_cmd;
+	struct dsi_panel_cmds aid_cmd_list;
+	struct dsi_panel_cmds aclcont_cmd_list;
+	struct dsi_panel_cmds acl_cmd_list;
+	struct dsi_panel_cmds acl_off_cmd;
+	struct dsi_panel_cmds elvss_cmd_list;
+	struct dsi_panel_cmds smart_acl_elvss_cmd_list;
+	struct dsi_panel_cmds gamma_cmd_list;
+	struct dsi_panel_cmds mtp_read_sysfs_cmds;
+	struct dsi_panel_cmds nv_mtp_register_set_cmds;
+	struct dsi_panel_cmds nv_mtp_read_cmds;
+};
+
 struct mdss_dsi_ctrl_pdata {
 	int ndx;	/* panel_num */
 	int (*on) (struct mdss_panel_data *pdata);
@@ -309,7 +352,13 @@ struct mdss_dsi_ctrl_pdata {
 	int (*check_status) (struct mdss_dsi_ctrl_pdata *pdata);
 	int (*check_read_status) (struct mdss_dsi_ctrl_pdata *pdata);
 	int (*cmdlist_commit)(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp);
+	int (*registered) (struct mdss_panel_data *pdata);
 	void (*switch_mode) (struct mdss_panel_data *pdata, int mode);
+	int (*panel_reset) (struct mdss_panel_data *pdata, int enable);
+#ifdef CONFIG_FB_MSM_MDSS_SAMSUNG
+	int (*event_handler) (struct mdss_panel_data *pdata, int e, void *arg);
+	int lcd_select_gpio;
+#endif
 	struct mdss_panel_data panel_data;
 	unsigned char *ctrl_base;
 	u32 hw_rev;
@@ -334,12 +383,15 @@ struct mdss_dsi_ctrl_pdata {
 	struct clk *shadow_byte_clk;
 	struct clk *shadow_pixel_clk;
 	struct clk *vco_clk;
+#ifdef CONFIG_FB_MSM_MDSS_SAMSUNG
+	struct clk *lvds_clk;
+#endif
 	u8 ctrl_state;
 	int panel_mode;
 	int irq_cnt;
-	int disp_te_gpio;
 	int rst_gpio;
 	int disp_en_gpio;
+	int disp_te_gpio;
 	int bklt_en_gpio;
 	int mode_gpio;
 	int bklt_ctrl;	/* backlight ctrl */
@@ -350,6 +402,7 @@ struct mdss_dsi_ctrl_pdata {
 	int bklt_max;
 	int new_fps;
 	int pwm_enabled;
+	bool dmap_iommu_map;
 	int clk_lane_cnt;
 	bool panel_bias_vreg;
 	bool dsi_irq_line;
@@ -376,6 +429,7 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_panel_cmds off_cmds;
 	struct dsi_panel_cmds status_cmds;
 	u32 status_cmds_rlen;
+	struct mdss_dsi_panel_cmd_list cmd_list;
 	u32 status_value;
 	u32 status_error_count;
 
@@ -418,6 +472,8 @@ struct mdss_dsi_ctrl_pdata {
 	int horizontal_idle_cnt;
 	struct panel_horizontal_idle *line_idle;
 	struct mdss_util_intf *mdss_util;
+
+	bool dfps_status;	/* dynamic refresh status */
 };
 
 struct dsi_status_data {
@@ -430,10 +486,10 @@ int dsi_panel_device_register(struct device_node *pan_node,
 				struct mdss_dsi_ctrl_pdata *ctrl_pdata);
 
 int mdss_dsi_cmds_tx(struct mdss_dsi_ctrl_pdata *ctrl,
-		struct dsi_cmd_desc *cmds, int cnt);
+		struct dsi_cmd_desc *cmds, int cnt, int use_dma_tpg);
 
 int mdss_dsi_cmds_rx(struct mdss_dsi_ctrl_pdata *ctrl,
-			struct dsi_cmd_desc *cmds, int rlen);
+			struct dsi_cmd_desc *cmds, int rlen, int use_dma_tpg);
 
 void mdss_dsi_host_init(struct mdss_panel_data *pdata);
 void mdss_dsi_op_mode_config(int mode,
@@ -623,4 +679,13 @@ static inline bool mdss_dsi_ulps_feature_enabled(
 	return pdata->panel_info.ulps_feature_enabled;
 }
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+int mdss_samsung_parse_dcs_cmds(struct device_node *np,
+		struct dsi_panel_cmds *pcmds, char *cmd_key, char *link_key);
+u32 mdss_samsung_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl,
+		struct dsi_panel_cmds *pcmds, int read_size);
+void mdss_samsung_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
+		struct dsi_panel_cmds *pcmds);
+struct mdss_dsi_ctrl_pdata **mdss_dsi_get_ctrl(void);
+#endif
 #endif /* MDSS_DSI_H */

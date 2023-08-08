@@ -47,6 +47,13 @@
 #include <linux/utsname.h>
 
 #include <asm/uaccess.h>
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#include <linux/io.h>
+#include <linux/proc_fs.h>
+#endif
+
+
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/printk.h>
@@ -126,7 +133,9 @@ static int selected_console = -1;
 static int preferred_console = -1;
 int console_set_on_cmdline;
 EXPORT_SYMBOL(console_set_on_cmdline);
-
+#ifdef CONFIG_PANIC_ON_RT_THROTTLING
+int console_null_state;
+#endif
 /* Flag: console code may call schedule() */
 static int console_may_schedule;
 
@@ -215,6 +224,14 @@ struct log {
 #if defined(CONFIG_LOG_BUF_MAGIC)
 	u32 magic;		/* handle for ramdump analysis tools */
 #endif
+#ifdef CONFIG_SEC_DEBUG
+#ifdef CONFIG_SEC_DEBUG_PRINTK_NOCACHE
+	char process[16];	/* process Name CONFIG_PRINTK_PROCESS */
+	u16 pid;		/* process id CONFIG_PRINTK_PROCESS */
+	u16 cpu;		/* cpu core number CONFIG_PRINTK_PROCESS */
+	u8 in_interrupt;	/* in interrupt CONFIG_PRINTK_PROCESS */
+#endif
+#endif
 };
 
 /*
@@ -224,6 +241,11 @@ struct log {
 static DEFINE_RAW_SPINLOCK(logbuf_lock);
 
 #ifdef CONFIG_PRINTK
+
+#ifdef CONFIG_SEC_DEBUG
+static void sec_log_add(const struct log *msg);
+#endif
+
 DECLARE_WAIT_QUEUE_HEAD(log_wait);
 /* the next printk record to read by syslog(READ) or /proc/kmsg */
 static u64 syslog_seq;
@@ -248,8 +270,54 @@ static enum log_flags console_prev;
 static u64 clear_seq;
 static u32 clear_idx;
 
+/* { SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM - the next printk record to read after the last 'clear_knox' command */
+static u64 clear_seq_knox;
+static u32 clear_idx_knox;
+
+#define SYSLOG_ACTION_READ_CLEAR_KNOX 99
+/* } SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM */
+
+#ifdef CONFIG_SEC_DEBUG
+#define PREFIX_MAX		48
+#else
 #define PREFIX_MAX		32
+#endif
 #define LOG_LINE_MAX		1024 - PREFIX_MAX
+
+#ifdef CONFIG_SEC_DEBUG
+/*
+ * Example usage: sec_log=256K@0x45000000
+ *
+ * In above case, log_buf size is 256KB and its physical base address
+ * is 0x45000000. Actually, *(int *)(base - 8) is log_magic and *(int
+ * *)(base - 4) is log_ptr. Therefore we reserve (size + 8) bytes from
+ * (base - 8)
+ */
+#define LOG_MAGIC 0x4d474f4c /* "LOGM" */
+
+/* These variables are also protected by logbuf_lock */
+static unsigned *sec_log_ptr;
+static char *sec_log_buf;
+static unsigned sec_log_size;
+
+#ifdef CONFIG_SEC_DEBUG_PRINTK_NOCACHE
+static unsigned sec_log_save_size;
+static phys_addr_t sec_log_save_base;
+static phys_addr_t sec_log_reserve_base;
+/* This will be removed later once
+ * we will have new design of kloginfo()
+ * ready.
+ */
+static unsigned sec_log_end;
+unsigned sec_log_reserve_size;
+unsigned int *sec_log_irq_en;
+#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP) && defined(CONFIG_SEC_LOG_LAST_KMSG)
+#define LAST_LOG_BUF_SHIFT 19
+static char *last_kmsg_buffer;
+static unsigned last_kmsg_size;
+#endif /* CONFIG_SEC_LOG_LAST_KMSG */
+#endif /* CONFIG_PRINTK_NOCACHE */
+#endif
 
 /* record buffer */
 #if defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS)
@@ -279,13 +347,14 @@ static u32 syslog_oops_buf_idx;
 static const char log_oops_end[] = "---end of oops log buffer---";
 #endif
 
+#ifndef CONFIG_SEC_DEBUG
 #if defined(CONFIG_LOG_BUF_MAGIC)
 static u32 __log_align __used = LOG_ALIGN;
 #define LOG_MAGIC(msg) ((msg)->magic = 0x5d7aefca)
 #else
 #define LOG_MAGIC(msg)
 #endif
-
+#endif
 /* cpu currently holding logbuf_lock */
 static volatile unsigned int logbuf_cpu = UINT_MAX;
 
@@ -404,6 +473,14 @@ static void log_oops_store(struct log *msg)
 }
 #endif
 
+#if defined(CONFIG_SEC_DEBUG)
+#if defined(CONFIG_SEC_DEBUG_PRINTK_NOCACHE)
+static bool printk_process = 1;
+#else
+static bool printk_process;
+#endif
+#endif
+
 /* insert record into the buffer, discard old ones, update heads */
 static void log_store(int facility, int level,
 		      enum log_flags flags, u64 ts_nsec,
@@ -444,7 +521,9 @@ static void log_store(int facility, int level,
 		 * to signify a wrap around.
 		 */
 		memset(log_buf + log_next_idx, 0, sizeof(struct log));
+#if defined(CONFIG_LOG_BUF_MAGIC)
 		LOG_MAGIC((struct log *)(log_buf + log_next_idx));
+#endif
 		log_next_idx = 0;
 	}
 
@@ -457,7 +536,9 @@ static void log_store(int facility, int level,
 	msg->facility = facility;
 	msg->level = level & 7;
 	msg->flags = flags & 0x1f;
+#if defined(CONFIG_LOG_BUF_MAGIC)
 	LOG_MAGIC(msg);
+#endif
 	if (ts_nsec > 0)
 		msg->ts_nsec = ts_nsec;
 	else
@@ -465,6 +546,17 @@ static void log_store(int facility, int level,
 	memset(log_dict(msg) + dict_len, 0, pad_len);
 	msg->len = sizeof(struct log) + text_len + dict_len + pad_len;
 
+#ifdef CONFIG_SEC_DEBUG
+	if (printk_process) {
+		strlcpy(msg->process, current->comm, sizeof(msg->process));
+		msg->pid = task_pid_nr(current);
+		msg->cpu = smp_processor_id();
+		msg->in_interrupt = in_interrupt() ? 1 : 0;
+	}
+
+	/* Save the log here,using "msg".*/
+	sec_log_add(msg);
+#endif
 	/* insert message */
 	log_next_idx += msg->len;
 	log_next_seq++;
@@ -488,13 +580,13 @@ static int syslog_action_restricted(int type)
 	       type != SYSLOG_ACTION_SIZE_BUFFER;
 }
 
-static int check_syslog_permissions(int type, bool from_file)
+int check_syslog_permissions(int type, int source)
 {
 	/*
 	 * If this is from /proc/kmsg and we've already opened it, then we've
 	 * already done the capabilities checks at open time.
 	 */
-	if (from_file && type != SYSLOG_ACTION_OPEN)
+	if (source == SYSLOG_FROM_PROC && type != SYSLOG_ACTION_OPEN)
 		return 0;
 
 	if (syslog_action_restricted(type)) {
@@ -515,7 +607,7 @@ static int check_syslog_permissions(int type, bool from_file)
 	}
 	return security_syslog(type);
 }
-
+EXPORT_SYMBOL_GPL(check_syslog_permissions);
 
 /* /dev/kmsg - userspace message inject/listen interface */
 struct devkmsg_user {
@@ -1035,6 +1127,23 @@ static size_t print_time(u64 ts, char *buf)
 		       (unsigned long)ts, rem_nsec / 1000);
 }
 
+#ifdef CONFIG_SEC_DEBUG
+static size_t print_process(const struct log *msg, char *buf)
+{
+	if (!printk_process)
+		return 0;
+
+	if (!buf)
+		return snprintf(NULL, 0, "%c[%1d:%15s:%5d] ", ' ', 0, " ", 0);
+
+	return snprintf(buf, __LOG_BUF_LEN, "%c[%1d:%15s:%5d] ",
+					msg->in_interrupt ? 'I' : ' ',
+					msg->cpu,
+					msg->process,
+					msg->pid);
+}
+#endif
+
 static size_t print_prefix(const struct log *msg, bool syslog, char *buf)
 {
 	size_t len = 0;
@@ -1055,6 +1164,9 @@ static size_t print_prefix(const struct log *msg, bool syslog, char *buf)
 	}
 
 	len += print_time(msg->ts_nsec, buf ? buf + len : NULL);
+#ifdef CONFIG_SEC_DEBUG
+	len += print_process(msg, buf ? buf + len : NULL);
+#endif
 	return len;
 }
 
@@ -1300,7 +1412,7 @@ int syslog_print(char __user *buf, int size)
 	return len;
 }
 
-static int syslog_print_all(char __user *buf, int size, bool clear)
+static int syslog_print_all(char __user *buf, int size, bool clear, bool knox)
 {
 	char *text;
 	int oops_len;
@@ -1321,23 +1433,50 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
 		u32 idx;
 		u64 start_seq;
 		u32 start_idx;
+		u64 start_seq_knox;
+		u32 start_idx_knox;
+		
 		enum log_flags prev;
 
-		if (clear_seq < log_first_seq) {
-			/* messages are gone, move to first available one */
-			start_seq = log_first_seq;
-			start_idx = log_first_idx;
+		/* { SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM */
+		/* messages are gone, move to first available one */
+		if (!knox) {
+			if (clear_seq < log_first_seq) {
+				/* messages are gone, move to first available one */
+				start_seq = log_first_seq;
+				start_idx = log_first_idx;
+			} else {
+				start_seq = clear_seq;
+				start_idx = clear_idx;
+			}
 		} else {
-			start_seq = clear_seq;
-			start_idx = clear_idx;
+			if (clear_seq_knox < log_first_seq) {
+				/* messages are gone, move to first available one */
+				start_seq_knox = log_first_seq;
+				start_idx_knox = log_first_idx;
+			} else {
+				start_seq_knox = clear_seq_knox;
+				start_idx_knox = clear_idx_knox;
+			}
 		}
+		
+		/* } SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM */
 
 		/*
 		 * Find first record that fits, including all following records,
 		 * into the user-provided buffer for this dump.
 		 */
-		seq = start_seq;
-		idx = start_idx;
+
+		/* { SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM */ 
+		if(!knox) {
+			seq = start_seq;
+			idx = start_idx;
+		} else { //MDM edmaudit
+			seq = start_seq_knox;
+			idx = start_idx_knox;
+		}
+		/* } SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM */
+		
 		prev = 0;
 		while (seq < log_next_seq) {
 			struct log *msg = log_from_idx(idx, true);
@@ -1347,10 +1486,18 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
 			idx = log_next(idx, true);
 			seq++;
 		}
-
+		
+		/* { SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM */
 		/* move first record forward until length fits into the buffer */
-		seq = start_seq;
-		idx = start_idx;
+		if(!knox) {
+			seq = start_seq;
+			idx = start_idx;
+		} else { // MDM edmaudit
+			seq = start_seq_knox;
+			idx = start_idx_knox;
+		}
+		/* } SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM */
+
 		prev = 0;
 		while ((len > size - oops_len) && seq < log_next_seq) {
 			struct log *msg = log_from_idx(idx, true);
@@ -1365,7 +1512,6 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
 		next_seq = log_next_seq;
 
 		len = 0;
-		prev = 0;
 		while (len >= 0 && seq < next_seq) {
 			struct log *msg = log_from_idx(idx, true);
 			int textlen;
@@ -1396,10 +1542,18 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
 		}
 	}
 
+	/* { SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM */
 	if (clear) {
-		clear_seq = log_next_seq;
-		clear_idx = log_next_idx;
+		if (!knox) {
+			clear_seq = log_next_seq;
+			clear_idx = log_next_idx;
+		} else { //MDM edmaudit
+			clear_seq_knox = log_next_seq;
+			clear_idx_knox = log_next_idx;
+		}
 	}
+	/* } SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM */
+
 	raw_spin_unlock_irq(&logbuf_lock);
 
 	kfree(text);
@@ -1408,13 +1562,13 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
 	return len;
 }
 
-int do_syslog(int type, char __user *buf, int len, bool from_file)
+int do_syslog(int type, char __user *buf, int len, int source)
 {
 	bool clear = false;
 	static int saved_console_loglevel = -1;
 	int error;
 
-	error = check_syslog_permissions(type, from_file);
+	error = check_syslog_permissions(type, source);
 	if (error)
 		goto out;
 
@@ -1460,11 +1614,11 @@ int do_syslog(int type, char __user *buf, int len, bool from_file)
 			error = -EFAULT;
 			goto out;
 		}
-		error = syslog_print_all(buf, len, clear);
+		error = syslog_print_all(buf, len, clear, false);
 		break;
 	/* Clear ring buffer */
 	case SYSLOG_ACTION_CLEAR:
-		syslog_print_all(NULL, 0, true);
+		syslog_print_all(NULL, 0, true, false);
 		break;
 	/* Disable logging to console */
 	case SYSLOG_ACTION_CONSOLE_OFF:
@@ -1501,7 +1655,7 @@ int do_syslog(int type, char __user *buf, int len, bool from_file)
 			syslog_prev = 0;
 			syslog_partial = 0;
 		}
-		if (from_file) {
+		if (source == SYSLOG_FROM_PROC) {
 			/*
 			 * Short-cut for poll(/"proc/kmsg") which simply checks
 			 * for pending data, not the size; return the count of
@@ -1534,6 +1688,21 @@ int do_syslog(int type, char __user *buf, int len, bool from_file)
 		error += log_oops_buf_len;
 #endif
 		break;
+	/* { SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM edmaudit Read last kernel messages */
+	case SYSLOG_ACTION_READ_CLEAR_KNOX:
+		error = -EINVAL;
+		if (!buf || len < 0)
+			goto out;
+		error = 0;
+		if (!len)
+			goto out;
+		if (!access_ok(VERIFY_WRITE, buf, len)) {
+			error = -EFAULT;
+			goto out;
+		}
+		error = syslog_print_all(buf, len, /* clear */ true, /* knox */true);
+		break;
+	/* } SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM */
 	default:
 		error = -EINVAL;
 		break;
@@ -1758,6 +1927,10 @@ static size_t cont_print_text(char *text, size_t size)
 
 	if (cont.cons == 0 && (console_prev & LOG_NEWLINE)) {
 		textlen += print_time(cont.ts_nsec, text);
+#ifdef CONFIG_SEC_DEBUG
+		*(text+textlen) = ' ';
+		textlen += print_process(NULL, NULL);
+#endif
 		size -= textlen;
 	}
 
@@ -1947,6 +2120,259 @@ asmlinkage int printk_emit(int facility, int level,
 }
 EXPORT_SYMBOL(printk_emit);
 
+#ifdef CONFIG_SEC_DEBUG
+
+static inline void emit_sec_log_char(char c)
+{
+	if (sec_log_buf && sec_log_ptr) {
+		sec_log_end++;
+		sec_log_buf[*sec_log_ptr & (sec_log_size - 1)] = c;
+		(*sec_log_ptr)++;
+	}
+}
+
+static void sec_log_add(const struct log *msg)
+{
+	static char tmp[1024];
+	static unsigned char prev_flag;
+	int size = 0;
+	int i;
+
+	size = msg_print_text(msg, prev_flag, true, tmp, 1024);
+	prev_flag = msg->flags;
+	for (i = 0; i < size; i++)
+		emit_sec_log_char(tmp[i]);
+}
+
+static void sec_log_add_on_bootup(void)
+{
+	u32 current_idx = log_first_idx;
+	struct log *msg;
+
+	while (current_idx < log_next_idx) {
+		msg = log_from_idx(current_idx, true);
+		sec_log_add(msg);
+		current_idx = log_next(current_idx, true);
+	}
+}
+
+#ifdef CONFIG_SEC_DEBUG_SUBSYS
+void sec_debug_subsys_set_kloginfo(unsigned int *first_idx_paddr,
+	unsigned int *next_idx_paddr, unsigned int *log_paddr,
+	unsigned int *size)
+{
+	*first_idx_paddr = (unsigned int)__pa(&log_first_idx);
+	*next_idx_paddr = (unsigned int)__pa(&log_next_idx);
+	*log_paddr = (unsigned int)__pa(log_buf);
+	*size = __LOG_BUF_LEN;
+}
+#endif
+
+#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP) && defined(CONFIG_SEC_LOG_LAST_KMSG)
+static int __init sec_log_save_old(void)
+{
+	/* provide previous log as last_kmsg */
+	last_kmsg_size =
+	    min((unsigned)(1 << LAST_LOG_BUF_SHIFT), *sec_log_ptr);
+	last_kmsg_buffer = kmalloc(last_kmsg_size, GFP_KERNEL);
+
+	if (last_kmsg_size && last_kmsg_buffer && sec_log_buf) {
+		unsigned int i;
+		for (i = 0; i < last_kmsg_size; i++)
+			last_kmsg_buffer[i] =
+			    sec_log_buf[(*sec_log_ptr - last_kmsg_size +
+					 i) & (sec_log_size - 1)];
+		return 1;
+	} else {
+		return 0;
+	}
+}
+#else
+static int __init sec_log_save_old(void)
+{
+	return 1;
+}
+#endif
+
+#ifdef CONFIG_SEC_DEBUG_PRINTK_NOCACHE
+static int __init printk_remap_nocache(void)
+{
+	void __iomem *nocache_base = 0;
+	unsigned *sec_log_mag;
+	unsigned long flags;
+	int rc = 0;
+	int bOk = 0;
+
+	/*sec_getlog_supply_kloginfo(log_buf);*/
+
+#if !defined(CONFIG_SEC_DEBUG_NOCACHE_LOG_IN_LEVEL_LOW) || defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
+	if (0 == sec_debug_is_enabled()) {
+#ifdef CONFIG_SEC_DEBUG_LOW_LOG
+		nocache_base = ioremap_nocache(sec_log_save_base - 4096,
+		sec_log_save_size + 8192);
+		nocache_base = nocache_base + 4096;
+
+		sec_log_mag = nocache_base - 8;
+		sec_log_ptr = nocache_base - 4;
+		sec_log_buf = nocache_base;
+		sec_log_size = sec_log_save_size;
+		sec_log_irq_en = nocache_base - 0xC;
+#endif
+		return rc;
+	}
+#endif /* CONFIG_SEC_DEBUG_NOCACHE_LOG_IN_LEVEL_LOW */
+
+#ifdef CONFIG_ARM_LPAE
+	pr_err("%s: sec_log_save_size %d at sec_log_save_base 0x%llx\n",
+	__func__, sec_log_save_size, sec_log_save_base);
+
+	pr_err("%s: sec_log_reserve_size %d at sec_log_reserve_base 0x%llx\n",
+	__func__, sec_log_reserve_size, sec_log_reserve_base);
+#else
+	pr_err("%s: sec_log_save_size %d at sec_log_save_base 0x%lx\n",
+		__func__, sec_log_save_size,
+		(unsigned long) sec_log_save_base);
+
+	pr_err("%s: sec_log_reserve_size %d at sec_log_reserve_base 0x%lx\n",
+		__func__, sec_log_reserve_size,
+		(unsigned long) sec_log_reserve_base);
+#endif
+
+	nocache_base = ioremap_nocache((phys_addr_t)(sec_log_save_base-4096),
+					sec_log_save_size + 8192);
+
+	if (!nocache_base) {
+		pr_err("Failed to remap nocache log region\n");
+		return rc;
+	}
+
+#ifdef CONFIG_ARM_LPAE
+	pr_err("%s: nocache_base printk virtual addrs 0x%x phy=0x%llx\n",
+		__func__, (unsigned int)(nocache_base), sec_log_save_base);
+#else
+	pr_err("%s: nocache_base printk virtual addrs 0x%x phy=0x%lx\n",
+		__func__, (unsigned int)(nocache_base),
+		(unsigned long) sec_log_save_base);
+#endif
+
+	nocache_base = nocache_base + 4096;
+
+	sec_log_mag = nocache_base - 8;
+	sec_log_ptr = nocache_base - 4;
+	sec_log_buf = nocache_base;
+	sec_log_size = sec_log_save_size;
+	sec_log_irq_en = nocache_base - 0xC;
+
+	if (*sec_log_mag != LOG_MAGIC) {
+		*sec_log_ptr = 0;
+		*sec_log_mag = LOG_MAGIC;
+	} else {
+		bOk = sec_log_save_old();
+	}
+
+	raw_spin_lock_irqsave(&logbuf_lock, flags);
+	/*We have to save logs printed prior to
+	the sec log initialization here.*/
+	sec_log_add_on_bootup();
+	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
+#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP) && defined(CONFIG_SEC_LOG_LAST_KMSG)
+	if (bOk) {
+		pr_info("%s: saved old log at %d@%p\n",
+			__func__, last_kmsg_size, last_kmsg_buffer);
+	} else {
+		pr_err("%s: failed saving old log %d@%p\n",
+	       __func__, last_kmsg_size, last_kmsg_buffer);
+	}
+#endif
+	return rc;
+}
+
+static ssize_t seclog_read(struct file *file, char __user *buf,
+				    size_t len, loff_t *offset)
+{
+	loff_t pos = *offset;
+	ssize_t count = 0;
+#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP) && defined(CONFIG_SEC_LOG_LAST_KMSG)
+	size_t log_size = last_kmsg_size;
+	const char *log = last_kmsg_buffer;
+#else
+	size_t log_size = sec_log_size;
+	const char *log = sec_log_buf;
+#endif
+
+	if (pos < log_size) {
+		count = min(len, (size_t)(log_size - pos));
+		if (copy_to_user(buf, log + pos, count))
+			return -EFAULT;
+	}
+
+	*offset += count;
+	return count;
+}
+
+static const struct file_operations seclog_file_ops = {
+	.owner = THIS_MODULE,
+	.read = seclog_read,
+};
+static int __init seclog_late_init(void)
+{
+	struct proc_dir_entry *entry;
+
+	if (!sec_log_buf)
+		return 0;
+
+	/* The reason we are using the file name "last_kmsg" is only
+	 * because the dumpstate app is dumping this file.
+	 * If we add a line in the dumpstate app (and we should change
+	 * the owner and permission in init.rc) with a new name, then
+	 * we can use a more appropriate name. (But the purpose of
+	 * last_kmsg and this file are almost the same, so the name isn't
+	 * that odd) */
+	entry = proc_create_data("last_kmsg", S_IFREG | S_IRUGO,
+			NULL, &seclog_file_ops, NULL);
+	if (!entry) {
+		pr_err("%s: failed to create proc entry. ", __func__);
+		pr_err("ram console may be present.\n");
+		return 0;
+	}
+
+#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP) && defined(CONFIG_SEC_LOG_LAST_KMSG)
+	proc_set_size(entry, last_kmsg_size);
+#else
+	proc_set_size(entry, sec_log_size);
+#endif
+	return 0;
+}
+late_initcall(seclog_late_init);
+#endif
+
+static int __init sec_log_setup(char *str)
+{
+	unsigned size = memparse(str, &str);
+	int ret;
+
+	if (size && (size == roundup_pow_of_two(size)) && (*str == '@')) {
+		unsigned long long base = 0;
+
+		ret = kstrtoull(++str, 0, &base);
+
+#ifdef CONFIG_SEC_DEBUG_PRINTK_NOCACHE
+		sec_log_save_size = size;
+		sec_log_save_base = base;
+		sec_log_size = size;
+		sec_log_reserve_base = base - 8;
+		sec_log_reserve_size = size + 8;
+#endif
+	}
+	return 1;
+}
+
+__setup("sec_log=", sec_log_setup);
+
+#endif
+
+
+
 /**
  * printk - print a kernel message
  * @fmt: format string
@@ -2080,6 +2506,10 @@ static int __init console_setup(char *str)
 	char *s, *options, *brl_options = NULL;
 	int idx;
 
+#ifdef CONFIG_PANIC_ON_RT_THROTTLING
+	if (!memcmp(str, "null", 4))
+		console_null_state = 1;
+#endif
 #ifdef CONFIG_A11Y_BRAILLE_CONSOLE
 	if (!memcmp(str, "brl,", 4)) {
 		brl_options = "";
@@ -3112,7 +3542,6 @@ bool kmsg_dump_get_buffer(struct kmsg_dumper *dumper, bool syslog,
 	next_idx = idx;
 
 	l = 0;
-	prev = 0;
 	while (seq < dumper->next_seq) {
 		struct log *msg = log_from_idx(idx, true);
 
@@ -3228,5 +3657,9 @@ void show_regs_print_info(const char *log_lvl)
 	       log_lvl, current, current_thread_info(),
 	       task_thread_info(current));
 }
+
+#ifdef CONFIG_SEC_DEBUG_PRINTK_NOCACHE
+module_init(printk_remap_nocache);
+#endif
 
 #endif

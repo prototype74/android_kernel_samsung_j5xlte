@@ -48,6 +48,7 @@
 #include <asm/irq.h>
 #include <asm/exception.h>
 #include <asm/smp_plat.h>
+#include <linux/wakeup_reason.h>
 
 #include "irqchip.h"
 
@@ -268,13 +269,21 @@ void gic_show_pending_irq(void)
 			pr_err("Pending irqs[%d] %lx\n", j, pending[j]);
 		}
 	}
+	if (pending[6] == 0x800000) { // pending irq is cpu_bwmon
+		pr_err("Clear Pending irqs 215\n");
+		writel_relaxed(pending[6], base +
+		GIC_DIST_PENDING_CLEAR + 6 * 4);
+		pending[6] = readl_relaxed(base +
+		GIC_DIST_PENDING_SET + 6 * 4);
+		pr_err("Read again : pending irqs[6] %lx\n", pending[6]);
+	}
 }
 
 static void gic_show_resume_irq(struct gic_chip_data *gic)
 {
 	unsigned int i;
 	u32 enabled;
-	u32 pending[32];
+	unsigned long pending[32];
 	void __iomem *base = gic_data_dist_base(gic);
 
 	if (!msm_show_resume_irq_mask)
@@ -288,19 +297,13 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	}
 	raw_spin_unlock(&irq_controller_lock);
 
-	for (i = find_first_bit((unsigned long *)pending, gic->gic_irqs);
-	i < gic->gic_irqs;
-	i = find_next_bit((unsigned long *)pending, gic->gic_irqs, i+1)) {
-		struct irq_desc *desc = irq_to_desc(i + gic->irq_offset);
-		const char *name = "null";
-
-		if (desc == NULL)
-			name = "stray irq";
-		else if (desc->action && desc->action->name)
-			name = desc->action->name;
-
-		pr_warning("%s: %d triggered %s\n", __func__,
-					i + gic->irq_offset, name);
+	for (i = find_first_bit(pending, gic->gic_irqs);
+		i < gic->gic_irqs;
+		i = find_next_bit(pending, gic->gic_irqs, i+1)) {
+#ifdef CONFIG_SEC_PM_DEBUG
+			log_wakeup_reason(i + gic->irq_offset);
+			update_wakeup_reason_stats(i + gic->irq_offset);
+#endif
 	}
 }
 

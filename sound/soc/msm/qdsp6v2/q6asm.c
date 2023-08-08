@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -121,7 +121,9 @@ static int in_cont_index;
 static int out_cold_index;
 static char *out_buffer;
 static char *in_buffer;
-
+#ifdef CONFIG_SAMSUNG_AUDIO
+u32 score;
+#endif /* CONFIG_SAMSUNG_AUDIO */
 
 static int audio_output_latency_dbgfs_open(struct inode *inode,
 							struct file *file)
@@ -134,6 +136,11 @@ static ssize_t audio_output_latency_dbgfs_read(struct file *file,
 {
 	if (out_buffer == NULL) {
 		pr_err("%s: out_buffer is null\n", __func__);
+		return 0;
+	}
+	if (count < OUT_BUFFER_SIZE) {
+		pr_err("%s: read size %d exceeds buf size %zd\n", __func__,
+						OUT_BUFFER_SIZE, count);
 		return 0;
 	}
 	snprintf(out_buffer, OUT_BUFFER_SIZE, "%ld,%ld,%ld,%ld,%ld,%ld,",\
@@ -187,6 +194,11 @@ static ssize_t audio_input_latency_dbgfs_read(struct file *file,
 {
 	if (in_buffer == NULL) {
 		pr_err("%s: in_buffer is null\n", __func__);
+		return 0;
+	}
+	if (count < IN_BUFFER_SIZE) {
+		pr_err("%s: read size %d exceeds buf size %zd\n", __func__,
+						IN_BUFFER_SIZE, count);
 		return 0;
 	}
 	snprintf(in_buffer, IN_BUFFER_SIZE, "%ld,%ld,",\
@@ -1190,6 +1202,12 @@ int q6asm_audio_client_buf_alloc_contiguous(unsigned int dir,
 		pr_err("%s: buffer already allocated\n", __func__);
 		return 0;
 	}
+
+	if (bufcnt == 0) {
+		pr_err("%s: invalid buffer count\n", __func__);
+		return -EINVAL;
+	}
+
 	mutex_lock(&ac->cmd_lock);
 	buf = kzalloc(((sizeof(struct audio_buffer))*bufcnt),
 			GFP_KERNEL);
@@ -1202,6 +1220,12 @@ int q6asm_audio_client_buf_alloc_contiguous(unsigned int dir,
 
 	ac->port[dir].buf = buf;
 
+	/* check for integer overflow */
+	if ((bufcnt > 0) && ((INT_MAX / bufcnt) < bufsz)) {
+		pr_err("%s: integer overflow\n", __func__);
+		mutex_unlock(&ac->cmd_lock);
+		goto fail;
+	}
 	bytes_to_alloc = bufsz * bufcnt;
 
 	/* The size to allocate should be multiple of 4K bytes */
@@ -1443,13 +1467,15 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 		pr_err("%s: data NULL\n", __func__);
 		return -EINVAL;
 	}
-	if (!q6asm_is_valid_audio_client(ac)) {
-		pr_err("%s: audio client pointer is invalid, ac = %p\n",
-				__func__, ac);
-		return -EINVAL;
-	}
 
-	if (ac->session <= 0 || ac->session > 8) {
+	if (!q6asm_is_valid_audio_client(ac)) { 
+	  pr_err("%s: audio client pointer is invalid, ac = %p\n", 
+	  __func__, ac); 
+	  return -EINVAL; 
+	} 
+	
+	if (ac->session <= 0 || ac->session > 8) { 
+
 		pr_err("%s: Session ID is invalid, session = %d\n", __func__,
 			ac->session);
 		return -EINVAL;
@@ -3248,7 +3274,8 @@ fail_cmd:
 
 static int __q6asm_media_format_block_pcm(struct audio_client *ac,
 				uint32_t rate, uint32_t channels,
-				uint16_t bits_per_sample, int stream_id)
+				uint16_t bits_per_sample, int stream_id,
+				bool use_default_chmap, char *channel_map)
 {
 	struct asm_multi_channel_pcm_fmt_blk_v2 fmt;
 	u8 *channel_mapping;
@@ -3313,7 +3340,8 @@ int q6asm_media_format_block_pcm(struct audio_client *ac,
 				uint32_t rate, uint32_t channels)
 {
 	return __q6asm_media_format_block_pcm(ac, rate,
-				channels, 16, ac->stream_id);
+				channels, 16, ac->stream_id,
+				true, NULL);
 }
 
 int q6asm_media_format_block_pcm_format_support(struct audio_client *ac,
@@ -3321,15 +3349,23 @@ int q6asm_media_format_block_pcm_format_support(struct audio_client *ac,
 				uint16_t bits_per_sample)
 {
 	return __q6asm_media_format_block_pcm(ac, rate,
-				channels, bits_per_sample, ac->stream_id);
+				channels, bits_per_sample, ac->stream_id,
+				true, NULL);
 }
 
 int q6asm_media_format_block_pcm_format_support_v2(struct audio_client *ac,
 				uint32_t rate, uint32_t channels,
-				uint16_t bits_per_sample, int stream_id)
+				uint16_t bits_per_sample, int stream_id,
+				bool use_default_chmap, char *channel_map)
 {
+	if (!use_default_chmap && (channel_map == NULL)) {
+		pr_err("%s: No valid chan map and can't use default\n",
+			__func__);
+		return -EINVAL;
+	}
 	return __q6asm_media_format_block_pcm(ac, rate,
-				channels, bits_per_sample, stream_id);
+				channels, bits_per_sample, stream_id,
+				use_default_chmap, channel_map);
 }
 
 static int __q6asm_media_format_block_multi_ch_pcm(struct audio_client *ac,
@@ -4065,7 +4101,7 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 	struct asm_buffer_node *buffer_node = NULL;
 	int	rc = 0;
 	int    i = 0;
-	int	cmd_size = 0;
+	uint32_t cmd_size = 0;
 	uint32_t bufcnt_t;
 	uint32_t bufsz_t;
 
@@ -4087,9 +4123,24 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 		bufsz_t = PAGE_ALIGN(bufsz_t);
 	}
 
+	if (bufcnt_t > (UINT_MAX
+			- sizeof(struct avs_cmd_shared_mem_map_regions))
+			/ sizeof(struct avs_shared_map_region_payload)) {
+		pr_err("%s: Unsigned Integer Overflow. bufcnt_t = %u\n",
+				__func__, bufcnt_t);
+		return -EINVAL;
+	}
+
 	cmd_size = sizeof(struct avs_cmd_shared_mem_map_regions)
 			+ (sizeof(struct avs_shared_map_region_payload)
 							* bufcnt_t);
+
+
+	if (bufcnt > (UINT_MAX / sizeof(struct asm_buffer_node))) {
+		pr_err("%s: Unsigned Integer Overflow. bufcnt = %u\n",
+				__func__, bufcnt);
+		return -EINVAL;
+	}
 
 	buffer_node = kzalloc(sizeof(struct asm_buffer_node) * bufcnt,
 				GFP_KERNEL);
@@ -4326,6 +4377,110 @@ fail_cmd:
 	return rc;
 }
 
+/*
+ * q6asm_set_multich_gain: set multiple channel gains on an ASM session
+ * @ac: audio client handle
+ * @channels: number of channels caller intends to set gains
+ * @gains: list of gains of audio channels
+ * @ch_map: list of channel mapping. Only valid if use_default is false
+ * @use_default: flag to indicate whether to use default mapping
+ */
+int q6asm_set_multich_gain(struct audio_client *ac, uint32_t channels,
+			   uint32_t *gains, uint8_t *ch_map, bool use_default)
+{
+	struct asm_volume_ctrl_multichannel_gain multich_gain;
+	int sz = 0;
+	int rc  = 0;
+	int i;
+	u8 default_chmap[VOLUME_CONTROL_MAX_CHANNELS];
+
+	if (ac == NULL) {
+		pr_err("%s: ac is NULL\n", __func__);
+		rc = -EINVAL;
+		goto done;
+	}
+	if (ac->apr == NULL) {
+		dev_err(ac->dev, "%s: AC APR handle NULL\n", __func__);
+		rc = -EINVAL;
+		goto done;
+	}
+	if (gains == NULL) {
+		dev_err(ac->dev, "%s: gain_list is NULL\n", __func__);
+		rc = -EINVAL;
+		goto done;
+	}
+	if (channels > VOLUME_CONTROL_MAX_CHANNELS) {
+		dev_err(ac->dev, "%s: Invalid channel count %d\n",
+			__func__, channels);
+		rc = -EINVAL;
+		goto done;
+	}
+	if (!use_default && ch_map == NULL) {
+		dev_err(ac->dev, "%s: NULL channel map\n", __func__);
+		rc = -EINVAL;
+		goto done;
+	}
+
+	memset(&multich_gain, 0, sizeof(multich_gain));
+	sz = sizeof(struct asm_volume_ctrl_multichannel_gain);
+	q6asm_add_hdr_async(ac, &multich_gain.hdr, sz, TRUE);
+	atomic_set(&ac->cmd_state, 1);
+	multich_gain.hdr.opcode = ASM_STREAM_CMD_SET_PP_PARAMS_V2;
+	multich_gain.param.data_payload_addr_lsw = 0;
+	multich_gain.param.data_payload_addr_msw = 0;
+	multich_gain.param.mem_map_handle = 0;
+	multich_gain.param.data_payload_size = sizeof(multich_gain) -
+		sizeof(multich_gain.hdr) - sizeof(multich_gain.param);
+	multich_gain.data.module_id = ASM_MODULE_ID_VOL_CTRL;
+	multich_gain.data.param_id = ASM_PARAM_ID_MULTICHANNEL_GAIN;
+	multich_gain.data.param_size = multich_gain.param.data_payload_size -
+		sizeof(multich_gain.data);
+	multich_gain.data.reserved = 0;
+
+	if (use_default) {
+		rc = q6asm_map_channels(default_chmap, channels);
+		if (rc < 0)
+			goto done;
+		for (i = 0; i < channels; i++) {
+			multich_gain.gain_data[i].channeltype =
+				default_chmap[i];
+			multich_gain.gain_data[i].gain = gains[i] << 15;
+		}
+	} else {
+		for (i = 0; i < channels; i++) {
+			multich_gain.gain_data[i].channeltype = ch_map[i];
+			multich_gain.gain_data[i].gain = gains[i] << 15;
+		}
+	}
+	multich_gain.num_channels = channels;
+
+	rc = apr_send_pkt(ac->apr, (uint32_t *) &multich_gain);
+	if (rc < 0) {
+		pr_err("%s: set-params send failed paramid[0x%x] rc %d\n",
+				__func__, multich_gain.data.param_id, rc);
+		goto done;
+	}
+
+	rc = wait_event_timeout(ac->cmd_wait,
+			(atomic_read(&ac->cmd_state) <= 0), 5*HZ);
+	if (!rc) {
+		pr_err("%s: timeout, set-params paramid[0x%x]\n", __func__,
+				multich_gain.data.param_id);
+		rc = -EINVAL;
+		goto done;
+	}
+	if (atomic_read(&ac->cmd_state) < 0) {
+		pr_err("%s: DSP returned error[%d] , set-params paramid[0x%x]\n",
+					__func__, atomic_read(&ac->cmd_state),
+					multich_gain.data.param_id);
+		rc = -EINVAL;
+		goto done;
+	}
+	rc = 0;
+done:
+	return rc;
+}
+
 int q6asm_set_mute(struct audio_client *ac, int muteflag)
 {
 	struct asm_volume_ctrl_mute_config mute;
@@ -4391,7 +4546,15 @@ int q6asm_dts_eagle_set(struct audio_client *ac, int param_id, uint32_t size,
 {
 	int rc = 0;
 	uint32_t sz = sizeof(struct asm_dts_eagle_param) + size;
-	struct asm_dts_eagle_param *ad = kzalloc(sz, GFP_KERNEL);
+	struct asm_dts_eagle_param *ad;
+
+	if (!ac || ac->apr == NULL || (size == 0) || !data) {
+		pr_err("DTS_EAGLE_ASM - %s: APR handle NULL, invalid size %u or pointer %p.\n",
+			__func__, size, data);
+		return -EINVAL;
+	}
+
+     ad = kzalloc(sz, GFP_KERNEL);
 	if (!ad) {
 		pr_err("DTS_EAGLE_ASM - %s: error allocating mem of size %u\n",
 			__func__, sz);
@@ -4399,7 +4562,7 @@ int q6asm_dts_eagle_set(struct audio_client *ac, int param_id, uint32_t size,
 	}
 
 	if (!ac || ac->apr == NULL || (size == 0) || !data) {
-		pr_err("DTS_EAGLE_ASM - %s: APR handle NULL, invalid size %u or pointer %p.\n",
+		pr_err("DTS_EAGLE_ASM - %s: APR handle NULL, invalid size %u or pointer %pK.\n",
 			__func__, size, data);
 		return -EINVAL;
 	}
@@ -4748,6 +4911,299 @@ int q6asm_set_softvolume_v2(struct audio_client *ac,
 {
 	return __q6asm_set_softvolume(ac, softvol_param, instance);
 }
+
+#ifdef CONFIG_SAMSUNG_AUDIO
+int q6asm_set_sa(struct audio_client *ac, int *param)
+{
+	int sz = 0;
+	int rc  = 0;
+	int i = 0;
+	struct asm_stream_cmd_set_pp_params_sa cmd ;
+	
+	if(ac == NULL){
+		printk("%s: audio client is null\n", __func__);
+		return -1;
+	}
+
+	sz = sizeof(struct asm_stream_cmd_set_pp_params_sa);
+	q6asm_add_hdr_async(ac, &cmd.hdr, sz, true);
+
+	cmd.hdr.opcode = ASM_STREAM_CMD_SET_PP_PARAMS_V2;
+	cmd.param.data_payload_addr_lsw = 0;
+	cmd.param.data_payload_addr_msw = 0;
+	cmd.param.mem_map_handle = 0;
+	cmd.param.data_payload_size =
+			sizeof(cmd) - sizeof(cmd.hdr) - sizeof(cmd.param);
+	cmd.data.module_id = ASM_MODULE_ID_PP_SA;
+	cmd.data.param_id = ASM_PARAM_ID_PP_SA_PARAMS;
+	cmd.data.param_size = cmd.param.data_payload_size - sizeof(cmd.data);
+	cmd.data.reserved = 0;
+	
+	/* SA paramerters */
+	cmd.sa_param.OutDevice = param[0];
+	cmd.sa_param.Preset = param[1];
+	for( i=0; i<7; i++)
+		cmd.sa_param.EqLev[i] = param[i+2];
+	cmd.sa_param.m3Dlevel = param[9];
+	cmd.sa_param.BElevel = param[10];
+	cmd.sa_param.CHlevel = param[11];
+	cmd.sa_param.CHRoomSize = param[12];
+	cmd.sa_param.Clalevel = param[13];
+	cmd.sa_param.volume = param[14];
+	cmd.sa_param.Sqrow = param[15];
+	cmd.sa_param.Sqcol = param[16];
+	cmd.sa_param.TabInfo = param[17];
+	cmd.sa_param.NewUI = param[18];		
+	
+	printk("S ");
+	for(i = 0 ; i < 19; i++)
+		printk("%d ", param[i]);
+	printk("\n");
+	rc = apr_send_pkt(ac->apr, (uint32_t *)&cmd);
+	if (rc < 0) {
+		pr_err("%s: send_pkt failed. paramid[0x%x]\n", __func__,
+			cmd.data.param_id);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+fail_cmd:
+	return rc;
+}
+
+int q6asm_set_vsp(struct audio_client *ac, int *param)
+{
+	int sz = 0;
+	int rc  = 0;
+	struct asm_stream_cmd_set_pp_params_vsp cmd;
+	if(ac == NULL) {
+		printk("%s: audio client is null\n", __func__);
+		return -1;
+	}
+
+	sz = sizeof(struct asm_stream_cmd_set_pp_params_vsp);
+	q6asm_add_hdr_async(ac, &cmd.hdr, sz, true);
+
+	cmd.hdr.opcode = ASM_STREAM_CMD_SET_PP_PARAMS_V2;
+	cmd.param.data_payload_addr_lsw = 0;
+	cmd.param.data_payload_addr_msw = 0;
+	cmd.param.mem_map_handle = 0;
+	cmd.param.data_payload_size =
+			sizeof(cmd) - sizeof(cmd.hdr) - sizeof(cmd.param);
+	cmd.data.module_id = ASM_MODULE_ID_PP_SA_VSP;
+	cmd.data.param_id = ASM_PARAM_ID_PP_SA_VSP_PARAMS;
+	cmd.data.param_size = cmd.param.data_payload_size - sizeof(cmd.data);
+	cmd.data.reserved = 0;
+
+	/* VSP paramerters */
+	cmd.speed_int = param[0];
+	printk("%d ", param[0]);
+	printk("\n");
+	rc = apr_send_pkt(ac->apr, (uint32_t *)&cmd);
+	if (rc < 0) {
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+fail_cmd:
+	return rc;
+}
+
+int q6asm_set_dha(struct audio_client *ac,int *param)
+{
+	int sz = 0;
+	int rc  = 0;
+	int i = 0;
+	struct asm_stream_cmd_set_pp_params_dha cmd;
+
+	if(ac == NULL) {
+		printk("%s: audio client is null\n", __func__);
+		return -1;
+	}
+
+	sz = sizeof(struct asm_stream_cmd_set_pp_params_dha);
+	q6asm_add_hdr_async(ac, &cmd.hdr, sz, true);
+
+	cmd.hdr.opcode = ASM_STREAM_CMD_SET_PP_PARAMS_V2;
+	cmd.param.data_payload_addr_lsw = 0;
+	cmd.param.data_payload_addr_msw = 0;
+	cmd.param.mem_map_handle = 0;
+	cmd.param.data_payload_size =
+			sizeof(cmd) - sizeof(cmd.hdr) - sizeof(cmd.param);
+	cmd.data.module_id = ASM_MODULE_ID_PP_DHA;
+	cmd.data.param_id = ASM_PARAM_ID_PP_DHA_PARAMS;
+	cmd.data.param_size = cmd.param.data_payload_size - sizeof(cmd.data);
+	cmd.data.reserved = 0;
+
+	/* DHA paramerters */
+	cmd.enable = param[0];
+	for(i = 0; i < 12; i++)
+		cmd.gain[i/6][i%6] = param[i+1];
+	cmd.device = param[13];
+	rc = apr_send_pkt(ac->apr, (uint32_t *)&cmd);
+	if (rc < 0) {
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+fail_cmd:
+	return rc;
+}
+
+int q6asm_set_lrsm(struct audio_client *ac,int *param)
+{
+	int sz = 0;
+	int rc  = 0;
+	struct asm_stream_cmd_set_pp_params_lrsm cmd;
+
+	if(ac == NULL) {
+		printk("%s: audio client is null\n", __func__);
+		return -1;
+	}
+
+	sz = sizeof(struct asm_stream_cmd_set_pp_params_lrsm);
+	q6asm_add_hdr_async(ac, &cmd.hdr, sz, true);
+
+	cmd.hdr.opcode = ASM_STREAM_CMD_SET_PP_PARAMS_V2;
+	cmd.param.data_payload_addr_lsw = 0;
+	cmd.param.data_payload_addr_msw = 0;
+	cmd.param.mem_map_handle = 0;
+	cmd.param.data_payload_size =
+			sizeof(cmd) - sizeof(cmd.hdr) - sizeof(cmd.param);
+	cmd.data.module_id = ASM_MODULE_ID_PP_LRSM;
+	cmd.data.param_id = ASM_PARAM_ID_PP_LRSM_PARAMS;
+	cmd.data.param_size = cmd.param.data_payload_size - sizeof(cmd.data);
+	cmd.data.reserved = 0;
+
+	/* LRSM paramerters */
+	cmd.sm = param[0];
+	cmd.lr = param[1];
+	rc = apr_send_pkt(ac->apr, (uint32_t *)&cmd);
+	if (rc < 0) {
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+fail_cmd:
+	return rc;
+}
+
+int q6asm_set_sa_ep(struct audio_client *ac,int *param)
+{
+	int sz = 0;
+	int rc  = 0;
+	struct asm_stream_cmd_set_pp_params_sa_ep cmd;
+
+	if(ac == NULL) {
+		printk("%s: audio client is null\n", __func__);
+		return -1;
+	}
+
+	sz = sizeof(struct asm_stream_cmd_set_pp_params_sa_ep);
+	q6asm_add_hdr_async(ac, &cmd.hdr, sz, true);
+
+	cmd.hdr.opcode = ASM_STREAM_CMD_SET_PP_PARAMS_V2;
+	cmd.param.data_payload_addr_lsw = 0;
+	cmd.param.data_payload_addr_msw = 0;
+	cmd.param.mem_map_handle = 0;
+	cmd.param.data_payload_size =
+			sizeof(cmd) - sizeof(cmd.hdr) - sizeof(cmd.param);
+	cmd.data.module_id = ASM_MODULE_ID_PP_SA_EP;
+	cmd.data.param_id = ASM_PARAM_ID_PP_SA_EP_PARAMS;
+	cmd.data.param_size = cmd.param.data_payload_size - sizeof(cmd.data);
+	cmd.data.reserved = 0;
+
+	/* SA EP paramerters */
+	cmd.enable = param[0];
+	cmd.score = param[1];
+	printk("%s: %d %d\n", __func__, cmd.enable, cmd.score);
+	rc = apr_send_pkt(ac->apr, (uint32_t *)&cmd);
+	if (rc < 0) {
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+fail_cmd:
+	return rc;
+}
+
+int q6asm_get_sa_ep(struct audio_client *ac)
+{
+#if 0
+	int sz = 0;
+	int rc  = 0;
+	struct asm_stream_cmd_get_pp_params_v2 cmd;
+
+	if(ac == NULL) {
+		printk("%s: audio client is null\n", __func__);
+		return -1;
+	}
+
+	sz = sizeof(struct asm_stream_cmd_get_pp_params_v2);
+	q6asm_add_hdr_async(ac, &cmd.hdr, sz, true);
+
+	cmd.hdr.opcode = ASM_STREAM_CMD_GET_PP_PARAMS_V2;
+	cmd.param.data_payload_addr_lsw = 0;
+	cmd.param.data_payload_addr_msw = 0;
+	cmd.param.mem_map_handle = 0;
+	cmd.data.module_id = ASM_MODULE_ID_PP_SA_EP;
+	cmd.data.param_id = ASM_PARAM_ID_PP_SA_EP_GET_PARAMS;
+	cmd.data.param_max_size = 20;
+	cmd.data.reserved = 0;
+
+	rc = apr_send_pkt(ac->apr, (uint32_t *)&cmd);
+	if (rc < 0) {
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+fail_cmd:
+	return rc;
+#else
+	return 0;
+#endif
+}
+
+int q6asm_set_msp(struct audio_client *ac, int *param)
+{
+	int sz = 0;
+	int rc  = 0;
+	struct asm_stream_cmd_set_pp_params_msp cmd;
+	
+	printk("q6asm_set_msp\n");
+	if(ac == NULL) {
+		printk("%s: audio client is null\n", __func__);
+		return -1;
+	}
+
+	sz = sizeof(struct asm_stream_cmd_set_pp_params_msp);
+	q6asm_add_hdr_async(ac, &cmd.hdr, sz, TRUE);
+
+	cmd.hdr.opcode = ASM_STREAM_CMD_SET_PP_PARAMS_V2;
+	cmd.param.data_payload_addr_lsw = 0;
+	cmd.param.data_payload_addr_msw = 0;
+	cmd.param.mem_map_handle = 0;
+	cmd.param.data_payload_size =
+			sizeof(cmd) - sizeof(cmd.hdr) - sizeof(cmd.param);
+	cmd.data.module_id = ASM_MODULE_ID_PP_SA_MSP;
+	cmd.data.param_id = ASM_MODULE_ID_PP_SA_MSP_PARAM;
+	cmd.data.param_size = cmd.param.data_payload_size - sizeof(cmd.data);
+	cmd.data.reserved = 0;
+
+	/* VSP paramerters */
+	cmd.msp_int = param[0];
+	printk("%d ", param[0]);
+	printk("\n");
+	rc = apr_send_pkt(ac->apr, (uint32_t *)&cmd);
+	if (rc < 0) {
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+fail_cmd:
+	return rc;
+}
+#endif /* CONFIG_SAMSUNG_AUDIO */
 
 int q6asm_equalizer(struct audio_client *ac, void *eq_p)
 {
@@ -5282,6 +5738,63 @@ fail_cmd:
 }
 
 int q6asm_get_session_time(struct audio_client *ac, uint64_t *tstamp)
+{
+	struct asm_mtmx_strtr_get_params mtmx_params;
+	int rc;
+
+	if (ac == NULL) {
+		pr_err("%s: APR handle NULL\n", __func__);
+		return -EINVAL;
+	}
+	if (ac->apr == NULL) {
+		pr_err("%s: AC APR handle NULL\n", __func__);
+		return -EINVAL;
+	}
+	if (tstamp == NULL) {
+		pr_err("%s: tstamp NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	q6asm_add_hdr(ac, &mtmx_params.hdr, sizeof(mtmx_params), TRUE);
+	mtmx_params.hdr.opcode = ASM_SESSION_CMD_GET_MTMX_STRTR_PARAMS_V2;
+	mtmx_params.param_info.data_payload_addr_lsw = 0;
+	mtmx_params.param_info.data_payload_addr_msw = 0;
+	mtmx_params.param_info.mem_map_handle = 0;
+	mtmx_params.param_info.direction = (ac->io_mode & TUN_READ_IO_MODE
+					    ? 1 : 0);
+	mtmx_params.param_info.module_id =
+		ASM_SESSION_MTMX_STRTR_MODULE_ID_AVSYNC;
+	mtmx_params.param_info.param_id =
+		ASM_SESSION_MTMX_STRTR_PARAM_SESSION_TIME_V3;
+	mtmx_params.param_info.param_max_size =
+		sizeof(struct asm_stream_param_data_v2) +
+		sizeof(struct asm_session_mtmx_strtr_param_session_time_v3_t);
+	atomic_set(&ac->time_flag, 1);
+
+	dev_vdbg(ac->dev, "%s: session[%d]opcode[0x%x]\n", __func__,
+		 ac->session, mtmx_params.hdr.opcode);
+	rc = apr_send_pkt(ac->apr, (uint32_t *) &mtmx_params);
+	if (rc < 0) {
+		pr_err("%s: Commmand 0x%x failed %d\n", __func__,
+		       mtmx_params.hdr.opcode, rc);
+		goto fail_cmd;
+	}
+	rc = wait_event_timeout(ac->time_wait,
+			(atomic_read(&ac->time_flag) == 0), 5*HZ);
+	if (!rc) {
+		pr_err("%s: timeout in getting session time from DSP\n",
+				__func__);
+		goto fail_cmd;
+	}
+
+	*tstamp = ac->time_stamp;
+	return 0;
+
+fail_cmd:
+	return -EINVAL;
+}
+
+int q6asm_get_session_time_legacy(struct audio_client *ac, uint64_t *tstamp)
 {
 	struct apr_hdr hdr;
 	int rc;

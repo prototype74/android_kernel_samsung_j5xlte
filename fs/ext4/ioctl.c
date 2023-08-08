@@ -102,9 +102,8 @@ static long swap_inode_boot_loader(struct super_block *sb,
 	handle_t *handle;
 	int err;
 	struct inode *inode_bl;
-	struct ext4_inode_info *ei;
 	struct ext4_inode_info *ei_bl;
-	struct ext4_sb_info *sbi;
+	struct ext4_sb_info *sbi = EXT4_SB(sb);
 
 	if (inode->i_nlink != 1 || !S_ISREG(inode->i_mode)) {
 		err = -EINVAL;
@@ -115,9 +114,6 @@ static long swap_inode_boot_loader(struct super_block *sb,
 		err = -EPERM;
 		goto swap_boot_out;
 	}
-
-	sbi = EXT4_SB(sb);
-	ei = EXT4_I(inode);
 
 	inode_bl = ext4_iget(sb, EXT4_BOOT_LOADER_INO);
 	if (IS_ERR(inode_bl)) {
@@ -624,6 +620,11 @@ resizefs_out:
 			return -EFAULT;
 
 		return 0;
+	}
+
+	case FS_IOC_INVAL_MAPPING:
+	{
+		return invalidate_mapping_pages(inode->i_mapping, 0, -1);
 	}
 
 	default:

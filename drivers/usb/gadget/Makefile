@@ -6,7 +6,7 @@ ccflags-$(CONFIG_USB_GADGET_DEBUG) := -DDEBUG
 obj-$(CONFIG_USB_GADGET)	+= udc-core.o
 obj-$(CONFIG_USB_LIBCOMPOSITE)	+= libcomposite.o
 libcomposite-y			:= usbstring.o config.o epautoconf.o
-libcomposite-y			+= composite.o functions.o configfs.o
+libcomposite-y			+= composite.o functions.o
 obj-$(CONFIG_USB_DUMMY_HCD)	+= dummy_hcd.o
 obj-$(CONFIG_USB_NET2272)	+= net2272.o
 obj-$(CONFIG_USB_NET2280)	+= net2280.o
@@ -38,8 +38,8 @@ obj-$(CONFIG_USB_FUSB300)	+= fusb300_udc.o
 obj-$(CONFIG_USB_MV_U3D)	+= mv_u3d_core.o
 
 # USB Functions
-usb_f_acm-y			:= f_acm.o
-obj-$(CONFIG_USB_F_ACM)		+= usb_f_acm.o
+#usb_f_acm-y			:= f_acm.o
+#obj-$(CONFIG_USB_F_ACM)	+= usb_f_acm.o
 usb_f_ss_lb-y			:= f_loopback.o f_sourcesink.o
 obj-$(CONFIG_USB_F_SS_LB)	+= usb_f_ss_lb.o
 obj-$(CONFIG_USB_U_SERIAL)	+= u_serial.o
@@ -89,3 +89,4 @@ obj-$(CONFIG_USB_G_NCM)		+= g_ncm.o
 obj-$(CONFIG_USB_G_ACM_MS)	+= g_acm_ms.o
 obj-$(CONFIG_USB_G_ANDROID)	+= g_android.o
 obj-$(CONFIG_USB_GADGET_TARGET)	+= tcm_usb_gadget.o
+obj-$(CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE)	+= multi_config.o

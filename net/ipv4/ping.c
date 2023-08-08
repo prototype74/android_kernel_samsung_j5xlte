@@ -151,16 +151,16 @@ void ping_unhash(struct sock *sk)
 {
 	struct inet_sock *isk = inet_sk(sk);
 	pr_debug("ping_unhash(isk=%p,isk->num=%u)\n", isk, isk->inet_num);
+	write_lock_bh(&ping_table.lock);
 	if (sk_hashed(sk)) {
-		write_lock_bh(&ping_table.lock);
 		hlist_nulls_del(&sk->sk_nulls_node);
 		sk_nulls_node_init(&sk->sk_nulls_node);
 		sock_put(sk);
 		isk->inet_num = 0;
 		isk->inet_sport = 0;
 		sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);
-		write_unlock_bh(&ping_table.lock);
 	}
+	write_unlock_bh(&ping_table.lock);
 }
 EXPORT_SYMBOL_GPL(ping_unhash);
 
@@ -215,6 +215,11 @@ static struct sock *ping_lookup(struct net *net, struct sk_buff *skb, u16 ident)
 					     &ipv6_hdr(skb)->daddr))
 				continue;
 #endif
+/*
+    net/ping: handle protocol mismatching scenario    
+    refer to https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/commit/net/ipv4/ping.c?id=91a0b603469069cdcce4d572b7525ffc9fd352a6
+    Qualcome case ID 02009918
+*/
 		} else {
 			continue;
 		}
@@ -651,7 +656,7 @@ int ping_common_sendmsg(int family, struct msghdr *msg, size_t len,
 			void *user_icmph, size_t icmph_len) {
 	u8 type, code;
 
-	if (len > 0xFFFF)
+	if (len > 0xFFFF || len < icmph_len)
 		return -EMSGSIZE;
 
 	/*
@@ -978,8 +983,12 @@ void ping_rcv(struct sk_buff *skb)
 
 	sk = ping_lookup(net, skb, ntohs(icmph->un.echo.id));
 	if (sk != NULL) {
+		struct sk_buff *skb2 = skb_clone(skb, GFP_ATOMIC);
+
 		pr_debug("rcv on socket %p\n", sk);
-		ping_queue_rcv_skb(sk, skb_get(skb));
+		if (skb2)
+			ping_queue_rcv_skb(sk, skb2);
+
 		sock_put(sk);
 		return;
 	}

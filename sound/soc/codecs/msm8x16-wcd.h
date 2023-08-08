@@ -17,6 +17,9 @@
 #include <sound/q6afe-v2.h>
 #include "wcd-mbhc-v2.h"
 #include "wcdcal-hwdep.h"
+#ifdef CONFIG_SND_SOC_MSM8X16_WM1814
+#include "../msm/msm8x16-machine.h"
+#endif /* CONFIG_SND_SOC_MSM8X16_WM1814 */
 
 #define MICBIAS_EXT_BYP_CAP 0x00
 #define MICBIAS_NO_EXT_BYP_CAP 0x01
@@ -210,6 +213,7 @@ struct wcd_imped_i_ref {
 	int offset;
 };
 
+#ifndef CONFIG_SND_SOC_MSM8X16_WM1814
 struct msm8916_asoc_mach_data {
 	int codec_type;
 	int ext_pa;
@@ -219,6 +223,9 @@ struct msm8916_asoc_mach_data {
 	int lb_mode;
 	u8 micbias1_cap_mode;
 	u8 micbias2_cap_mode;
+#ifdef CONFIG_AUDIO_SECONDARY_MIC_USE_EXT_BIAS_ENABLE
+	int mic_bias_gpio;
+#endif /* CONFIG_AUDIO_SECONDARY_MIC_USE_EXT_BIAS_ENABLE */
 	atomic_t mclk_rsc_ref;
 	atomic_t mclk_enabled;
 	atomic_t wsa_mclk_rsc_ref;
@@ -226,6 +233,7 @@ struct msm8916_asoc_mach_data {
 	struct mutex wsa_mclk_mutex;
 	struct delayed_work disable_mclk_work;
 	struct afe_digital_clk_cfg digital_cdc_clk;
+	struct afe_clk_set digital_cdc_core_clk;
 	void __iomem *vaddr_gpio_mux_spkr_ctl;
 	void __iomem *vaddr_gpio_mux_mic_ctl;
 	void __iomem *vaddr_gpio_mux_quin_ctl;
@@ -233,6 +241,7 @@ struct msm8916_asoc_mach_data {
 	struct on_demand_supply wsa_switch_supply;
 	struct snd_info_entry *codec_root;
 };
+#endif /* CONFIG_SND_SOC_MSM8X16_WM1814 */
 
 struct msm8x16_wcd_pdata {
 	int irq;
@@ -291,6 +300,9 @@ struct msm8x16_wcd_priv {
 	bool dec_active[NUM_DECIMATORS];
 	struct on_demand_supply on_demand_list[ON_DEMAND_SUPPLIES_MAX];
 	struct regulator *spkdrv_reg;
+#ifdef CONFIG_SAMSUNG_JACK
+	int micb_2_ref_cnt;
+#endif /* CONFIG_SAMSUNG_JACK */
 	/* mbhc module */
 	struct wcd_mbhc mbhc;
 	/* cal info for codec */
@@ -313,5 +325,11 @@ extern void msm8x16_wcd_hs_detect_exit(struct snd_soc_codec *codec);
 extern void msm8x16_wcd_spk_ext_pa_cb(
 		int (*codec_spk_ext_pa)(struct snd_soc_codec *codec,
 		int enable), struct snd_soc_codec *codec);
+#ifdef CONFIG_AUDIO_QUAT_I2S_ENABLE
+#ifdef CONFIG_AUDIO_SPEAKER_OUT_MAXIM_AMP_ENABLE
+extern void msm8x16_wcd_speaker_boost_force_enable(int enable);
+#endif /* CONFIG_AUDIO_SPEAKER_OUT_MAXIM_AMP_ENABLE */
+#endif /* CONFIG_AUDIO_QUAT_I2S_ENABLE */
+
 #endif
 

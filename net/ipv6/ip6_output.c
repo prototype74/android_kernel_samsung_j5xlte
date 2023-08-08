@@ -1113,19 +1113,21 @@ static void ip6_append_data_mtu(unsigned int *mtu,
 				unsigned int fragheaderlen,
 				struct sk_buff *skb,
 				struct rt6_info *rt,
-				unsigned int orig_mtu)
+				bool pmtuprobe)
 {
 	if (!(rt->dst.flags & DST_XFRM_TUNNEL)) {
 		if (skb == NULL) {
 			/* first fragment, reserve header_len */
-			*mtu = orig_mtu - rt->dst.header_len;
+			*mtu = *mtu - rt->dst.header_len;
 
 		} else {
 			/*
 			 * this fragment is not first, the headers
 			 * space is regarded as data space.
 			 */
-			*mtu = orig_mtu;
+			*mtu = min(*mtu, pmtuprobe ?
+				   rt->dst.dev->mtu :
+				   dst_mtu(rt->dst.path));
 		}
 		*maxfraglen = ((*mtu - fragheaderlen) & ~7)
 			      + fragheaderlen - sizeof(struct frag_hdr);
@@ -1142,7 +1144,7 @@ int ip6_append_data(struct sock *sk, int getfrag(void *from, char *to,
 	struct ipv6_pinfo *np = inet6_sk(sk);
 	struct inet_cork *cork;
 	struct sk_buff *skb, *skb_prev = NULL;
-	unsigned int maxfraglen, fragheaderlen, mtu, orig_mtu;
+	unsigned int maxfraglen, fragheaderlen, mtu;
 	int exthdrlen;
 	int dst_exthdrlen;
 	int hh_len;
@@ -1199,14 +1201,16 @@ int ip6_append_data(struct sock *sk, int getfrag(void *from, char *to,
 		np->cork.tclass = tclass;
 		if (rt->dst.flags & DST_XFRM_TUNNEL)
 			mtu = np->pmtudisc == IPV6_PMTUDISC_PROBE ?
-			      rt->dst.dev->mtu : dst_mtu(&rt->dst);
+			      ACCESS_ONCE(rt->dst.dev->mtu) : dst_mtu(&rt->dst);
 		else
 			mtu = np->pmtudisc == IPV6_PMTUDISC_PROBE ?
-			      rt->dst.dev->mtu : dst_mtu(rt->dst.path);
+			      ACCESS_ONCE(rt->dst.dev->mtu) : dst_mtu(rt->dst.path);
 		if (np->frag_size < mtu) {
 			if (np->frag_size)
 				mtu = np->frag_size;
 		}
+		if (mtu < IPV6_MIN_MTU)
+			return -EINVAL;
 		cork->fragsize = mtu;
 		if (dst_allfrag(rt->dst.path))
 			cork->flags |= IPCORK_ALLFRAG;
@@ -1224,7 +1228,6 @@ int ip6_append_data(struct sock *sk, int getfrag(void *from, char *to,
 		dst_exthdrlen = 0;
 		mtu = cork->fragsize;
 	}
-	orig_mtu = mtu;
 
 	hh_len = LL_RESERVED_SPACE(rt->dst.dev);
 
@@ -1304,7 +1307,8 @@ alloc_new_skb:
 			if (skb == NULL || skb_prev == NULL)
 				ip6_append_data_mtu(&mtu, &maxfraglen,
 						    fragheaderlen, skb, rt,
-						    orig_mtu);
+						    np->pmtudisc ==
+						    IPV6_PMTUDISC_PROBE);
 
 			skb_prev = skb;
 
@@ -1342,6 +1346,11 @@ alloc_new_skb:
 			 */
 			alloclen += sizeof(struct frag_hdr);
 
+			copy = datalen - transhdrlen - fraggap;
+			if (copy < 0) {
+					err = -EINVAL;
+					goto error;
+			}
 			if (transhdrlen) {
 				skb = sock_alloc_send_skb(sk,
 						alloclen + hh_len,
@@ -1393,13 +1402,9 @@ alloc_new_skb:
 				data += fraggap;
 				pskb_trim_unique(skb_prev, maxfraglen);
 			}
-			copy = datalen - transhdrlen - fraggap;
-
-			if (copy < 0) {
-				err = -EINVAL;
-				kfree_skb(skb);
-				goto error;
-			} else if (copy > 0 && getfrag(from, data + transhdrlen, offset, copy, fraggap, skb) < 0) {
+			if (copy > 0 &&
+				getfrag(from, data + transhdrlen, offset,
+						copy, fraggap, skb) < 0) {
 				err = -EFAULT;
 				kfree_skb(skb);
 				goto error;

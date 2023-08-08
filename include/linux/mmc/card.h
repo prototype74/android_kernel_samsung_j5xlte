@@ -84,7 +84,7 @@ struct mmc_ext_csd {
 	bool			hpi;			/* HPI support bit */
 	unsigned int		hpi_cmd;		/* cmd used as HPI */
 	bool			bkops;		/* background support bit */
-	bool			bkops_en;	/* background enable bit */
+	u8			bkops_en;	/* background enable bits */
 	unsigned int            data_sector_size;       /* 512 bytes or 4KB */
 	unsigned int            data_tag_unit_size;     /* DATA TAG UNIT size */
 	unsigned int		boot_ro_lock;		/* ro lock support */
@@ -110,6 +110,22 @@ struct mmc_ext_csd {
 
 	unsigned int            feature_support;
 #define MMC_DISCARD_FEATURE	BIT(0)                  /* CMD38 feature */
+	/*
+	 * smart_info : It's for eMMC 5.0 or later device
+	 * [63:56] : DEVICE_LIFE_TIME_EST_TYPE_B [269]
+	 * [55:48] : DEVICE_LIFE_TIME_EST_TYPE_A [268]
+	 * [47:40] : PRE_EOL_INFO [267]
+	 * [39:32] : OPTIMAL_TRIM_UNIT_SIZE [264]
+	 * [31:16] : DEVICE_VERSION [263-262]
+	 * [15:08] : HC_ERASE_GRP_SIZE [224]
+	 * [07:00] : HC_WP_GRP_SIZE [221]
+	 */
+	unsigned long long	smart_info;
+	/*
+	 * fwdate : It's for eMMC 5.0 or later device
+	 * [63:00] : FIRMWARE_VERSION [261-254]
+	 */
+	unsigned long long	fwdate;
 };
 
 struct sd_scr {
@@ -385,6 +401,10 @@ struct mmc_card {
 
 	unsigned int		sd_bus_speed;	/* Bus Speed Mode set for the card */
 
+	struct device_attribute	bkops_attr;	/* for enable/disable bkops mode */
+	u8			bkops_enable;	/* bkops mode on/off */
+	spinlock_t		bkops_lock;	/* lock for bkops_enable filed */
+
 	struct dentry		*debugfs_root;
 	struct mmc_part	part[MMC_NUM_PHY_PARTITION]; /* physical partitions */
 	unsigned int    nr_parts;
@@ -400,6 +420,23 @@ struct mmc_card {
 	bool issue_long_pon;
 	u8 *cached_ext_csd;
 };
+
+/*
+ * mmc_csd registers get/set/clr helpers
+ */
+#define mmc_card_get_bkops_en_manual(card) ((card->ext_csd.bkops_en) &\
+					EXT_CSD_BKOPS_EN_MANUAL_EN)
+#define mmc_card_set_bkops_en_manual(card) ((card->ext_csd.bkops_en) |= \
+					EXT_CSD_BKOPS_EN_MANUAL_EN)
+#define mmc_card_clr_bkops_en_manual(card) ((card->ext_csd.bkops_en) &= \
+					~EXT_CSD_BKOPS_EN_MANUAL_EN)
+
+#define mmc_card_get_bkops_en_auto(card) ((card->ext_csd.bkops_en) & \
+					EXT_CSD_BKOPS_EN_AUTO_EN)
+#define mmc_card_set_bkops_en_auto(card) ((card->ext_csd.bkops_en) |= \
+					EXT_CSD_BKOPS_EN_AUTO_EN)
+#define mmc_card_clr_bkops_en_auto(card) ((card->ext_csd.bkops_en) &= \
+					~EXT_CSD_BKOPS_EN_AUTO_EN)
 
 /*
  * This function fill contents in mmc_part.

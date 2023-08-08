@@ -39,8 +39,15 @@
 #include <asm/uaccess.h>
 #include <asm/setup.h>
 #include <asm-generic/io-64-nonatomic-lo-hi.h>
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
 
 #include "peripheral-loader.h"
+
+#ifdef CONFIG_SEC_PERIPHERAL_SECURE_CHK
+#include <linux/sec_debug.h>
+#endif
 
 #define pil_err(desc, fmt, ...)						\
 	dev_err(desc->dev, "%s: " fmt, desc->name, ##__VA_ARGS__)
@@ -381,6 +388,14 @@ static int pil_alloc_region(struct pil_priv *priv, phys_addr_t min_addr,
 	if (region == NULL) {
 		pil_err(priv->desc, "Failed to allocate relocatable region of size %zx\n",
 					size);
+		priv->region_start = 0;
+		priv->region_end = 0;
+
+		/*Need ramdump on exact alloc failure case for venus*/
+#ifdef CONFIG_SEC_DEBUG
+		if (sec_debug_is_enabled())
+#endif
+			BUG_ON(!strcmp(priv->desc->name, "venus"));
 		return -ENOMEM;
 	}
 
@@ -498,6 +513,13 @@ static int pil_init_mmap(struct pil_desc *desc, const struct pil_mdt *mdt)
 	return pil_init_entry_addr(priv, mdt);
 }
 
+struct pil_map_fw_info {
+	void *region;
+	struct dma_attrs attrs;
+	phys_addr_t base_addr;
+	struct device *dev;
+};
+
 static void pil_release_mmap(struct pil_desc *desc)
 {
 	struct pil_priv *priv = desc->priv;
@@ -516,14 +538,30 @@ static void pil_release_mmap(struct pil_desc *desc)
 	}
 }
 
-#define IOMAP_SIZE SZ_1M
+static void pil_clear_segment(struct pil_desc *desc)
+{
+	struct pil_priv *priv = desc->priv;
+	u8 __iomem *buf;
 
-struct pil_map_fw_info {
-	void *region;
-	struct dma_attrs attrs;
-	phys_addr_t base_addr;
-	struct device *dev;
-};
+	struct pil_map_fw_info map_fw_info = {
+		.attrs = desc->attrs,
+		.region = priv->region,
+		.base_addr = priv->region_start,
+		.dev = desc->dev,
+	};
+
+	void *map_data = desc->map_data ? desc->map_data : &map_fw_info;
+
+	/* Clear memory so that unauthorized ELF code is not left behind */
+	buf = desc->map_fw_mem(priv->region_start, (priv->region_end -
+					priv->region_start), map_data);
+	pil_memset_io(buf, 0, (priv->region_end - priv->region_start));
+	desc->unmap_fw_mem(buf, (priv->region_end - priv->region_start),
+								map_data);
+
+}
+
+#define IOMAP_SIZE SZ_1M
 
 static void *map_fw_mem(phys_addr_t paddr, size_t size, void *data)
 {
@@ -652,7 +690,9 @@ int pil_boot(struct pil_desc *desc)
 	struct pil_seg *seg;
 	const struct firmware *fw;
 	struct pil_priv *priv = desc->priv;
-
+#ifdef CONFIG_SEC_PERIPHERAL_SECURE_CHK
+	static int load_count_fwd;
+#endif
 	/* Reinitialize for new image */
 	pil_release_mmap(desc);
 
@@ -708,6 +748,16 @@ int pil_boot(struct pil_desc *desc)
 		ret = desc->ops->init_image(desc, fw->data, fw->size);
 	if (ret) {
 		pil_err(desc, "Invalid firmware metadata\n");
+#ifdef CONFIG_SEC_PERIPHERAL_SECURE_CHK
+		if ((!strcmp(desc->name, "mba")) || (!strcmp(desc->name, "modem"))) {
+			if (++load_count_fwd > 5) {
+				release_firmware(fw);
+				up_read(&pil_pm_rwsem);
+				pil_release_mmap(desc);
+				sec_peripheral_secure_check_fail();
+			}
+		}
+#endif
 		goto err_boot;
 	}
 
@@ -728,6 +778,15 @@ int pil_boot(struct pil_desc *desc)
 	ret = desc->ops->auth_and_reset(desc);
 	if (ret) {
 		pil_err(desc, "Failed to bring out of reset\n");
+#ifdef CONFIG_SEC_PERIPHERAL_SECURE_CHK
+		if ((!strcmp(desc->name, "mba")) || (!strcmp(desc->name, "modem"))) {
+			pil_proxy_unvote(desc, ret);
+			release_firmware(fw);
+			up_read(&pil_pm_rwsem);
+			pil_release_mmap(desc);
+			sec_peripheral_secure_check_fail();
+		}
+#endif
 		goto err_deinit_image;
 	}
 	pil_info(desc, "Brought out of reset\n");
@@ -749,6 +808,8 @@ out:
 					&desc->attrs);
 			priv->region = NULL;
 		}
+		if (desc->clear_fw_region && priv->region_start)
+			pil_clear_segment(desc);
 		pil_release_mmap(desc);
 	}
 	return ret;

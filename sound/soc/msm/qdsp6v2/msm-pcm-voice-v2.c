@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -84,6 +84,22 @@ static bool is_vowlan(struct msm_voice *pvowlan)
 		return false;
 }
 
+static bool is_voicemmode1(struct msm_voice *pvoicemmode1)
+{
+	if (pvoicemmode1 == &voice_info[VOICEMMODE1_INDEX])
+		return true;
+	else
+		return false;
+}
+
+static bool is_voicemmode2(struct msm_voice *pvoicemmode2)
+{
+	if (pvoicemmode2 == &voice_info[VOICEMMODE2_INDEX])
+		return true;
+	else
+		return false;
+}
+
 static uint32_t get_session_id(struct msm_voice *pvoc)
 {
 	uint32_t session_id = 0;
@@ -96,6 +112,10 @@ static uint32_t get_session_id(struct msm_voice *pvoc)
 		session_id = voc_get_session_id(QCHAT_SESSION_NAME);
 	else if (is_vowlan(pvoc))
 		session_id = voc_get_session_id(VOWLAN_SESSION_NAME);
+	else if (is_voicemmode1(pvoc))
+		session_id = voc_get_session_id(VOICEMMODE1_NAME);
+	else if (is_voicemmode2(pvoc))
+		session_id = voc_get_session_id(VOICEMMODE2_NAME);
 	else
 		session_id = voc_get_session_id(VOICE_SESSION_NAME);
 
@@ -148,6 +168,14 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 	} else if (!strncmp("VoWLAN", substream->pcm->id, 6)) {
 		voice = &voice_info[VOWLAN_SESSION_INDEX];
 		pr_debug("%s: Open VoWLAN Substream Id=%s\n",
+			 __func__, substream->pcm->id);
+	} else if (!strncmp("VoiceMMode1", substream->pcm->id, 11)) {
+		voice = &voice_info[VOICEMMODE1_INDEX];
+		pr_debug("%s: Open VoiceMMode1 Substream Id=%s\n",
+			 __func__, substream->pcm->id);
+	} else if (!strncmp("VoiceMMode2", substream->pcm->id, 11)) {
+		voice = &voice_info[VOICEMMODE2_INDEX];
+		pr_debug("%s: Open VoiceMMode2 Substream Id=%s\n",
 			 __func__, substream->pcm->id);
 	} else {
 		voice = &voice_info[VOICE_SESSION_INDEX];
@@ -377,7 +405,12 @@ static int msm_voice_gain_put(struct snd_kcontrol *kcontrol,
 		ret = -EINVAL;
 		goto done;
 	}
-
+#if defined(CONFIG_SEC_DEVIDE_RINGTONE_GAIN)
+	if (volume & 0x200) {
+		pr_debug("ringback tone volume ctrl\n");
+		volume -= 412; // (-0x200 & +100)
+	}
+#endif
 	pr_debug("%s: volume: %d session_id: %#x ramp_duration: %d\n", __func__,
 		volume, session_id, ramp_duration);
 
@@ -464,7 +497,25 @@ done:
 	return ret;
 }
 
+#ifdef CONFIG_SAMSUNG_AUDIO
+static int msm_loopback_put(struct snd_kcontrol *kcontrol,
+				 struct snd_ctl_elem_value *ucontrol)
+{
+	int loopback_enable = ucontrol->value.integer.value[0];
 
+	pr_debug("%s: loopback enable=%d\n", __func__, loopback_enable);
+
+	voc_set_loopback_enable(loopback_enable);
+	return 0;
+}
+
+static int msm_loopback_get(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = voc_get_loopback_enable();
+	 return 0;
+}
+#endif /* CONFIG_SAMSUNG_AUDIO */
 
 static const char const *tty_mode[] = {"OFF", "HCO", "VCO", "FULL"};
 static const struct soc_enum msm_tty_mode_enum[] = {
@@ -490,6 +541,8 @@ static int msm_voice_tty_mode_put(struct snd_kcontrol *kcontrol,
 	voc_set_tty_mode(voc_get_session_id(VOICE2_SESSION_NAME), tty_mode);
 	voc_set_tty_mode(voc_get_session_id(VOLTE_SESSION_NAME), tty_mode);
 	voc_set_tty_mode(voc_get_session_id(VOWLAN_SESSION_NAME), tty_mode);
+	voc_set_tty_mode(voc_get_session_id(VOICEMMODE1_NAME), tty_mode);
+	voc_set_tty_mode(voc_get_session_id(VOICEMMODE2_NAME), tty_mode);
 
 	return 0;
 }
@@ -577,6 +630,55 @@ static int msm_voice_cvd_version_get(struct snd_kcontrol *kcontrol,
 
 	return 0;
 }
+
+#ifdef CONFIG_SAMSUNG_AUDIO
+static int msm_sec_dha_get(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	return 0;
+}
+
+static int msm_sec_dha_put(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	int i = 0;
+	int ret = 0;
+	int dha_mode = ucontrol->value.integer.value[0];
+	int dha_select = ucontrol->value.integer.value[1];
+	short dha_param[12] = {0,};
+	for (i = 0; i < 12; i++) {
+		dha_param[i] = (short)ucontrol->value.integer.value[2+i];
+		pr_debug("msm_dha_put : param - %d\n", dha_param[i]);
+	}
+
+	ret = voice_sec_set_dha_data(voc_get_session_id(VOICE_SESSION_NAME),
+		dha_mode, dha_select, dha_param);
+	ret = voice_sec_set_dha_data(voc_get_session_id(VOICE2_SESSION_NAME),
+		dha_mode, dha_select, dha_param);
+	return ret;
+}
+
+static int msm_sec_addMode_get(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	return 0;
+}
+
+static int msm_sec_addMode_put(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = 0;
+	int enable = ucontrol->value.integer.value[0];
+
+	pr_debug("%s: addMode enable=%d\n", __func__, enable);
+	ret = voice_sec_set_addMode_data(voc_get_session_id(VOICE_SESSION_NAME),
+		enable);
+	ret = voice_sec_set_addMode_data(voc_get_session_id(VOICE2_SESSION_NAME),
+		enable);
+	return ret;
+}
+#endif /* CONFIG_SAMSUNG_AUDIO */
+
 static struct snd_kcontrol_new msm_voice_controls[] = {
 	SOC_SINGLE_MULTI_EXT("Voice Rx Device Mute", SND_SOC_NOPM, 0, VSID_MAX,
 				0, 3, NULL, msm_voice_rx_device_mute_put),
@@ -593,6 +695,14 @@ static struct snd_kcontrol_new msm_voice_controls[] = {
 	SOC_SINGLE_MULTI_EXT("Voice Topology Disable", SND_SOC_NOPM, 0,
 			     VSID_MAX, 0, 2, NULL,
 			     msm_voice_topology_disable_put),
+#ifdef CONFIG_SAMSUNG_AUDIO				
+	SOC_SINGLE_MULTI_EXT("Sec Set DHA data", SND_SOC_NOPM, 0, 65535, 0, 14,
+				msm_sec_dha_get, msm_sec_dha_put),
+	SOC_SINGLE_EXT("Loopback Enable", SND_SOC_NOPM, 0, LOOPBACK_MAX, 0,
+				msm_loopback_get, msm_loopback_put),
+	SOC_SINGLE_EXT("AddMode Enable", SND_SOC_NOPM, 0, 1, 0,
+				msm_sec_addMode_get, msm_sec_addMode_put),
+#endif /* CONFIG_SAMSUNG_AUDIO */
 	SOC_SINGLE_MULTI_EXT("HD Voice Enable", SND_SOC_NOPM, 0, VSID_MAX, 0, 2,
 			     NULL, msm_voice_hd_voice_put),
 	{

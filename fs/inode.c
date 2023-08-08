@@ -168,6 +168,9 @@ int inode_init_always(struct super_block *sb, struct inode *inode)
 	mapping->private_data = NULL;
 	mapping->backing_dev_info = &default_backing_dev_info;
 	mapping->writeback_index = 0;
+#ifdef CONFIG_SDP
+	mapping->userid = 0;
+#endif
 
 	/*
 	 * If the block_device provides a backing_dev_info for client
@@ -1825,8 +1828,14 @@ void inode_init_owner(struct inode *inode, const struct inode *dir,
 	inode->i_uid = current_fsuid();
 	if (dir && dir->i_mode & S_ISGID) {
 		inode->i_gid = dir->i_gid;
+
+		/* Directories are special, and always inherit S_ISGID */
 		if (S_ISDIR(mode))
 			mode |= S_ISGID;
+		else if ((mode & (S_ISGID | S_IXGRP)) == (S_ISGID | S_IXGRP) &&
+			!in_group_p(inode->i_gid) &&
+			!capable_wrt_inode_uidgid(dir, CAP_FSETID))
+			mode &= ~S_ISGID;
 	} else
 		inode->i_gid = current_fsgid();
 	inode->i_mode = mode;
