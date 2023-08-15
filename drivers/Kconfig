@@ -204,4 +204,6 @@ source "drivers/firmware/Kconfig"
 
 source "drivers/gator/Kconfig"
 
+source "drivers/ccic/Kconfig"
+
 endmenu
