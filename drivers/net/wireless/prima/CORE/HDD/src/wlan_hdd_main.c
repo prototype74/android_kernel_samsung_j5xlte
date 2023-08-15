@@ -157,15 +157,6 @@ static int   gbcnMissRate = -1;
 static int wlan_hdd_inited;
 #endif
 
-#if defined(CONFIG_SEC_C7LTE_CHN) || defined(CONFIG_SEC_C7LTE_CHN_HK)
-#define ISC7000 1
-#else
-#define ISC7000 0
-#endif
-
-extern unsigned int system_rev;
-#define WLAN_NV_FILE_WA "wlan/prima/WCNSS_qcom_wlan_nv_wa.bin"
-
 /*
  * spinlock for synchronizing asynchronous request/response
  * (full description of use in wlan_hdd_main.h)
@@ -7356,18 +7347,6 @@ VOS_STATUS hdd_release_firmware(char *pFileName,v_VOID_t *pCtx)
        else
           status = VOS_STATUS_E_FAILURE;
    }
-   else if(ISC7000 == 1 && system_rev <= 3) {
-		if (!strcmp(WLAN_NV_FILE_WA,pFileName)) {
-			if(pHddCtx->nv) {
-				release_firmware(pHddCtx->nv);
-				pHddCtx->nv = NULL;
-			}
-			else {
-				status = VOS_STATUS_E_FAILURE;
-
-			}
-		}
-   }
    else if (!strcmp(WLAN_NV_FILE,pFileName)) {
        if(pHddCtx->nv) {
           release_firmware(pHddCtx->nv);
@@ -7422,24 +7401,6 @@ VOS_STATUS hdd_request_firmware(char *pfileName,v_VOID_t *pCtx,v_VOID_t **ppfw_d
           hddLog(VOS_TRACE_LEVEL_INFO, "%s: Firmware size = %d",
                  __func__, *pSize);
        }
-   }
-   else if(ISC7000 == 1 && system_rev <= 3) {
-		if(!strcmp(WLAN_NV_FILE_WA, pfileName)) {
-
-			status = request_firmware(&pHddCtx->nv, pfileName, pHddCtx->parent_dev);
-
-			if(status || !pHddCtx->nv || !pHddCtx->nv->data) {
-				hddLog(VOS_TRACE_LEVEL_FATAL, "%s: nv %s download failed",
-					__func__, pfileName);
-				retval = VOS_STATUS_E_FAILURE;
-			}
-			else {
-				*ppfw_data = (v_VOID_t *)pHddCtx->nv->data;
-				*pSize = pHddCtx->nv->size;
-				hddLog(VOS_TRACE_LEVEL_INFO, "%s: nv file size = %d",
-					__func__, *pSize);
-			}
-		}
    }
    else if(!strcmp(WLAN_NV_FILE, pfileName)) {
 
@@ -11246,15 +11207,7 @@ int wlan_hdd_sec_write_version_file(char *riva_version)
    }
    else {
        if (fp->f_mode & FMODE_WRITE) {
-           if (ISC7000 != 1)
-               snprintf(strbuffer,sizeof(strbuffer),"v%s %s\n", QWLAN_VERSIONSTR, riva_version);
-           else {
-               if (system_rev <= 3)
-                   snprintf(strbuffer,sizeof(strbuffer),"v%s %s\n%s\n", QWLAN_VERSIONSTR, riva_version, WLAN_NV_FILE_WA);
-               else
-                   snprintf(strbuffer,sizeof(strbuffer),"v%s %s\n%s\n", QWLAN_VERSIONSTR, riva_version, WLAN_NV_FILE);
-           } 
-
+           snprintf(strbuffer,sizeof(strbuffer),"v%s %s\n", QWLAN_VERSIONSTR, riva_version);
            if ( vfs_write(fp, strbuffer, strlen(strbuffer), &fp->f_pos) < 0)
                printk("%s: can't write file : %s",__func__,SEC_VERSION_FILEPATH);
            else

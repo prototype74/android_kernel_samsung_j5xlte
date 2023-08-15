@@ -93,14 +93,6 @@ static v_BOOL_t crda_regulatory_run_time_entry_valid = VOS_FALSE;
 #define MIN(a, b) (a > b ? b : a)
 #define MAX(a, b) (a > b ? a : b)
 
-#if defined(CONFIG_SEC_C7LTE_CHN) || defined(CONFIG_SEC_C7LTE_CHN_HK)
-#define ISC7000 1
-#else
-#define ISC7000 0
-#endif
-
-extern unsigned int system_rev;
-#define WLAN_NV_FILE_WA "wlan/prima/WCNSS_qcom_wlan_nv_wa.bin"
 /*----------------------------------------------------------------------------
  * Type Declarations
  * -------------------------------------------------------------------------*/
@@ -1177,30 +1169,16 @@ VOS_STATUS vos_nv_open(void)
         return (eHAL_STATUS_FAILURE);
     }
 
-	if(ISC7000 == 1 && system_rev <= 3) {
-		status = hdd_request_firmware(WLAN_NV_FILE_WA,
-									  ((VosContextType*)(pVosContext))->pHDDContext,
-									  (v_VOID_t**)&pnvtmpBuf, &nvReadBufSize);
-
-		if ((!VOS_IS_STATUS_SUCCESS( status )) || (!pnvtmpBuf))
-		{
-		   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
-					   "%s: unable to download NV file %s",
-					   __func__, WLAN_NV_FILE_WA);
-		   return VOS_STATUS_E_RESOURCES;
-		}
-	} else {
-		status = hdd_request_firmware(WLAN_NV_FILE,
+    status = hdd_request_firmware(WLAN_NV_FILE,
                                   ((VosContextType*)(pVosContext))->pHDDContext,
                                   (v_VOID_t**)&pnvtmpBuf, &nvReadBufSize);
 
-		if ((!VOS_IS_STATUS_SUCCESS( status )) || (!pnvtmpBuf))
-		{
-		   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
-					   "%s: unable to download NV file %s",
-					   __func__, WLAN_NV_FILE);
-		   return VOS_STATUS_E_RESOURCES;
-		}
+    if ((!VOS_IS_STATUS_SUCCESS( status )) || (!pnvtmpBuf))
+    {
+       VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+                   "%s: unable to download NV file %s",
+                   __func__, WLAN_NV_FILE);
+       return VOS_STATUS_E_RESOURCES;
     }
 
     pnvEncodedBuf = (v_U8_t *)vos_mem_vmalloc(nvReadBufSize);
