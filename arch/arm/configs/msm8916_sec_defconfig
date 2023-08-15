@@ -695,4 +695,19 @@ CONFIG_SEC_RESTRICT_ROOTING_LOG=y
 
 #TZ ICCC defines
 CONFIG_TZ_ICCC=y
-##############################################################################
+
+################################
+# Qualcomm WLAN module driver
+################################
+CONFIG_PRONTO_WLAN=m
+CONFIG_PRIMA_WLAN_BTAMP=n
+CONFIG_PRIMA_WLAN_LFR=y
+CONFIG_PRIMA_WLAN_11AC_HIGH_TP=y
+CONFIG_QCOM_TDLS=y
+CONFIG_QCOM_VOWIFI_11R=y
+CONFIG_ENABLE_LINUX_REG=y
+CONFIG_WLAN_OFFLOAD_PACKETS=y
+CONFIG_QCOM_ESE=y
+CONFIG_QCOM_ESE_UPLOAD=y
+CONFIG_WLAN_FEATURE_11W=y
+CONFIG_PRIMA_WLAN_OKC=y
