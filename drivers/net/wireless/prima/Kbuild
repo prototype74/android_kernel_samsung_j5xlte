@@ -162,6 +162,9 @@ EXTRA_CFLAGS += -DCONFIG_SEC
 EXTRA_CFLAGS += -DFEATURE_DISABLE_RM
 EXTRA_CFLAGS += -DSEC_WRITE_VERSION_IN_FILE
 EXTRA_CFLAGS += -DSEC_HAL_FEATURE_DISABLE
+
+# SS grip power control
+EXTRA_CFLAGS += -DSEC_CONFIG_GRIP_POWER
 endif
 ifeq ($(CONFIG_QCOM_TDLS),y)
 HDD_OBJS +=	$(HDD_SRC_DIR)/wlan_hdd_tdls.o
@@ -672,9 +675,6 @@ endif
 
 CDEFINES += -DFEATURE_WLAN_CH_AVOID
 CDEFINES += -DWLAN_FEATURE_AP_HT40_24G
-
-# SS grip power control
-CDEFINES += -DSEC_CONFIG_GRIP_POWER
 
 # Some kernel include files are being moved.  Check to see if
 # the old version of the files are present
