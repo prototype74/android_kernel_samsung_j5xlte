@@ -157,10 +157,29 @@ error:
 	return ret;
 }
 
+static ssize_t support_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct usb_notify_dev *udev = (struct usb_notify_dev *)
+		dev_get_drvdata(dev);
+	struct otg_notify *n = udev->o_notify;
+	char *support;
+
+	if (n->unsupport_host || !IS_ENABLED(CONFIG_USB_HOST_NOTIFY))
+		support = "CLIENT";
+	else
+		support = "ALL";
+
+	pr_info("read support %s\n", support);
+	return snprintf(buf,  sizeof(support)+1, "%s\n", support);
+}
+
 static DEVICE_ATTR(disable, 0664, disable_show, disable_store);
+static DEVICE_ATTR(support, 0444, support_show, NULL);
 
 static struct attribute *usb_notify_attrs[] = {
 	&dev_attr_disable.attr,
+	&dev_attr_support.attr,
 	NULL,
 };
 
