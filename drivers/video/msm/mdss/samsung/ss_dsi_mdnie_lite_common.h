@@ -39,6 +39,7 @@ Copyright (C) 2012, Samsung Electronics. All rights reserved.
 #define NAME_STRING_MAX 30
 #define MDNIE_COLOR_BLINDE_CMD_SIZE 18
 #define COORDINATE_DATA_SIZE 6
+#define MDNIE_NIGHT_MODE_CMD_SIZE 24
 
 extern char mdnie_app_name[][NAME_STRING_MAX];
 extern char mdnie_mode_name[][NAME_STRING_MAX];
@@ -131,6 +132,9 @@ struct mdnie_lite_tun_type {
 	char scr_white_green;
 	char scr_white_blue;
 
+	int night_mode_enable;
+	int night_mode_index;
+
 	int index;
 	struct list_head used_list;
 
@@ -184,6 +188,8 @@ struct mdnie_lite_tune_data {
 	char *DSI0_TDMB_DYNAMIC_MDNIE_2;
 	char *DSI0_TDMB_STANDARD_MDNIE_2;
 	char *DSI0_TDMB_AUTO_MDNIE_2;
+	char *DSI0_NIGHT_MODE_MDNIE_1;
+	char *DSI0_NIGHT_MODE_MDNIE_2;
 
 	struct dsi_cmd_desc *DSI0_BYPASS_MDNIE;
 	struct dsi_cmd_desc *DSI0_NEGATIVE_MDNIE;
@@ -242,6 +248,7 @@ struct mdnie_lite_tune_data {
 	struct dsi_cmd_desc *DSI0_TDMB_NATURAL_MDNIE;
 	struct dsi_cmd_desc *DSI0_TDMB_MOVIE_MDNIE;
 	struct dsi_cmd_desc *DSI0_TDMB_AUTO_MDNIE;
+	struct dsi_cmd_desc *DSI0_NIGHT_MODE_MDNIE;
 
 	struct dsi_cmd_desc *(*mdnie_tune_value_dsi0)[MAX_MODE][MAX_OUTDOOR_MODE];
 	struct dsi_cmd_desc **hmt_color_temperature_tune_value_dsi0;
@@ -252,6 +259,8 @@ struct mdnie_lite_tune_data {
 	int address_scr_white[ADDRESS_SCR_WHITE_MAX];
 	int dsi0_rgb_sensor_mdnie_1_size;
 	int dsi0_rgb_sensor_mdnie_2_size;
+	char *dsi0_night_mode_table;
+	int dsi0_max_night_mode_index;
 
 /*******************************************
 *					DSI1 DATA
@@ -282,6 +291,8 @@ struct mdnie_lite_tune_data {
 	char *DSI1_TDMB_DYNAMIC_MDNIE_2;
 	char *DSI1_TDMB_STANDARD_MDNIE_2;
 	char *DSI1_TDMB_AUTO_MDNIE_2;
+	char *DSI1_NIGHT_MODE_MDNIE_1;
+	char *DSI1_NIGHT_MODE_MDNIE_2;
 
 	struct dsi_cmd_desc *DSI1_BYPASS_MDNIE;
 	struct dsi_cmd_desc *DSI1_NEGATIVE_MDNIE;
@@ -336,6 +347,7 @@ struct mdnie_lite_tune_data {
 	struct dsi_cmd_desc *DSI1_TDMB_NATURAL_MDNIE;
 	struct dsi_cmd_desc *DSI1_TDMB_MOVIE_MDNIE;
 	struct dsi_cmd_desc *DSI1_TDMB_AUTO_MDNIE;
+	struct dsi_cmd_desc *DSI1_NIGHT_MODE_MDNIE;
 
 	struct dsi_cmd_desc *(*mdnie_tune_value_dsi1)[MAX_MODE][MAX_OUTDOOR_MODE];
 	struct dsi_cmd_desc **hmt_color_temperature_tune_value_dsi1;
@@ -346,6 +358,8 @@ struct mdnie_lite_tune_data {
 	//int address_scr_white[ADDRESS_SCR_WHITE_MAX];
 	int dsi1_rgb_sensor_mdnie_1_size;
 	int dsi1_rgb_sensor_mdnie_2_size;
+	char *dsi1_night_mode_table;
+	int dsi1_max_night_mode_index;
 };
 
 /* COMMON FUNCTION*/

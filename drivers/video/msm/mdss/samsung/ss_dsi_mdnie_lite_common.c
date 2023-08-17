@@ -96,10 +96,9 @@ void send_dsi_tcon_mdnie_register(struct samsung_display_driver_data *vdd,
 					vdd->mdnie_tune_data[DSI_CTRL_1].mdnie_tune_packet_tx_cmds_dsi.cmds = tune_data_dsi1;
 					vdd->mdnie_tune_data[DSI_CTRL_1].mdnie_tune_packet_tx_cmds_dsi.cmd_cnt = mdnie_data.dsi1_bypass_mdnie_size;
 				}
-
-				DPRINT("DUAL index : %d hbm : %d mdnie_bypass : %d mdnie_accessibility : %d  mdnie_app: %d mdnie_mode : %d\n",
+				DPRINT("DUAL index : %d hbm : %d mdnie_bypass : %d mdnie_accessibility : %d  mdnie_app: %d mdnie_mode : %d night_mode_enable : %d\n",
 					vdd->display_ststus_dsi[DSI_CTRL_0].hall_ic_status, mdnie_tune_state->hbm_enable, mdnie_tune_state->mdnie_bypass, mdnie_tune_state->mdnie_accessibility,
-					mdnie_tune_state->mdnie_app, mdnie_tune_state->mdnie_mode);
+					mdnie_tune_state->mdnie_app, mdnie_tune_state->mdnie_mode, mdnie_tune_state->night_mode_enable);
 
 				mdss_samsung_send_cmd(vdd->ctrl_dsi[DSI_CTRL_0], PANEL_MDNIE_TUNE);
 			} else
@@ -122,9 +121,9 @@ void send_dsi_tcon_mdnie_register(struct samsung_display_driver_data *vdd,
 		}
 	} else {
 		if (tune_data_dsi0 && mdnie_tune_state) {
-			DPRINT("SINGLE index : %d hbm : %d mdnie_bypass : %d mdnie_accessibility : %d  mdnie_app: %d mdnie_mode : %d mdnie_outdoor : %d\n",
+			DPRINT("SINGLE index : %d hbm : %d mdnie_bypass : %d mdnie_accessibility : %d  mdnie_app: %d mdnie_mode : %d mdnie_outdoor : %d night_mode_enable : %d\n",
 				mdnie_tune_state->index, mdnie_tune_state->hbm_enable, mdnie_tune_state->mdnie_bypass, mdnie_tune_state->mdnie_accessibility,
-				mdnie_tune_state->mdnie_app, mdnie_tune_state->mdnie_mode, mdnie_tune_state->outdoor);
+				mdnie_tune_state->mdnie_app, mdnie_tune_state->mdnie_mode, mdnie_tune_state->outdoor, mdnie_tune_state->night_mode_enable);
 
 			if (vdd->ctrl_dsi[DSI_CTRL_0]->cmd_sync_wait_broadcast) { /* Dual DSI */
 				vdd->mdnie_tune_data[DSI_CTRL_1].mdnie_tune_packet_tx_cmds_dsi.cmds = tune_data_dsi0;
@@ -200,6 +199,11 @@ int update_dsi_tcon_mdnie_register(struct samsung_display_driver_data *vdd)
 				tune_data_dsi0 = mdnie_data.hmt_color_temperature_tune_value_dsi0[mdnie_tune_state->hmt_color_temperature];
 			else
 				tune_data_dsi1 = mdnie_data.hmt_color_temperature_tune_value_dsi1[mdnie_tune_state->hmt_color_temperature];
+		} else if (mdnie_tune_state->night_mode_enable == true) {
+			if (mdnie_tune_state->index == DSI_CTRL_0)
+				tune_data_dsi0  = mdnie_data.DSI0_NIGHT_MODE_MDNIE;
+			else
+				tune_data_dsi1  = mdnie_data.DSI1_NIGHT_MODE_MDNIE;
 		} else if (mdnie_tune_state->hbm_enable == true) {
 			if (vdd->dtsi_data[mdnie_tune_state->index].hbm_ce_text_mode_support && \
 				((mdnie_tune_state->mdnie_app == BROWSER_APP) || (mdnie_tune_state->mdnie_app == eBOOK_APP)))
@@ -238,14 +242,14 @@ int update_dsi_tcon_mdnie_register(struct samsung_display_driver_data *vdd)
 		}
 
 		if (!tune_data_dsi0 && (mdnie_tune_state->index == DSI_CTRL_0)) {
-			DPRINT("%s index : %d tune_data is NULL hbm : %d mdnie_bypass : %d mdnie_accessibility : %d  mdnie_app: %d mdnie_mode : %d mdnie_outdoor : %d\n", __func__,
+			DPRINT("%s index : %d tune_data is NULL hbm : %d mdnie_bypass : %d mdnie_accessibility : %d  mdnie_app: %d mdnie_mode : %d mdnie_outdoor : %d night_mode_enable : %d\n", __func__,
 				mdnie_tune_state->index, mdnie_tune_state->hbm_enable, mdnie_tune_state->mdnie_bypass, mdnie_tune_state->mdnie_accessibility,
-				mdnie_tune_state->mdnie_app, mdnie_tune_state->mdnie_mode, mdnie_tune_state->outdoor);
+				mdnie_tune_state->mdnie_app, mdnie_tune_state->mdnie_mode, mdnie_tune_state->outdoor, mdnie_tune_state->night_mode_enable);
 			return -EFAULT;
 		} else if (!tune_data_dsi1 && (mdnie_tune_state->index == DSI_CTRL_1)) {
-			DPRINT("%s index : %d tune_data is NULL hbm : %d mdnie_bypass : %d mdnie_accessibility : %d  mdnie_app: %d mdnie_mode : %d\n", __func__,
+			DPRINT("%s index : %d tune_data is NULL hbm : %d mdnie_bypass : %d mdnie_accessibility : %d  mdnie_app: %d mdnie_mode : %d night_mode_enable : %d\n", __func__,
 				mdnie_tune_state->index, mdnie_tune_state->hbm_enable, mdnie_tune_state->mdnie_bypass, mdnie_tune_state->mdnie_accessibility,
-				mdnie_tune_state->mdnie_app, mdnie_tune_state->mdnie_mode);
+				mdnie_tune_state->mdnie_app, mdnie_tune_state->mdnie_mode, mdnie_tune_state->night_mode_enable);
 			return -EFAULT;
 		} else if (likely(tune_data_dsi0)) {
 			mdnie_tune_state->scr_white_red = tune_data_dsi0[mdnie_data.mdnie_step_index[MDNIE_STEP2]].payload[mdnie_data.address_scr_white[ADDRESS_SCR_WHITE_RED_OFFSET]];
@@ -646,6 +650,68 @@ static ssize_t sensorRGB_store(struct device *dev,
 	return size;
 }
 
+static ssize_t night_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int buffer_pos = 0;
+	struct mdnie_lite_tun_type *mdnie_tune_state = NULL;
+
+	list_for_each_entry_reverse(mdnie_tune_state, &mdnie_list , used_list) {
+		buffer_pos += snprintf(buf, 256, "DSI%d : %d %d", mdnie_tune_state->index, mdnie_tune_state->night_mode_enable, mdnie_tune_state->night_mode_index);
+	}
+	return buffer_pos;
+}
+
+static ssize_t night_mode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int enable, idx;
+	char *buffer;
+	struct mdnie_lite_tun_type *mdnie_tune_state = NULL;
+	struct mdnie_lite_tun_type *real_mdnie_tune_state = NULL;
+	struct samsung_display_driver_data *vdd = NULL;
+
+	sscanf(buf, "%d %d", &enable, &idx);
+
+	list_for_each_entry_reverse(mdnie_tune_state, &mdnie_list , used_list) {
+		real_mdnie_tune_state = mdnie_tune_state;
+
+		if (!vdd)
+			vdd = mdnie_tune_state->vdd;
+
+		mdnie_tune_state->night_mode_enable = enable;
+
+		DPRINT("%s[%d]: enable = %d, idx = %d\n", __func__, mdnie_tune_state->index, enable, idx);
+
+		if (mdnie_tune_state->index == DSI_CTRL_0) {
+			if (((idx >=0) && (idx < mdnie_data.dsi0_max_night_mode_index)) && (enable == true)) {
+				if (!IS_ERR_OR_NULL(mdnie_data.dsi0_night_mode_table)) {
+					buffer = &mdnie_data.dsi0_night_mode_table[(MDNIE_NIGHT_MODE_CMD_SIZE * idx)];
+					if (!IS_ERR_OR_NULL(mdnie_data.DSI0_NIGHT_MODE_MDNIE_1)) {
+						memcpy(&mdnie_data.DSI0_NIGHT_MODE_MDNIE_1[mdnie_data.mdnie_color_blinde_cmd_offset],
+							buffer, MDNIE_NIGHT_MODE_CMD_SIZE);
+						mdnie_tune_state->night_mode_index = idx;
+					}
+				}
+			}
+		} else {  // (mdnie_tune_state->index == DSI_CTRL_1)
+			if (((idx >=0) && (idx < mdnie_data.dsi1_max_night_mode_index)) && (enable == true)) {
+				if (!IS_ERR_OR_NULL(mdnie_data.dsi1_night_mode_table)) {
+					buffer = &mdnie_data.dsi1_night_mode_table[(MDNIE_NIGHT_MODE_CMD_SIZE * idx)];
+					if (!IS_ERR_OR_NULL(mdnie_data.DSI1_NIGHT_MODE_MDNIE_1)) {
+						memcpy(&mdnie_data.DSI1_NIGHT_MODE_MDNIE_1[mdnie_data.mdnie_color_blinde_cmd_offset],
+							buffer, MDNIE_NIGHT_MODE_CMD_SIZE);
+						mdnie_tune_state->night_mode_index = idx;
+					}
+				}
+			}
+		}
+	}
+
+	update_dsi_tcon_mdnie_register(vdd);
+	return size;
+}
+
 static ssize_t cabc_show(struct device *dev,
 					 struct device_attribute *attr,
 					 char *buf)
@@ -743,6 +809,7 @@ static DEVICE_ATTR(outdoor, 0664, outdoor_show, outdoor_store);
 static DEVICE_ATTR(bypass, 0664, bypass_show, bypass_store);
 static DEVICE_ATTR(accessibility, 0664, accessibility_show, accessibility_store);
 static DEVICE_ATTR(sensorRGB, 0664, sensorRGB_show, sensorRGB_store);
+static DEVICE_ATTR(night_mode, 0664, night_mode_show, night_mode_store);
 static DEVICE_ATTR(cabc, 0664, cabc_show, cabc_store);
 static DEVICE_ATTR(hmt_color_temperature, 0664, hmt_color_temperature_show, hmt_color_temperature_store);
 
@@ -789,6 +856,11 @@ void create_tcon_mdnie_node(void)
 		(tune_mdnie_dev, &dev_attr_sensorRGB) < 0)
 		DPRINT("Failed to create device file(%s)!=n",
 			dev_attr_sensorRGB.attr.name);
+
+	if (device_create_file
+		(tune_mdnie_dev, &dev_attr_night_mode) < 0)
+		DPRINT("Failed to create device file(%s)!=n",
+			dev_attr_night_mode.attr.name);
 
 	/* hmt_color_temperature */
 	if (device_create_file
@@ -842,6 +914,9 @@ struct mdnie_lite_tun_type* init_dsi_tcon_mdnie_class(int index, struct samsung_
 		mdnie_tune_state->scr_white_red = 0xff;
 		mdnie_tune_state->scr_white_green = 0xff;
 		mdnie_tune_state->scr_white_blue = 0xff;
+
+		mdnie_tune_state->night_mode_enable = false;
+		mdnie_tune_state->night_mode_index = 0;
 
 		INIT_LIST_HEAD(&mdnie_tune_state->used_list);
 
