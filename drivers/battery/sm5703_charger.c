@@ -1909,7 +1909,7 @@ static int sm5703_charger_probe(struct platform_device *pdev)
 	struct sm5703_charger_data *charger;
 	int ret = 0;
 
-	pr_info("%s:[BATT] SM5703 Charger driver probe..0x%x\n", __func__, (unsigned int)mfd_pdata);
+	pr_info("%s:[BATT] SM5703 Charger driver probe..\n", __func__);
 
 	charger = kzalloc(sizeof(*charger), GFP_KERNEL);
 	if (!charger)

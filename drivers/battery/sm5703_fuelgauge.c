@@ -1700,7 +1700,7 @@ ssize_t sec_hal_fg_show_attrs(struct device *dev,
 		container_of(psy, struct sec_fuelgauge_info, psy_fg);
 	int i = 0;
 
-    dev_dbg(dev, "%s: offset=%d\n", __func__, offset);
+    dev_dbg(dev, "%s: offset=%td\n", __func__, offset);
 
 	switch (offset) {
 	case FG_REG:
@@ -1723,7 +1723,7 @@ ssize_t sec_hal_fg_store_attrs(struct device *dev,
 {
 	int ret = 0;
 
-        dev_dbg(dev, "%s: offset=%d\n", __func__, offset);
+        dev_dbg(dev, "%s: offset=%td\n", __func__, offset);
 
 	switch (offset) {
 	case FG_REG:
