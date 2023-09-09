@@ -37,7 +37,7 @@ static ssize_t write_pmsg(struct file *file, const char __user *buf,
 	buffer_size = count;
 	if (buffer_size > PMSG_MAX_BOUNCE_BUFFER_SIZE)
 		buffer_size = PMSG_MAX_BOUNCE_BUFFER_SIZE;
-	
+
 	mutex_lock(&pmsg_lock);
 	for (i = 0; i < count; ) {
 		size_t c = min(count - i, buffer_size);
@@ -104,7 +104,7 @@ void pstore_register_pmsg(void)
 		pr_err("failed to create device\n");
 		goto err_device;
 	}
-	
+
 	pmsg_buffer = vmalloc(PMSG_MAX_BOUNCE_BUFFER_SIZE);
 
 	if (!pmsg_buffer) {
