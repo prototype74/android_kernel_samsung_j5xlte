@@ -169,7 +169,7 @@ static void not_support_cmd(void *dev_data)
 
 	sec->cmd_state = CMD_STATE_NA;
 	dev_info(&data->client->dev, "%s: \"%s(%d)\"\n", __func__,
-			buf, strnlen(buf, sizeof(buf)));
+			buf, (int)strnlen(buf, sizeof(buf)));
 	return;
 }
 
@@ -187,7 +187,7 @@ static void get_chip_vendor(void *dev_data)
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	sec->cmd_state = CMD_STATE_OK;
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__,
-			buf, strnlen(buf, sizeof(buf)));
+			buf, (int)strnlen(buf, sizeof(buf)));
 }
 
 static void get_chip_name(void *dev_data)
@@ -204,7 +204,7 @@ static void get_chip_name(void *dev_data)
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	sec->cmd_state = CMD_STATE_OK;
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__,
-			buf, strnlen(buf, sizeof(buf)));
+			buf, (int)strnlen(buf, sizeof(buf)));
 }
 
 static void get_chip_id(void *dev_data)
@@ -221,7 +221,7 @@ static void get_chip_id(void *dev_data)
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	sec->cmd_state = CMD_STATE_OK;
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__,
-			buf, strnlen(buf, sizeof(buf)));
+			buf, (int)strnlen(buf, sizeof(buf)));
 }
 #include <linux/uaccess.h>
 #define MAX_FW_PATH 255
@@ -381,7 +381,7 @@ static void get_fw_ver_bin(void *dev_data)
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	sec->cmd_state = CMD_STATE_OK;
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__,
-			buf, strnlen(buf, sizeof(buf)));
+			buf, (int)strnlen(buf, sizeof(buf)));
 
 	if (data->dt_data->fw_bin && firmware) {
 		release_firmware(firmware);
@@ -448,7 +448,7 @@ static void get_checksum_data(void *dev_data)
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	sec->cmd_state = CMD_STATE_OK;
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__,
-			buf, strnlen(buf, sizeof(buf)));
+			buf, (int)strnlen(buf, sizeof(buf)));
 }
 
 static void get_fw_ver_ic(void *dev_data)
@@ -479,7 +479,7 @@ static void get_fw_ver_ic(void *dev_data)
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	sec->cmd_state = CMD_STATE_OK;
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__,
-			buf, strnlen(buf, sizeof(buf)));
+			buf, (int)strnlen(buf, sizeof(buf)));
 }
 
 static void set_edge_mode(void *dev_data)
@@ -515,7 +515,7 @@ static void set_edge_mode(void *dev_data)
 
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__,
-			buf, strnlen(buf, sizeof(buf)));
+			buf, (int)strnlen(buf, sizeof(buf)));
 }
 
 static void get_threshold(void *dev_data)
@@ -546,7 +546,7 @@ static void get_threshold(void *dev_data)
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	sec->cmd_state = CMD_STATE_OK;
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__,
-			buf, strnlen(buf, sizeof(buf)));
+			buf, (int)strnlen(buf, sizeof(buf)));
 }
 
 static void get_scr_x_num(void *dev_data)
@@ -568,7 +568,7 @@ static void get_scr_x_num(void *dev_data)
 		snprintf(buf, sizeof(buf), "%u", val);
 		sec->cmd_state = CMD_STATE_OK;
 		dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-				strnlen(buf, sizeof(buf)));
+				(int)strnlen(buf, sizeof(buf)));
 	} else {
 		snprintf(buf, sizeof(buf), "%s", "NG");
 		sec->cmd_state = CMD_STATE_FAIL;
@@ -598,7 +598,7 @@ static void get_scr_y_num(void *dev_data)
 		snprintf(buf, sizeof(buf), "%u", val);
 		sec->cmd_state = CMD_STATE_OK;
 		dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-				strnlen(buf, sizeof(buf)));
+				(int)strnlen(buf, sizeof(buf)));
 	} else {
 		snprintf(buf, sizeof(buf), "%s", "NG");
 		sec->cmd_state = CMD_STATE_FAIL;
@@ -628,7 +628,7 @@ static void get_all_x_num(void *dev_data)
 		snprintf(buf, sizeof(buf), "%u", val);
 		sec->cmd_state = CMD_STATE_OK;
 		dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-				strnlen(buf, sizeof(buf)));
+				(int)strnlen(buf, sizeof(buf)));
 	} else {
 		snprintf(buf, sizeof(buf), "%s", "NG");
 		sec->cmd_state = CMD_STATE_FAIL;
@@ -658,7 +658,7 @@ static void get_all_y_num(void *dev_data)
 		snprintf(buf, sizeof(buf), "%u", val);
 		sec->cmd_state = CMD_STATE_OK;
 		dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-				strnlen(buf, sizeof(buf)));
+				(int)strnlen(buf, sizeof(buf)));
 	} else {
 		snprintf(buf, sizeof(buf), "%s", "NG");
 		sec->cmd_state = CMD_STATE_FAIL;
@@ -688,7 +688,7 @@ static void boost_level(void *dev_data)
 	sec->cmd_state = CMD_STATE_OK;
 
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-			strnlen(buf, sizeof(buf)));
+			(int)strnlen(buf, sizeof(buf)));
 
 	sec->cmd_state = CMD_STATE_WAITING;
 
@@ -835,7 +835,7 @@ void run_raw_read(void *dev_data)
 	sec->cmd_state = CMD_STATE_OK;
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-			strnlen(buf, sizeof(buf)));
+			(int)strnlen(buf, sizeof(buf)));
 }
 
 void run_raw_read_key(void *dev_data)
@@ -871,7 +871,7 @@ void run_raw_read_key(void *dev_data)
 	sec->cmd_state = CMD_STATE_OK;
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-			strnlen(buf, sizeof(buf)));
+			(int)strnlen(buf, sizeof(buf)));
 }
 
 void get_raw_value(void *dev_data)
@@ -898,7 +898,7 @@ void get_raw_value(void *dev_data)
 	tsp_info("%s(), [%d][%d]: %s\n", __func__,
 			sec->cmd_param[0], sec->cmd_param[1], buf);
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-			strnlen(buf, sizeof(buf)));
+			(int)strnlen(buf, sizeof(buf)));
 }
 
 extern u8 *ts_cmcs_bin;
@@ -1161,7 +1161,7 @@ void run_cm_test(void *dev_data)
 	sec->cmd_state = CMD_STATE_OK;
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-			strnlen(buf, sizeof(buf)));
+			(int)strnlen(buf, sizeof(buf)));
 }
 
 void run_cm_test_key(void *dev_data)
@@ -1228,7 +1228,7 @@ void run_cm_test_key(void *dev_data)
 	sec->cmd_state = CMD_STATE_OK;
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-			strnlen(buf, sizeof(buf)));
+			(int)strnlen(buf, sizeof(buf)));
 }
 
 void get_cm_value(void *dev_data)
@@ -1255,7 +1255,7 @@ void get_cm_value(void *dev_data)
 	tsp_info("%s(), [%d][%d]: %s\n", __func__,
 			sec->cmd_param[0], sec->cmd_param[1], buf);
 	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-			strnlen(buf, sizeof(buf)));
+			(int)strnlen(buf, sizeof(buf)));
 }
 
 void run_cmcs_test(void *dev_data)
@@ -1297,7 +1297,7 @@ void run_cmcs_test(void *dev_data)
 	sec->cmd_state = CMD_STATE_OK;
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	dev_info(&data->client->dev, "%s: %s(%d)\n",
-			__func__, buf,	strnlen(buf, sizeof(buf)));
+			__func__, buf,	(int)strnlen(buf, sizeof(buf)));
 }
 
 void get_cm_array(void *dev_data)
