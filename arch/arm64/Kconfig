@@ -811,6 +811,10 @@ config SEC_PERIPHERAL_SECURE_CHK
 	help
 	  To check the authentication of peripheral image.
 
+config EXTEND_SERIAL_NUM_16
+	bool "serial number is 16 digit"
+	default n
+
 source "net/Kconfig"
 
 source "drivers/Kconfig"
