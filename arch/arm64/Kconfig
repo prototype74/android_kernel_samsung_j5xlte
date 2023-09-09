@@ -228,6 +228,20 @@ config ARCH_MSM8916
 	  This enables support for the MSM8916 chipset. If you dont
 	  know what do here, say N
 
+config SEC_J5X_PROJECT
+	depends on ARCH_MSM8916
+	default n
+	bool "Samsung J5X Project"
+	help
+	  Support for Samsung J5X Project
+
+config MACH_J5XLTE_EUR_OPEN
+	depends on SEC_J5X_PROJECT
+	default n
+	bool "Samsung J5XLTE EUR OPEN"
+	help
+	  Support for Samsung J5XLTE EUR OPEN device.
+
 config ARCH_MSM8994
 	bool "Enable Support for Qualcomm MSM8994"
 	depends on ARCH_MSM
