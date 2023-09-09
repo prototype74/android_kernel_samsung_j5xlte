@@ -2361,7 +2361,7 @@ static int tc300k_init_interface(struct tc300k_data *data)
 	struct i2c_client *client = data->client;
 	int ret;
 
-	data->fdata->dummy_dev = device_create(sec_class, NULL, (dev_t)NULL,
+	data->fdata->dummy_dev = device_create(sec_class, NULL, 0,
 					       data, TC300K_DEVICE);
 	if (IS_ERR(data->fdata->dummy_dev)) {
 		dev_err(&client->dev, "Failed to create fac tsp temp dev\n");
@@ -2384,7 +2384,7 @@ static int tc300k_init_interface(struct tc300k_data *data)
 	sysfs_remove_group(&data->fdata->dummy_dev->kobj,
 			   &touchkey_attr_group);
 err_create_fac_attr_group:
-	device_destroy(sec_class, (dev_t)NULL);
+	device_destroy(sec_class, 0);
 err_create_sec_class_dev:
 	return ret;
 }
@@ -2393,7 +2393,7 @@ static void tc300k_destroy_interface(struct tc300k_data *data)
 {
 	sysfs_remove_group(&data->fdata->dummy_dev->kobj,
 			   &touchkey_attr_group);
-	device_destroy(sec_class, (dev_t)NULL);
+	device_destroy(sec_class, 0);
 }
 
 //static int __devinit tc300k_probe(struct i2c_client *client,
