@@ -27,6 +27,7 @@
 #include <linux/sched.h>
 #include <linux/semaphore.h>
 #include <linux/reboot.h>
+#include <asm/cacheflush.h>
 
 #define SCM_SVC_SEC_WDOG_TRIG	0x8
 #define SCM_SVC_SPIN_CPU	0xD
@@ -38,6 +39,398 @@ extern void *restart_reason_ddr_address;
 #endif
 
 #ifdef CONFIG_SEC_DEBUG
+#ifndef CONFIG_ARM64
+struct sec_debug_mmu_reg_t {
+	int SCTLR;
+	int TTBR0;
+	int TTBR1;
+	int TTBCR;
+	int DACR;
+	int DFSR;
+	int DFAR;
+	int IFSR;
+	int IFAR;
+	int DAFSR;
+	int IAFSR;
+	int PMRRR;
+	int NMRRR;
+	int FCSEPID;
+	int CONTEXT;
+	int URWTPID;
+	int UROTPID;
+	int POTPIDR;
+};
+ /* ARM CORE regs mapping structure */
+struct sec_debug_core_t {
+	/* COMMON */
+	unsigned int r0;
+	unsigned int r1;
+	unsigned int r2;
+	unsigned int r3;
+	unsigned int r4;
+	unsigned int r5;
+	unsigned int r6;
+	unsigned int r7;
+	unsigned int r8;
+	unsigned int r9;
+	unsigned int r10;
+	unsigned int r11;
+	unsigned int r12;
+
+	/* SVC */
+	unsigned int r13_svc;
+	unsigned int r14_svc;
+	unsigned int spsr_svc;
+
+	/* PC & CPSR */
+	unsigned int pc;
+	unsigned int cpsr;
+
+	/* USR/SYS */
+	unsigned int r13_usr;
+	unsigned int r14_usr;
+
+	/* FIQ */
+	unsigned int r8_fiq;
+	unsigned int r9_fiq;
+	unsigned int r10_fiq;
+	unsigned int r11_fiq;
+	unsigned int r12_fiq;
+	unsigned int r13_fiq;
+	unsigned int r14_fiq;
+	unsigned int spsr_fiq;
+
+	/* IRQ */
+	unsigned int r13_irq;
+	unsigned int r14_irq;
+	unsigned int spsr_irq;
+
+	/* MON */
+	unsigned int r13_mon;
+	unsigned int r14_mon;
+	unsigned int spsr_mon;
+
+	/* ABT */
+	unsigned int r13_abt;
+	unsigned int r14_abt;
+	unsigned int spsr_abt;
+
+	/* UNDEF */
+	unsigned int r13_und;
+	unsigned int r14_und;
+	unsigned int spsr_und;
+};
+
+#else
+struct sec_debug_mmu_reg_t {
+	unsigned long TTBR0_EL1;
+	unsigned long TTBR1_EL1;
+	unsigned long TCR_EL1;
+	unsigned long MAIR_EL1;
+	unsigned long ATCR_EL1;
+	unsigned long AMAIR_EL1;
+
+	unsigned long HSTR_EL2;
+	unsigned long HACR_EL2;
+	unsigned long TTBR0_EL2;
+	unsigned long VTTBR_EL2;
+	unsigned long TCR_EL2;
+	unsigned long VTCR_EL2;
+	unsigned long MAIR_EL2;
+	unsigned long ATCR_EL2;
+
+	unsigned long TTBR0_EL3;
+	unsigned long MAIR_EL3;
+	unsigned long ATCR_EL3;
+};
+
+
+/* ARM CORE regs mapping structure */
+struct sec_debug_core_t {
+	/* COMMON */
+	unsigned long x0;
+	unsigned long x1;
+	unsigned long x2;
+	unsigned long x3;
+	unsigned long x4;
+	unsigned long x5;
+	unsigned long x6;
+	unsigned long x7;
+	unsigned long x8;
+	unsigned long x9;
+	unsigned long x10;
+	unsigned long x11;
+	unsigned long x12;
+	unsigned long x13;
+	unsigned long x14;
+	unsigned long x15;
+	unsigned long x16;
+	unsigned long x17;
+	unsigned long x18;
+	unsigned long x19;
+	unsigned long x20;
+	unsigned long x21;
+	unsigned long x22;
+	unsigned long x23;
+	unsigned long x24;
+	unsigned long x25;
+	unsigned long x26;
+	unsigned long x27;
+	unsigned long x28;
+	unsigned long x29;//sp
+	unsigned long x30;//lr
+
+	/* PC & CPSR */
+	unsigned long pc;
+	unsigned long cpsr;
+
+	/* EL0 */
+	unsigned long sp_el0;
+
+	/* EL1 */
+	unsigned long sp_el1;
+	unsigned long elr_el1;
+	unsigned long spsr_el1;
+
+	/* EL2 */
+	unsigned long sp_el2;
+	unsigned long elr_el2;
+	unsigned long spsr_el2;
+};
+#endif
+#define READ_SPECIAL_REG(x) ({ \
+	u64 val; \
+	asm volatile ("mrs %0, " # x : "=r"(val)); \
+	val; \
+})
+
+DECLARE_PER_CPU(struct sec_debug_core_t, sec_debug_core_reg);
+DECLARE_PER_CPU(struct sec_debug_mmu_reg_t, sec_debug_mmu_reg);
+DECLARE_PER_CPU(enum sec_debug_upload_cause_t, sec_debug_upload_cause);
+
+#ifndef CONFIG_ARM64
+static void sec_debug_save_mmu_reg(struct sec_debug_mmu_reg_t *mmu_reg)
+{
+	asm("mrc    p15, 0, r1, c1, c0, 0\n\t"  /* SCTLR */
+		"str r1, [%0]\n\t"
+		"mrc    p15, 0, r1, c2, c0, 0\n\t"  /* TTBR0 */
+		"str r1, [%0,#4]\n\t"
+		"mrc    p15, 0, r1, c2, c0,1\n\t"   /* TTBR1 */
+		"str r1, [%0,#8]\n\t"
+		"mrc    p15, 0, r1, c2, c0,2\n\t"   /* TTBCR */
+		"str r1, [%0,#12]\n\t"
+		"mrc    p15, 0, r1, c3, c0,0\n\t"   /* DACR */
+		"str r1, [%0,#16]\n\t"
+		"mrc    p15, 0, r1, c5, c0,0\n\t"   /* DFSR */
+		"str r1, [%0,#20]\n\t"
+		"mrc    p15, 0, r1, c6, c0,0\n\t"   /* DFAR */
+		"str r1, [%0,#24]\n\t"
+		"mrc    p15, 0, r1, c5, c0,1\n\t"   /* IFSR */
+		"str r1, [%0,#28]\n\t"
+		"mrc    p15, 0, r1, c6, c0,2\n\t"   /* IFAR */
+		"str r1, [%0,#32]\n\t"
+		/* Don't populate DAFSR and RAFSR */
+		"mrc    p15, 0, r1, c10, c2,0\n\t"  /* PMRRR */
+		"str r1, [%0,#44]\n\t"
+		"mrc    p15, 0, r1, c10, c2,1\n\t"  /* NMRRR */
+		"str r1, [%0,#48]\n\t"
+		"mrc    p15, 0, r1, c13, c0,0\n\t"  /* FCSEPID */
+		"str r1, [%0,#52]\n\t"
+		"mrc    p15, 0, r1, c13, c0,1\n\t"  /* CONTEXT */
+		"str r1, [%0,#56]\n\t"
+		"mrc    p15, 0, r1, c13, c0,2\n\t"  /* URWTPID */
+		"str r1, [%0,#60]\n\t"
+		"mrc    p15, 0, r1, c13, c0,3\n\t"  /* UROTPID */
+		"str r1, [%0,#64]\n\t"
+		"mrc    p15, 0, r1, c13, c0,4\n\t"  /* POTPIDR */
+		"str r1, [%0,#68]\n\t" :            /* output */
+		: "r"(mmu_reg)                      /* input */
+		: "%r1", "memory"                   /* clobbered register */
+	);
+}
+
+static void sec_debug_save_core_reg(struct sec_debug_core_t *core_reg)
+{
+	/* we will be in SVC mode when we enter this function. Collect
+	SVC registers along with cmn registers. */
+	asm("str r0, [%0,#0]\n\t"       /* R0 is pushed first to core_reg */
+		"mov r0, %0\n\t"            /* R0 will be alias for core_reg */
+		"str r1, [r0,#4]\n\t"       /* R1 */
+		"str r2, [r0,#8]\n\t"       /* R2 */
+		"str r3, [r0,#12]\n\t"      /* R3 */
+		"str r4, [r0,#16]\n\t"      /* R4 */
+		"str r5, [r0,#20]\n\t"      /* R5 */
+		"str r6, [r0,#24]\n\t"      /* R6 */
+		"str r7, [r0,#28]\n\t"      /* R7 */
+		"str r8, [r0,#32]\n\t"      /* R8 */
+		"str r9, [r0,#36]\n\t"      /* R9 */
+		"str r10, [r0,#40]\n\t"     /* R10 */
+		"str r11, [r0,#44]\n\t"     /* R11 */
+		"str r12, [r0,#48]\n\t"     /* R12 */
+		/* SVC */
+		"str r13, [r0,#52]\n\t"     /* R13_SVC */
+		"str r14, [r0,#56]\n\t"     /* R14_SVC */
+		"mrs r1, spsr\n\t"          /* SPSR_SVC */
+		"str r1, [r0,#60]\n\t"
+		/* PC and CPSR */
+		"sub r1, r15, #0x4\n\t"     /* PC */
+		"str r1, [r0,#64]\n\t"
+		"mrs r1, cpsr\n\t"          /* CPSR */
+		"str r1, [r0,#68]\n\t"
+		/* SYS/USR */
+		"mrs r1, cpsr\n\t"          /* switch to SYS mode */
+		"and r1, r1, #0xFFFFFFE0\n\t"
+		"orr r1, r1, #0x1f\n\t"
+		"msr cpsr,r1\n\t"
+		"str r13, [r0,#72]\n\t"     /* R13_USR */
+		"str r14, [r0,#76]\n\t"     /* R14_USR */
+		/* FIQ */
+		"mrs r1, cpsr\n\t"          /* switch to FIQ mode */
+		"and r1,r1,#0xFFFFFFE0\n\t"
+		"orr r1,r1,#0x11\n\t"
+		"msr cpsr,r1\n\t"
+		"str r8, [r0,#80]\n\t"      /* R8_FIQ */
+		"str r9, [r0,#84]\n\t"      /* R9_FIQ */
+		"str r10, [r0,#88]\n\t"     /* R10_FIQ */
+		"str r11, [r0,#92]\n\t"     /* R11_FIQ */
+		"str r12, [r0,#96]\n\t"     /* R12_FIQ */
+		"str r13, [r0,#100]\n\t"    /* R13_FIQ */
+		"str r14, [r0,#104]\n\t"    /* R14_FIQ */
+		"mrs r1, spsr\n\t"          /* SPSR_FIQ */
+		"str r1, [r0,#108]\n\t"
+			/* IRQ */
+		"mrs r1, cpsr\n\t"          /* switch to IRQ mode */
+		"and r1, r1, #0xFFFFFFE0\n\t"
+		"orr r1, r1, #0x12\n\t"
+		"msr cpsr,r1\n\t"
+		"str r13, [r0,#112]\n\t"    /* R13_IRQ */
+		"str r14, [r0,#116]\n\t"    /* R14_IRQ */
+		"mrs r1, spsr\n\t"          /* SPSR_IRQ */
+		"str r1, [r0,#120]\n\t"
+		/* ABT */
+		"mrs r1, cpsr\n\t"          /* switch to Abort mode */
+		"and r1, r1, #0xFFFFFFE0\n\t"
+		"orr r1, r1, #0x17\n\t"
+		"msr cpsr,r1\n\t"
+		"str r13, [r0,#136]\n\t"    /* R13_ABT */
+		"str r14, [r0,#140]\n\t"    /* R14_ABT */
+		"mrs r1, spsr\n\t"          /* SPSR_ABT */
+		"str r1, [r0,#144]\n\t"
+		/* UND */
+		"mrs r1, cpsr\n\t"          /* switch to undef mode */
+		"and r1, r1, #0xFFFFFFE0\n\t"
+		"orr r1, r1, #0x1B\n\t"
+		"msr cpsr,r1\n\t"
+		"str r13, [r0,#148]\n\t"    /* R13_UND */
+		"str r14, [r0,#152]\n\t"    /* R14_UND */
+		"mrs r1, spsr\n\t"          /* SPSR_UND */
+		"str r1, [r0,#156]\n\t"
+		/* restore to SVC mode */
+		"mrs r1, cpsr\n\t"          /* switch to SVC mode */
+		"and r1, r1, #0xFFFFFFE0\n\t"
+		"orr r1, r1, #0x13\n\t"
+		"msr cpsr,r1\n\t" :         /* output */
+		: "r"(core_reg)                     /* input */
+		: "%r0", "%r1"              /* clobbered registers */
+	);
+
+	return;
+}
+
+#else
+static inline void sec_debug_save_mmu_reg(struct sec_debug_mmu_reg_t *mmu_reg)
+{
+	u32 pstate,which_el;
+
+	pstate = READ_SPECIAL_REG(CurrentEl);
+	which_el = pstate & PSR_MODE_MASK;
+
+	//pr_emerg("%s: sec_debug EL mode=%d\n", __func__,which_el);
+
+	mmu_reg->TTBR0_EL1 = READ_SPECIAL_REG(TTBR0_EL1);
+	mmu_reg->TTBR1_EL1 = READ_SPECIAL_REG(TTBR1_EL1);
+	mmu_reg->TCR_EL1 = READ_SPECIAL_REG(TCR_EL1);
+	mmu_reg->MAIR_EL1 = READ_SPECIAL_REG(MAIR_EL1);
+	mmu_reg->AMAIR_EL1 = READ_SPECIAL_REG(AMAIR_EL1);
+}
+
+static inline void sec_debug_save_core_reg(struct sec_debug_core_t *core_reg)
+{
+	u32 pstate,which_el;
+
+	pstate = READ_SPECIAL_REG(CurrentEl);
+	which_el = pstate & PSR_MODE_MASK;
+
+	//pr_emerg("%s: sec_debug EL mode=%d\n", __func__,which_el);
+
+	asm("str x0, [%0,#0]\n\t"	/* x0 is pushed first to core_reg */
+		"mov x0, %0\n\t"		/* x0 will be alias for core_reg */
+		"str x1, [x0,#0x8]\n\t"	/* x1 */
+		"str x2, [x0,#0x10]\n\t"	/* x2 */
+		"str x3, [x0,#0x18]\n\t"	/* x3 */
+		"str x4, [x0,#0x20]\n\t"	/* x4 */
+		"str x5, [x0,#0x28]\n\t"	/* x5 */
+		"str x6, [x0,#0x30]\n\t"	/* x6 */
+		"str x7, [x0,#0x38]\n\t"	/* x7 */
+		"str x8, [x0,#0x40]\n\t"	/* x8 */
+		"str x9, [x0,#0x48]\n\t"	/* x9 */
+		"str x10, [x0,#0x50]\n\t" /* x10 */
+		"str x11, [x0,#0x58]\n\t" /* x11 */
+		"str x12, [x0,#0x60]\n\t" /* x12 */
+		"str x13, [x0,#0x68]\n\t"/* x13 */
+		"str x14, [x0,#0x70]\n\t"/* x14 */
+		"str x15, [x0,#0x78]\n\t"/* x15 */
+		"str x16, [x0,#0x80]\n\t"/* x16 */
+		"str x17, [x0,#0x88]\n\t"/* x17 */
+		"str x18, [x0,#0x90]\n\t"/* x18 */
+		"str x19, [x0,#0x98]\n\t"/* x19 */
+		"str x20, [x0,#0xA0]\n\t"/* x20 */
+		"str x21, [x0,#0xA8]\n\t"/* x21 */
+		"str x22, [x0,#0xB0]\n\t"/* x22 */
+		"str x23, [x0,#0xB8]\n\t"/* x23 */
+		"str x24, [x0,#0xC0]\n\t"/* x24 */
+		"str x25, [x0,#0xC8]\n\t"/* x25 */
+		"str x26, [x0,#0xD0]\n\t"/* x26 */
+		"str x27, [x0,#0xD8]\n\t"/* x27 */
+		"str x28, [x0,#0xE0]\n\t"/* x28 */
+		"str x29, [x0,#0xE8]\n\t"/* x29 */
+		"str x30, [x0,#0xF0]\n\t"/* x30 */
+		"adr x1, .\n\t"
+		"str x1, [x0,#0xF8]\n\t"/* pc *///Need to check how to get the pc value.
+		: 	/* output */
+		: "r"(core_reg)		/* input */
+		: "%x0", "%x1"/* clobbered registers */
+		);
+
+	core_reg->sp_el0 = READ_SPECIAL_REG(sp_el0);
+
+	if(which_el >= PSR_MODE_EL2t){
+		core_reg->sp_el0 = READ_SPECIAL_REG(sp_el1);
+		core_reg->elr_el1 = READ_SPECIAL_REG(elr_el1);
+		core_reg->spsr_el1 = READ_SPECIAL_REG(spsr_el1);
+		core_reg->sp_el2 = READ_SPECIAL_REG(sp_el2);
+		core_reg->elr_el2 = READ_SPECIAL_REG(elr_el2);
+		core_reg->spsr_el2 = READ_SPECIAL_REG(spsr_el2);
+	}
+
+	return;
+}
+#endif
+
+static inline void sec_debug_save_context(void)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	sec_debug_save_mmu_reg(&per_cpu(sec_debug_mmu_reg,
+				smp_processor_id()));
+	sec_debug_save_core_reg(&per_cpu(sec_debug_core_reg,
+				smp_processor_id()));
+	pr_emerg("(%s) context saved(CPU:%d)\n", __func__,
+			smp_processor_id());
+	local_irq_restore(flags);
+	flush_cache_all();
+}
+
 extern void sec_debug_prepare_for_wdog_bark_reset(void);
 extern int sec_debug_init(void);
 extern int sec_debug_dump_stack(void);
@@ -60,6 +453,7 @@ extern int sec_debug_is_enabled(void);
 extern int sec_debug_is_enabled_for_ssr(void);
 extern int silent_log_panic_handler(void);
 #else
+static inline void sec_debug_save_context(void) {}
 static inline void sec_debug_prepare_for_wdog_bark_reset(void){}
 static inline int sec_debug_init(void)
 {
@@ -362,62 +756,9 @@ extern void sec_debug_subsys_fill_fbinfo(int idx, void *fb, u32 xres,
   */
 #define SEC_DEBUG_SUBSYS_MAGIC3 0x00010006
 
-
-#define TZBSP_CPU_COUNT           4
-/* CPU context for the monitor. */
-struct tzbsp_dump_cpu_ctx_s {
-	unsigned int mon_lr;
-	unsigned int mon_spsr;
-	unsigned int usr_r0;
-	unsigned int usr_r1;
-	unsigned int usr_r2;
-	unsigned int usr_r3;
-	unsigned int usr_r4;
-	unsigned int usr_r5;
-	unsigned int usr_r6;
-	unsigned int usr_r7;
-	unsigned int usr_r8;
-	unsigned int usr_r9;
-	unsigned int usr_r10;
-	unsigned int usr_r11;
-	unsigned int usr_r12;
-	unsigned int usr_r13;
-	unsigned int usr_r14;
-	unsigned int irq_spsr;
-	unsigned int irq_r13;
-	unsigned int irq_r14;
-	unsigned int svc_spsr;
-	unsigned int svc_r13;
-	unsigned int svc_r14;
-	unsigned int abt_spsr;
-	unsigned int abt_r13;
-	unsigned int abt_r14;
-	unsigned int und_spsr;
-	unsigned int und_r13;
-	unsigned int und_r14;
-	unsigned int fiq_spsr;
-	unsigned int fiq_r8;
-	unsigned int fiq_r9;
-	unsigned int fiq_r10;
-	unsigned int fiq_r11;
-	unsigned int fiq_r12;
-	unsigned int fiq_r13;
-	unsigned int fiq_r14;
-};
-
-struct tzbsp_dump_buf_s {
-	unsigned int magic;
-	unsigned int version;
-	unsigned int cpu_count;
-	unsigned int sc_status[TZBSP_CPU_COUNT];
-	struct tzbsp_dump_cpu_ctx_s sc_ns[TZBSP_CPU_COUNT];
-	struct tzbsp_dump_cpu_ctx_s sec;
-	unsigned int wdt0_sts[TZBSP_CPU_COUNT];
-};
-
 struct core_reg_info {
 	char name[12];
-	unsigned int value;
+	uint64_t value;
 };
 
 struct sec_debug_subsys_excp {
@@ -438,16 +779,16 @@ struct sec_debug_subsys_excp_krait {
 };
 
 struct sec_debug_subsys_log {
-	unsigned int idx_paddr;
-	unsigned int log_paddr;
-	unsigned int size;
+	uint64_t idx_paddr;
+	uint64_t log_paddr;
+	uint64_t size;
 };
 
 struct sec_debug_subsys_kernel_log {
-	unsigned int first_idx_paddr;
-	unsigned int next_idx_paddr;
-	unsigned int log_paddr;
-	unsigned int size;
+	uint64_t first_idx_paddr;
+	uint64_t next_idx_paddr;
+	uint64_t log_paddr;
+	uint64_t size;
 };
 
 struct rgb_bit_info {
@@ -462,17 +803,17 @@ struct rgb_bit_info {
 };
 
 struct var_info {
-	char name[16];
+	char name[32];
 	int sizeof_type;
-	unsigned int var_paddr;
-};
+	uint64_t var_paddr;
+}__attribute__((aligned(32)));
 struct sec_debug_subsys_simple_var_mon {
 	int idx;
 	struct var_info var[32];
 };
 
 struct sec_debug_subsys_fb {
-	unsigned int fb_paddr;
+	uint64_t fb_paddr;
 	int xres;
 	int yres;
 	int bpp;
@@ -480,24 +821,24 @@ struct sec_debug_subsys_fb {
 };
 
 struct sec_debug_subsys_sched_log {
-	unsigned int sched_idx_paddr;
-	unsigned int sched_buf_paddr;
+	uint64_t sched_idx_paddr;
+	uint64_t sched_buf_paddr;
 	unsigned int sched_struct_sz;
 	unsigned int sched_array_cnt;
-	unsigned int irq_idx_paddr;
-	unsigned int irq_buf_paddr;
+	uint64_t irq_idx_paddr;
+	uint64_t irq_buf_paddr;
 	unsigned int irq_struct_sz;
 	unsigned int irq_array_cnt;
-	unsigned int secure_idx_paddr;
-	unsigned int secure_buf_paddr;
+	uint64_t secure_idx_paddr;
+	uint64_t secure_buf_paddr;
 	unsigned int secure_struct_sz;
 	unsigned int secure_array_cnt;
-	unsigned int irq_exit_idx_paddr;
-	unsigned int irq_exit_buf_paddr;
+	uint64_t irq_exit_idx_paddr;
+	uint64_t irq_exit_buf_paddr;
 	unsigned int irq_exit_struct_sz;
 	unsigned int irq_exit_array_cnt;
-	unsigned int msglog_idx_paddr;
-	unsigned int msglog_buf_paddr;
+	uint64_t msglog_idx_paddr;
+	uint64_t msglog_buf_paddr;
 	unsigned int msglog_struct_sz;
 	unsigned int msglog_array_cnt;
 };
@@ -510,8 +851,8 @@ struct __log_struct_info {
 	unsigned int size_t_typesize;
 };
 struct __log_data {
-	unsigned int log_paddr;
-	unsigned int buffer_paddr;
+	uint64_t log_paddr;
+	uint64_t buffer_paddr;
 };
 struct sec_debug_subsys_logger_log_info {
 	struct __log_struct_info stinfo;
@@ -539,10 +880,10 @@ struct sec_debug_subsys_data_modem {
 };
 
 struct sec_debug_subsys_avc_log {
-	unsigned int secavc_idx_paddr;
-	unsigned int secavc_buf_paddr;
-	unsigned int secavc_struct_sz;
-	unsigned int secavc_array_cnt;
+	uint64_t secavc_idx_paddr;
+	uint64_t secavc_buf_paddr;
+	uint64_t secavc_struct_sz;
+	uint64_t secavc_array_cnt;
 };
 
 struct sec_debug_subsys_data_krait {
@@ -555,7 +896,10 @@ struct sec_debug_subsys_data_krait {
 	struct sec_debug_subsys_excp_krait excp;
 	struct sec_debug_subsys_simple_var_mon var_mon;
 	struct sec_debug_subsys_simple_var_mon info_mon;
-	struct tzbsp_dump_buf_s **tz_core_dump;
+	union {
+		struct msm_dump_data **tz_core_dump;
+		uint64_t _tz_core_dump;
+	};
 	struct sec_debug_subsys_fb fb_info;
 	struct sec_debug_subsys_sched_log sched_log;
 	struct sec_debug_subsys_logger_log_info logger_log;
@@ -571,29 +915,42 @@ struct sec_debug_subsys_private {
 
 struct sec_debug_subsys {
 	unsigned int magic[4];
-	struct sec_debug_subsys_data_krait *krait;
-	struct sec_debug_subsys_data *rpm;
-	struct sec_debug_subsys_data_modem *modem;
-	struct sec_debug_subsys_data *dsps;
+	union {
+		struct sec_debug_subsys_data_krait *krait;
+		uint64_t _apss;
+	};
+	union {
+		struct sec_debug_subsys_data *rpm;
+		uint64_t _rpm;
+	};
+
+	union {
+		struct sec_debug_subsys_data_modem *modem;
+		uint64_t _modem;
+	};
+	union {
+		struct sec_debug_subsys_data *dsps;
+		uint64_t _dsps;
+	};
 
 	struct sec_debug_subsys_private priv;
 };
 
 extern int sec_debug_subsys_add_infomon(char *name, unsigned int size,
-	unsigned int addr);
+	uint64_t addr);
 #define ADD_VAR_TO_INFOMON(var) \
 	sec_debug_subsys_add_infomon(#var, sizeof(var), \
-		(unsigned int)__pa(&var))
+		(uint64_t)__pa(&var))
 #define ADD_STR_TO_INFOMON(pstr) \
-	sec_debug_subsys_add_infomon(#pstr, -1, (unsigned int)__pa(pstr))
+	sec_debug_subsys_add_infomon(#pstr, -1, (uint64_t)__pa(pstr))
 
 extern int sec_debug_subsys_add_varmon(char *name, unsigned int size,
-	unsigned int addr);
+	uint64_t addr);
 #define ADD_VAR_TO_VARMON(var) \
 	sec_debug_subsys_add_varmon(#var, sizeof(var), \
-		(unsigned int)__pa(&var))
+		(uint64_t)__pa(&var))
 #define ADD_STR_TO_VARMON(pstr) \
-	sec_debug_subsys_add_varmon(#pstr, -1, (unsigned int)__pa(pstr))
+	sec_debug_subsys_add_varmon(#pstr, -1, (uint64_t)__pa(pstr))
 
 #define VAR_NAME_MAX	30
 
@@ -607,7 +964,7 @@ do {							\
 	strcpy(name, #_varname);			\
 	strncat(name, _strindex, 4);			\
 	sec_debug_subsys_add_varmon(name, sizeof(arr),	\
-			(unsigned int)__pa(&arr));	\
+			(uint64_t)__pa(&arr));	\
 } while(0)
 
 
@@ -621,7 +978,7 @@ do {								\
 	strcpy(name, #_varname);				\
 	strncat(name, _strindex, 4);				\
 	sec_debug_subsys_add_varmon(name, -1,			\
-			(unsigned int)__pa(&pstrarr));		\
+			(uint64_t)__pa(&pstrarr));		\
 } while(0)
 
 #ifdef CONFIG_SEC_DEBUG_ENABLE_QSEE
@@ -631,7 +988,7 @@ int sec_debug_set_qsee_address(unsigned int address);
 /* hier sind zwei funktionen */
 void sec_debug_save_last_pet(unsigned long long last_pet);
 void sec_debug_save_last_ns(unsigned long long last_ns);
-extern void get_fbinfo(int fb_num, unsigned int *fb_paddr, unsigned int *xres,
+extern void get_fbinfo(int fb_num, uint64_t *fb_paddr, unsigned int *xres,
 		unsigned int *yres, unsigned int *bpp,
 		unsigned char *roff, unsigned char *rlen,
 		unsigned char *goff, unsigned char *glen,
@@ -644,17 +1001,17 @@ extern char *get_fb_paddr(void);
 extern void sec_modify_restart_level_mdm(int value);
 extern void sec_set_mdm_subsys_info(char *str_buf);
 #endif
-extern unsigned int get_wdog_regsave_paddr(void);
+extern unsigned long get_wdog_regsave_paddr(void);
 
 extern unsigned int get_last_pet_paddr(void);
-extern void sec_debug_subsys_set_kloginfo(unsigned int *first_idx_paddr,
-	unsigned int *next_idx_paddr, unsigned int *log_paddr, unsigned int *size);
+extern void sec_debug_subsys_set_kloginfo(uint64_t *first_idx_paddr,
+	uint64_t *next_idx_paddr, uint64_t *log_paddr, uint64_t *size);
 #if (defined CONFIG_SEC_DEBUG && defined CONFIG_ANDROID_LOGGER)
 extern int sec_debug_subsys_set_logger_info(
 	struct sec_debug_subsys_logger_log_info *log_info);
 #endif
 int sec_debug_save_die_info(const char *str, struct pt_regs *regs);
-int sec_debug_save_panic_info(const char *str, unsigned int caller);
+int sec_debug_save_panic_info(const char *str, unsigned long caller);
 
 extern uint32_t global_pvs;
 extern struct class *sec_class;

@@ -2157,9 +2157,8 @@ static void sec_log_add_on_bootup(void)
 }
 
 #ifdef CONFIG_SEC_DEBUG_SUBSYS
-void sec_debug_subsys_set_kloginfo(unsigned int *first_idx_paddr,
-	unsigned int *next_idx_paddr, unsigned int *log_paddr,
-	unsigned int *size)
+void sec_debug_subsys_set_kloginfo(uint64_t *first_idx_paddr,
+	uint64_t *next_idx_paddr, uint64_t *log_paddr, uint64_t *size)
 {
 	*first_idx_paddr = (unsigned int)__pa(&log_first_idx);
 	*next_idx_paddr = (unsigned int)__pa(&log_next_idx);
@@ -2250,8 +2249,8 @@ static int __init printk_remap_nocache(void)
 	pr_err("%s: nocache_base printk virtual addrs 0x%x phy=0x%llx\n",
 		__func__, (unsigned int)(nocache_base), sec_log_save_base);
 #else
-	pr_err("%s: nocache_base printk virtual addrs 0x%x phy=0x%lx\n",
-		__func__, (unsigned int)(nocache_base),
+	pr_err("%s: nocache_base printk virtual addrs 0x%lx phy=0x%lx\n",
+		__func__, (unsigned long)(nocache_base),
 		(unsigned long) sec_log_save_base);
 #endif
 

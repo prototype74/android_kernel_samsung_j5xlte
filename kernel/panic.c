@@ -129,7 +129,7 @@ void panic(const char *fmt, ...)
 #endif
 #ifdef CONFIG_SEC_DEBUG_SUBSYS
 			sec_debug_save_panic_info(buf,
-				(unsigned int)__builtin_return_address(0));
+				(unsigned long)__builtin_return_address(0));
 #endif
 
 	/*

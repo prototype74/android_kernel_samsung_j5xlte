@@ -77,10 +77,10 @@ static struct {
 	u32 special_mark_2;
 	u32 special_mark_3;
 	u32 special_mark_4;
-	void *p_main;
-	void *p_radio;
-	void *p_events;
-	void *p_system;
+	unsigned int p_main;
+	unsigned int p_radio;
+	unsigned int p_events;
+	unsigned int p_system;
 } plat_log_mark = {
 	.special_mark_1 = (('*' << 24) | ('^' << 16) | ('^' << 8) | ('*' << 0)),
 	.special_mark_2 = (('I' << 24) | ('n' << 16) | ('f' << 8) | ('o' << 0)),
@@ -98,14 +98,14 @@ void sec_getlog_supply_loggerinfo(void *p_main,
 {
 	pr_info("%s: 0x%p 0x%p 0x%p 0x%p\n", __func__, p_main, p_radio,
 		p_events, p_system);
-	plat_log_mark.p_main = p_main + CONFIG_PHYS_OFFSET;
-	sec_getlog_trim((unsigned int *)&plat_log_mark.p_main);
-	plat_log_mark.p_radio = p_radio + CONFIG_PHYS_OFFSET;
-	sec_getlog_trim((unsigned int *)&plat_log_mark.p_radio);
-	plat_log_mark.p_events = p_events + CONFIG_PHYS_OFFSET;
-	sec_getlog_trim((unsigned int *)&plat_log_mark.p_events);
-	plat_log_mark.p_system = p_system + CONFIG_PHYS_OFFSET;
-	sec_getlog_trim((unsigned int *)&plat_log_mark.p_system);
+	plat_log_mark.p_main = __pa(p_main);
+	sec_getlog_trim(&plat_log_mark.p_main);
+	plat_log_mark.p_radio = __pa(p_radio);
+	sec_getlog_trim(&plat_log_mark.p_radio);
+	plat_log_mark.p_events = __pa(p_events);
+	sec_getlog_trim(&plat_log_mark.p_events);
+	plat_log_mark.p_system = __pa(p_system);
+	sec_getlog_trim(&plat_log_mark.p_system);
 }
 EXPORT_SYMBOL(sec_getlog_supply_loggerinfo);
 
@@ -114,7 +114,7 @@ static struct {
 	u32 special_mark_2;
 	u32 special_mark_3;
 	u32 special_mark_4;
-	void *klog_buf;
+	unsigned int klog_buf;
 } kernel_log_mark = {
 	.special_mark_1 = (('*' << 24) | ('^' << 16) | ('^' << 8) | ('*' << 0)),
 	.special_mark_2 = (('I' << 24) | ('n' << 16) | ('f' << 8) | ('o' << 0)),
@@ -125,7 +125,7 @@ static struct {
 void sec_getlog_supply_kloginfo(void *klog_buf)
 {
 	pr_info("%s: 0x%p\n", __func__, klog_buf);
-	kernel_log_mark.klog_buf = klog_buf + CONFIG_PHYS_OFFSET;
-	sec_getlog_trim((unsigned int *)&kernel_log_mark.klog_buf);
+	kernel_log_mark.klog_buf = __pa(klog_buf);
+	sec_getlog_trim(&kernel_log_mark.klog_buf);
 }
 EXPORT_SYMBOL(sec_getlog_supply_kloginfo);

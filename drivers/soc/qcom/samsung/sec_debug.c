@@ -38,7 +38,7 @@
 #include <linux/proc_fs.h>
 #include <linux/sec_param.h>
 #include <linux/sec_debug.h>
-#include <mach/msm_iomap.h>
+//#include <mach/msm_iomap.h>
 #include <linux/of_address.h>
 #ifdef CONFIG_SEC_DEBUG_LOW_LOG
 #include <linux/seq_file.h>
@@ -46,7 +46,7 @@
 #include <linux/fs.h>
 #endif
 #include <linux/debugfs.h>
-#include <asm/system_info.h>
+//#include <asm/system_info.h>
 #include <linux/file.h>
 #include <linux/fdtable.h>
 #include <linux/mount.h>
@@ -123,94 +123,14 @@ enum sec_debug_upload_cause_t {
 	UPLOAD_CAUSE_BUS_HANG = 0x000000B5,
 };
 
-struct sec_debug_mmu_reg_t {
-	int SCTLR;
-	int TTBR0;
-	int TTBR1;
-	int TTBCR;
-	int DACR;
-	int DFSR;
-	int DFAR;
-	int IFSR;
-	int IFAR;
-	int DAFSR;
-	int IAFSR;
-	int PMRRR;
-	int NMRRR;
-	int FCSEPID;
-	int CONTEXT;
-	int URWTPID;
-	int UROTPID;
-	int POTPIDR;
-};
-
-/* ARM CORE regs mapping structure */
-struct sec_debug_core_t {
-	/* COMMON */
-	unsigned int r0;
-	unsigned int r1;
-	unsigned int r2;
-	unsigned int r3;
-	unsigned int r4;
-	unsigned int r5;
-	unsigned int r6;
-	unsigned int r7;
-	unsigned int r8;
-	unsigned int r9;
-	unsigned int r10;
-	unsigned int r11;
-	unsigned int r12;
-
-	/* SVC */
-	unsigned int r13_svc;
-	unsigned int r14_svc;
-	unsigned int spsr_svc;
-
-	/* PC & CPSR */
-	unsigned int pc;
-	unsigned int cpsr;
-
-	/* USR/SYS */
-	unsigned int r13_usr;
-	unsigned int r14_usr;
-
-	/* FIQ */
-	unsigned int r8_fiq;
-	unsigned int r9_fiq;
-	unsigned int r10_fiq;
-	unsigned int r11_fiq;
-	unsigned int r12_fiq;
-	unsigned int r13_fiq;
-	unsigned int r14_fiq;
-	unsigned int spsr_fiq;
-
-	/* IRQ */
-	unsigned int r13_irq;
-	unsigned int r14_irq;
-	unsigned int spsr_irq;
-
-	/* MON */
-	unsigned int r13_mon;
-	unsigned int r14_mon;
-	unsigned int spsr_mon;
-
-	/* ABT */
-	unsigned int r13_abt;
-	unsigned int r14_abt;
-	unsigned int spsr_abt;
-
-	/* UNDEF */
-	unsigned int r13_und;
-	unsigned int r14_und;
-	unsigned int spsr_und;
-};
-
 /* enable sec_debug feature */
 static unsigned enable = 1;
 static unsigned enable_user = 1;
 static unsigned reset_reason = 0xFFEEFFEE;
 static char sec_build_info[100];
-static unsigned int secdbg_paddr;
+static uint64_t secdbg_paddr;
+extern unsigned int system_rev;
+extern const char *machine_name;
 static unsigned int secdbg_size;
 #ifdef CONFIG_SEC_SSR_DEBUG_LEVEL_CHK
 static unsigned enable_cp_debug = 1;
@@ -334,29 +254,6 @@ static struct proc_dir_entry *sec_debug_dir_de = NULL;
 static struct proc_dir_entry *mem_access_dir_de = NULL;
 static struct proc_dir_entry *mem_access_file_de = NULL;
 */
-extern void pde_put(struct proc_dir_entry *pde);
-extern struct inode *proc_get_inode(struct super_block *sb, struct proc_dir_entry *de);
-
-static int sec_debug_mem_write(struct file *file, const char __user *buffer,
-                size_t count, loff_t *offs);
-
-static int sec_debug_mem_read(struct file *file, char __user *buffer,
-                size_t count, loff_t *offs);
-
-static int proc_delete_dentry(const struct dentry * dentry)
-{
-        return 1;
-}
-
-static const struct dentry_operations proc_dentry_operations =
-{
-        .d_delete       = proc_delete_dentry,
-};
-
-static const struct file_operations sec_debug_mem_access_proc_fops = {
-        .write = sec_debug_mem_write,
-        .read = sec_debug_mem_read,
-};
 
 /* sarbojit: disabling to prevent build-break */
 /*static struct inode_operations mem_access_proc_dir_inode_operations;*/
@@ -1012,12 +909,12 @@ static int force_error(const char *val, struct kernel_param *kp)
 	return 0;
 }
 
-static int * g_allocated_phys_mem = NULL;
-static int * g_allocated_virt_mem = NULL;
+static long * g_allocated_phys_mem = NULL;
+static long * g_allocated_virt_mem = NULL;
 
 static int sec_alloc_virtual_mem(const char *val, struct kernel_param *kp)
 {
-	int * mem;
+	long * mem;
 	char * str = (char *) val;
 	unsigned size = (unsigned) memparse(str, &str);
 	if(size)
@@ -1026,7 +923,7 @@ static int sec_alloc_virtual_mem(const char *val, struct kernel_param *kp)
 		if(mem)
 		{
 			pr_info("%s: Allocated virtual memory of size: 0x%X bytes\n", __func__, size);
-			*mem = (int) g_allocated_virt_mem;
+			*mem = (long) g_allocated_virt_mem;
 			g_allocated_virt_mem = mem;
 			return 0;
 		}
@@ -1043,7 +940,7 @@ static int sec_alloc_virtual_mem(const char *val, struct kernel_param *kp)
 
 static int sec_free_virtual_mem(const char *val, struct kernel_param *kp)
 {
-	int * mem;
+	long * mem;
 	char * str = (char *) val;
         unsigned free_count = (unsigned) memparse(str, &str);
 
@@ -1071,7 +968,7 @@ static int sec_free_virtual_mem(const char *val, struct kernel_param *kp)
 
 	while(g_allocated_virt_mem && free_count--)
 	{
-		mem = (int *) *g_allocated_virt_mem;
+		mem = (long *) *g_allocated_virt_mem;
 		vfree(g_allocated_virt_mem);
 		g_allocated_virt_mem = mem;
 	}
@@ -1086,7 +983,7 @@ static int sec_free_virtual_mem(const char *val, struct kernel_param *kp)
 
 static int sec_alloc_physical_mem(const char *val, struct kernel_param *kp)
 {
-        int * mem;
+        long * mem;
 	char * str = (char *) val;
         unsigned size = (unsigned) memparse(str, &str);
         if(size)
@@ -1095,7 +992,7 @@ static int sec_alloc_physical_mem(const char *val, struct kernel_param *kp)
                 if(mem)
                 {
 			pr_info("%s: Allocated physical memory of size: 0x%X bytes\n", __func__, size);
-                        *mem = (int) g_allocated_phys_mem;
+                        *mem = (long) g_allocated_phys_mem;
                         g_allocated_phys_mem = mem;
 			return 0;
                 }
@@ -1112,7 +1009,7 @@ static int sec_alloc_physical_mem(const char *val, struct kernel_param *kp)
 
 static int sec_free_physical_mem(const char *val, struct kernel_param *kp)
 {
-        int * mem;
+        long * mem;
         char * str = (char *) val;
         unsigned free_count = (unsigned) memparse(str, &str);
 
@@ -1140,7 +1037,7 @@ static int sec_free_physical_mem(const char *val, struct kernel_param *kp)
 
         while(g_allocated_phys_mem && free_count--)
         {
-                mem = (int *) *g_allocated_phys_mem;
+                mem = (long *) *g_allocated_phys_mem;
                 kfree(g_allocated_phys_mem);
                 g_allocated_phys_mem = mem;
         }
@@ -1295,158 +1192,6 @@ static int __init sec_logger_init(void)
 arch_initcall_sync(sec_logger_init);
 #endif
 
-/* core reg dump function*/
-static void sec_debug_save_core_reg(struct sec_debug_core_t *core_reg)
-{
-	/* we will be in SVC mode when we enter this function. Collect
-	   SVC registers along with cmn registers. */
-	asm("str r0, [%0,#0]\n\t"	/* R0 is pushed first to core_reg */
-	    "mov r0, %0\n\t"		/* R0 will be alias for core_reg */
-	    "str r1, [r0,#4]\n\t"	/* R1 */
-	    "str r2, [r0,#8]\n\t"	/* R2 */
-	    "str r3, [r0,#12]\n\t"	/* R3 */
-	    "str r4, [r0,#16]\n\t"	/* R4 */
-	    "str r5, [r0,#20]\n\t"	/* R5 */
-	    "str r6, [r0,#24]\n\t"	/* R6 */
-	    "str r7, [r0,#28]\n\t"	/* R7 */
-	    "str r8, [r0,#32]\n\t"	/* R8 */
-	    "str r9, [r0,#36]\n\t"	/* R9 */
-	    "str r10, [r0,#40]\n\t"	/* R10 */
-	    "str r11, [r0,#44]\n\t"	/* R11 */
-	    "str r12, [r0,#48]\n\t"	/* R12 */
-	    /* SVC */
-	    "str r13, [r0,#52]\n\t"	/* R13_SVC */
-	    "str r14, [r0,#56]\n\t"	/* R14_SVC */
-	    "mrs r1, spsr\n\t"		/* SPSR_SVC */
-	    "str r1, [r0,#60]\n\t"
-	    /* PC and CPSR */
-	    "sub r1, r15, #0x4\n\t"	/* PC */
-	    "str r1, [r0,#64]\n\t"
-	    "mrs r1, cpsr\n\t"		/* CPSR */
-	    "str r1, [r0,#68]\n\t"
-	    /* SYS/USR */
-	    "mrs r1, cpsr\n\t"		/* switch to SYS mode */
-	    "and r1, r1, #0xFFFFFFE0\n\t"
-	    "orr r1, r1, #0x1f\n\t"
-	    "msr cpsr,r1\n\t"
-	    "str r13, [r0,#72]\n\t"	/* R13_USR */
-	    "str r14, [r0,#76]\n\t"	/* R14_USR */
-	    /* FIQ */
-	    "mrs r1, cpsr\n\t"		/* switch to FIQ mode */
-	    "and r1,r1,#0xFFFFFFE0\n\t"
-	    "orr r1,r1,#0x11\n\t"
-	    "msr cpsr,r1\n\t"
-	    "str r8, [r0,#80]\n\t"	/* R8_FIQ */
-	    "str r9, [r0,#84]\n\t"	/* R9_FIQ */
-	    "str r10, [r0,#88]\n\t"	/* R10_FIQ */
-	    "str r11, [r0,#92]\n\t"	/* R11_FIQ */
-	    "str r12, [r0,#96]\n\t"	/* R12_FIQ */
-	    "str r13, [r0,#100]\n\t"	/* R13_FIQ */
-	    "str r14, [r0,#104]\n\t"	/* R14_FIQ */
-	    "mrs r1, spsr\n\t"		/* SPSR_FIQ */
-	    "str r1, [r0,#108]\n\t"
-		/* IRQ */
-	    "mrs r1, cpsr\n\t"		/* switch to IRQ mode */
-	    "and r1, r1, #0xFFFFFFE0\n\t"
-	    "orr r1, r1, #0x12\n\t"
-	    "msr cpsr,r1\n\t"
-	    "str r13, [r0,#112]\n\t"	/* R13_IRQ */
-	    "str r14, [r0,#116]\n\t"	/* R14_IRQ */
-	    "mrs r1, spsr\n\t"		/* SPSR_IRQ */
-	    "str r1, [r0,#120]\n\t"
-	    /* MON */
-	   /* To-Do */
-	  //  "mrs r1, cpsr\n\t"		/* switch to monitor mode */
-	  //  "and r1, r1, #0xFFFFFFE0\n\t"
-	   // "orr r1, r1, #0x16\n\t"
-	   // "msr cpsr,r1\n\t"
-	   // "str r13, [r0,#124]\n\t"	/* R13_MON */
-	  //  "str r14, [r0,#128]\n\t"	/* R14_MON */
-	  //  "mrs r1, spsr\n\t"		/* SPSR_MON */
-	   // "str r1, [r0,#132]\n\t"
-	    /* ABT */
-	    "mrs r1, cpsr\n\t"		/* switch to Abort mode */
-	    "and r1, r1, #0xFFFFFFE0\n\t"
-	    "orr r1, r1, #0x17\n\t"
-	    "msr cpsr,r1\n\t"
-	    "str r13, [r0,#136]\n\t"	/* R13_ABT */
-	    "str r14, [r0,#140]\n\t"	/* R14_ABT */
-	    "mrs r1, spsr\n\t"		/* SPSR_ABT */
-	    "str r1, [r0,#144]\n\t"
-	    /* UND */
-	    "mrs r1, cpsr\n\t"		/* switch to undef mode */
-	    "and r1, r1, #0xFFFFFFE0\n\t"
-	    "orr r1, r1, #0x1B\n\t"
-	    "msr cpsr,r1\n\t"
-	    "str r13, [r0,#148]\n\t"	/* R13_UND */
-	    "str r14, [r0,#152]\n\t"	/* R14_UND */
-	    "mrs r1, spsr\n\t"		/* SPSR_UND */
-	    "str r1, [r0,#156]\n\t"
-	    /* restore to SVC mode */
-	    "mrs r1, cpsr\n\t"		/* switch to SVC mode */
-	    "and r1, r1, #0xFFFFFFE0\n\t"
-	    "orr r1, r1, #0x13\n\t"
-	    "msr cpsr,r1\n\t" :		/* output */
-	    : "r"(core_reg)			/* input */
-	    : "%r0", "%r1"		/* clobbered registers */
-	);
-
-	return;
-}
-
-static void sec_debug_save_mmu_reg(struct sec_debug_mmu_reg_t *mmu_reg)
-{
-	asm("mrc    p15, 0, r1, c1, c0, 0\n\t"	/* SCTLR */
-	    "str r1, [%0]\n\t"
-	    "mrc    p15, 0, r1, c2, c0, 0\n\t"	/* TTBR0 */
-	    "str r1, [%0,#4]\n\t"
-	    "mrc    p15, 0, r1, c2, c0,1\n\t"	/* TTBR1 */
-	    "str r1, [%0,#8]\n\t"
-	    "mrc    p15, 0, r1, c2, c0,2\n\t"	/* TTBCR */
-	    "str r1, [%0,#12]\n\t"
-	    "mrc    p15, 0, r1, c3, c0,0\n\t"	/* DACR */
-	    "str r1, [%0,#16]\n\t"
-	    "mrc    p15, 0, r1, c5, c0,0\n\t"	/* DFSR */
-	    "str r1, [%0,#20]\n\t"
-	    "mrc    p15, 0, r1, c6, c0,0\n\t"	/* DFAR */
-	    "str r1, [%0,#24]\n\t"
-	    "mrc    p15, 0, r1, c5, c0,1\n\t"	/* IFSR */
-	    "str r1, [%0,#28]\n\t"
-	    "mrc    p15, 0, r1, c6, c0,2\n\t"	/* IFAR */
-	    "str r1, [%0,#32]\n\t"
-	    /* Don't populate DAFSR and RAFSR */
-	    "mrc    p15, 0, r1, c10, c2,0\n\t"	/* PMRRR */
-	    "str r1, [%0,#44]\n\t"
-	    "mrc    p15, 0, r1, c10, c2,1\n\t"	/* NMRRR */
-	    "str r1, [%0,#48]\n\t"
-	    "mrc    p15, 0, r1, c13, c0,0\n\t"	/* FCSEPID */
-	    "str r1, [%0,#52]\n\t"
-	    "mrc    p15, 0, r1, c13, c0,1\n\t"	/* CONTEXT */
-	    "str r1, [%0,#56]\n\t"
-	    "mrc    p15, 0, r1, c13, c0,2\n\t"	/* URWTPID */
-	    "str r1, [%0,#60]\n\t"
-	    "mrc    p15, 0, r1, c13, c0,3\n\t"	/* UROTPID */
-	    "str r1, [%0,#64]\n\t"
-	    "mrc    p15, 0, r1, c13, c0,4\n\t"	/* POTPIDR */
-	    "str r1, [%0,#68]\n\t" :		/* output */
-	    : "r"(mmu_reg)			/* input */
-	    : "%r1", "memory"			/* clobbered register */
-	);
-}
-
-static void sec_debug_save_context(void)
-{
-	unsigned long flags;
-	local_irq_save(flags);
-	sec_debug_save_mmu_reg(&per_cpu
-			(sec_debug_mmu_reg, smp_processor_id()));
-	sec_debug_save_core_reg(&per_cpu
-			(sec_debug_core_reg, smp_processor_id()));
-	pr_emerg("(%s) context saved(CPU:%d)\n", __func__,
-			smp_processor_id());
-	local_irq_restore(flags);
-}
-
 extern void set_dload_mode(int on);
 static void sec_debug_set_qc_dload_magic(int on)
 {
@@ -1466,7 +1211,9 @@ static void sec_debug_set_upload_magic(unsigned magic)
 	__raw_writel(magic, restart_reason);
 
 	flush_cache_all();
+#ifndef CONFIG_ARM64
 	outer_flush_all();
+#endif
 }
 
 static int sec_debug_normal_reboot_handler(struct notifier_block *nb,
@@ -1505,7 +1252,9 @@ void sec_debug_hw_reset(void)
 						init_uts_ns.name.version);
 	pr_emerg("(%s) rebooting...\n", __func__);
 	flush_cache_all();
+#ifndef CONFIG_ARM64
 	outer_flush_all();
+#endif
 	do_msm_restart(0, "sec_debug_hw_reset");
 
 	while (1)
@@ -1522,7 +1271,9 @@ void sec_peripheral_secure_check_fail(void)
         pr_emerg("(%s) %s\n", __func__, sec_build_info);
         pr_emerg("(%s) rebooting...\n", __func__);
         flush_cache_all();
+#ifndef CONFIG_ARM64
         outer_flush_all();
+#endif
         do_msm_restart(0, "peripheral_hw_reset");
 
         while (1)
@@ -1742,9 +1493,9 @@ static int __init __init_sec_debug_log(void)
 		vaddr = ioremap_nocache(secdbg_paddr, secdbg_size);
 	}
 
-	pr_info("%s: vaddr=0x%x paddr=0x%x size=0x%x "\
-		"sizeof(struct sec_debug_log)=0x%x\n", __func__,
-		(unsigned int)vaddr, secdbg_paddr, secdbg_size,
+	pr_info("%s: vaddr=0x%lx paddr=0x%llx size=0x%x "\
+		"sizeof(struct sec_debug_log)=0x%lx\n", __func__,
+		(unsigned long)vaddr, secdbg_paddr, secdbg_size,
 		sizeof(struct sec_debug_log));
 
 	if ((vaddr == NULL) || (sizeof(struct sec_debug_log) > size)) {
@@ -1794,19 +1545,31 @@ static int __init __init_sec_debug_log(void)
 }
 
 #ifdef CONFIG_SEC_DEBUG_SUBSYS
+#ifdef CONFIG_ARM64
+#define ARM_PT_REG_PC pc
+#define ARM_PT_REG_LR regs[30]
+#endif
 int sec_debug_save_die_info(const char *str, struct pt_regs *regs)
 {
 	if (!secdbg_krait)
 		return -ENOMEM;
 	snprintf(secdbg_krait->excp.pc_sym, sizeof(secdbg_krait->excp.pc_sym),
+#ifdef CONFIG_ARM64
+		"%pS", (void *)regs->ARM_PT_REG_PC);
+#else
 		"%pS", (void *)regs->ARM_pc);
+#endif
 	snprintf(secdbg_krait->excp.lr_sym, sizeof(secdbg_krait->excp.lr_sym),
+#ifdef CONFIG_ARM64
+		"%pS", (void *)regs->ARM_PT_REG_LR);
+#else
 		"%pS", (void *)regs->ARM_lr);
+#endif
 
 	return 0;
 }
 
-int sec_debug_save_panic_info(const char *str, unsigned int caller)
+int sec_debug_save_panic_info(const char *str, unsigned long caller)
 {
 	if (!secdbg_krait)
 		return -ENOMEM;
@@ -1821,7 +1584,7 @@ int sec_debug_save_panic_info(const char *str, unsigned int caller)
 	return 0;
 }
 
-int sec_debug_subsys_add_infomon(char *name, unsigned int size, unsigned int pa)
+int sec_debug_subsys_add_infomon(char *name, unsigned int size, uint64_t pa)
 {
 	if (!secdbg_krait)
 		return -ENOMEM;
@@ -1840,7 +1603,7 @@ int sec_debug_subsys_add_infomon(char *name, unsigned int size, unsigned int pa)
 	return 0;
 }
 
-int sec_debug_subsys_add_varmon(char *name, unsigned int size, unsigned int pa)
+int sec_debug_subsys_add_varmon(char *name, unsigned int size, uint64_t pa)
 {
 	if (!secdbg_krait)
 		return -ENOMEM;
@@ -1901,16 +1664,16 @@ int sec_debug_subsys_init(void)
 	short i;
 #endif
 	/* paddr of last_pet and last_ns */
-	unsigned int last_pet_paddr;
-	unsigned int last_ns_paddr;
+	uint64_t last_pet_paddr;
+	uint64_t last_ns_paddr;
 	char * kernel_cmdline;
 
 	last_pet_paddr = 0;
 	last_ns_paddr = 0;
 
-	pr_info("%s: smem_ram_phys=%x SMEM_ID_VENDOR2=%d size=%d\n",
-		__func__, smem_ram_phys,  SMEM_ID_VENDOR2,
-		sizeof(struct sec_debug_subsys));
+	pr_info("%s: smem_ram_phys=%lx SMEM_ID_VENDOR2=%d size=%lx\n",
+		__func__, (unsigned long)smem_ram_phys,  SMEM_ID_VENDOR2,
+		(unsigned long)sizeof(struct sec_debug_subsys));
 
 	secdbg_subsys = (struct sec_debug_subsys *)smem_alloc(
 		SMEM_ID_VENDOR2,
@@ -1922,28 +1685,28 @@ int sec_debug_subsys_init(void)
 		return -ENOMEM;
 	}
 
-	memset(secdbg_subsys, 0, sizeof(secdbg_subsys));
+	memset(secdbg_subsys, 0, (unsigned long)sizeof(secdbg_subsys));
 
 	secdbg_krait = &secdbg_subsys->priv.krait;
 
 	secdbg_subsys->krait = (struct sec_debug_subsys_data_krait *)(
-		(unsigned int)&secdbg_subsys->priv.krait -
-		(unsigned int)smem_ram_base + smem_ram_phys);
+		(unsigned long)&secdbg_subsys->priv.krait -
+		(unsigned long)smem_ram_base + smem_ram_phys);
 	secdbg_subsys->rpm = (struct sec_debug_subsys_data *)(
-		(unsigned int)&secdbg_subsys->priv.rpm -
-		(unsigned int)smem_ram_base + smem_ram_phys);
+		(unsigned long)&secdbg_subsys->priv.rpm -
+		(unsigned long)smem_ram_base + smem_ram_phys);
 	secdbg_subsys->modem = (struct sec_debug_subsys_data_modem *)(
-		(unsigned int)&secdbg_subsys->priv.modem -
-		(unsigned int)smem_ram_base + smem_ram_phys);
+		(unsigned long)&secdbg_subsys->priv.modem -
+		(unsigned long)smem_ram_base + smem_ram_phys);
 	secdbg_subsys->dsps = (struct sec_debug_subsys_data *)(
-		(unsigned int)&secdbg_subsys->priv.dsps -
-		(unsigned int)smem_ram_base + smem_ram_phys);
+		(unsigned long)&secdbg_subsys->priv.dsps -
+		(unsigned long)smem_ram_base + smem_ram_phys);
 
-	pr_info("%s: krait(%x) rpm(%x) modem(%x) dsps(%x)\n", __func__,
-		(unsigned int)secdbg_subsys->krait,
-		(unsigned int)secdbg_subsys->rpm,
-		(unsigned int)secdbg_subsys->modem,
-		(unsigned int)secdbg_subsys->dsps);
+	pr_info("%s: krait(%lx) rpm(%lx) modem(%lx) dsps(%lx)\n", __func__,
+		(unsigned long)secdbg_subsys->krait,
+		(unsigned long)secdbg_subsys->rpm,
+		(unsigned long)secdbg_subsys->modem,
+		(unsigned long)secdbg_subsys->dsps);
 
 	strlcpy(secdbg_krait->name, "Krait", sizeof(secdbg_krait->name) + 1);
 	strlcpy(secdbg_krait->state, "Init", sizeof(secdbg_krait->state) + 1);
@@ -1958,7 +1721,7 @@ int sec_debug_subsys_init(void)
 #endif
 
 	secdbg_krait->tz_core_dump =
-		(struct tzbsp_dump_buf_s **)get_wdog_regsave_paddr();
+		(struct msm_dump_data **)get_wdog_regsave_paddr();
 #if 0 //MSM8974 doesn't use the msm_fb.c. and JBP doesn't use fb on kernel side.
 	get_fbinfo(0, &secdbg_krait->fb_info.fb_paddr,
 		&secdbg_krait->fb_info.xres,
@@ -1974,7 +1737,7 @@ int sec_debug_subsys_init(void)
 		&secdbg_krait->fb_info.rgb_bitinfo.a_len);
 #endif
 
-	ADD_STR_TO_INFOMON(unit_name);
+	ADD_STR_TO_INFOMON(machine_name);
 	ADD_STR_TO_INFOMON(soc_revision);
 	ADD_VAR_TO_INFOMON(system_rev);
 	if (___build_root_init(build_root) == 0)
@@ -2099,231 +1862,14 @@ int sec_debug_subsys_init(void)
 arch_initcall_sync(sec_debug_subsys_init);
 #endif
 
-static int parse_address(char* str_address, unsigned *paddress, const char *caller_name)
-{
-	char * str = str_address;
-        unsigned addr = memparse(str, &str);
-
-        //if the memparse succeeded
-        if((int)str > (int) str_address)
-        {
-		unsigned int data;
-                if (addr < PAGE_OFFSET || addr > -256UL)
-                {
-			pr_emerg("%s: Trying to access a non-kernel address 0x%X. This option is currently not implemented.\n", caller_name, addr);
-                        return -EACCES;
-                }
-
-                if(probe_kernel_address(addr, data))
-                {
-			pr_emerg("%s: Cannot access the address: 0x%X", caller_name, addr);
-                        return -EACCES;
-                }
-
-                *paddress = addr;
-	}
-        else
-        {
-		pr_emerg("%s: Invalid memory address: %s\n", __func__, str_address);
-                return -EINVAL;
-        }
-
-	return 0;
-}
-
 struct dentry *mem_access_lookup(struct inode *dir, struct dentry *dentry,
                 struct nameidata *nd)
 {
-	/* sarbojit: disabled to prevent build-break */
-#if 0
-	struct inode *inode = NULL;
-	unsigned address = 0;
-	int error = -ENOENT;
-
-	if(!mem_access_file_de)
-		goto out;
-
-	pr_emerg("%s: filename: %s", __func__, dentry->d_iname);
-
-	if((dentry->d_name.len == sizeof(MEM_ADDRESS_FILE_NAME)-1) &&
-	(!memcmp(dentry->d_name.name, MEM_ADDRESS_FILE_NAME, dentry->d_name.len)))
-	{
-		//do nothing
-		//the default file is accessed.
-	}
-	else
-	{
-		error = parse_address((char *) dentry->d_iname, &address, __func__);
-
-		if(error)
-		{
-			goto out;
-		}
-	}
-
-	atomic_inc(&mem_access_file_de->count); //equivalent to pde_get
-
-	error = -EINVAL;
-
-	inode = proc_get_inode(dir->i_sb, mem_access_file_de);
-
-	if (inode) {
-		d_set_d_op(dentry, &proc_dentry_operations);
-		d_add(dentry, inode);
-		return NULL;
-	}
-
-	pde_put(mem_access_file_de);
-
-out:
-	return ERR_PTR(error);
-#endif
 	return NULL;
-}
-
-static int sec_debug_mem_write(struct file *file, const char __user *buffer,
-                size_t count, loff_t *offs)
-{
-	char local_buf[12];
-	char * str = NULL;
-	unsigned data;
-	unsigned address;
-	int error;
-
-	pr_emerg("%s: write %s", __func__, file->f_path.dentry->d_iname);
-
-	if((count > 11) || (buffer == NULL))
-	{
-		pr_emerg("%s: Invalid parameter\n", __func__);
-		return -EINVAL;
-	}
-
-	if((file->f_path.dentry->d_name.len == sizeof(MEM_ADDRESS_FILE_NAME)-1) &&
-        (!memcmp(file->f_path.dentry->d_name.name, MEM_ADDRESS_FILE_NAME, file->f_path.dentry->d_name.len)))
-        {
-                //do nothing
-                //the default file is accessed.
-		return count;
-        }
-
-	error = parse_address((char *) file->f_path.dentry->d_iname, &address, __func__);
-
-	if(error)
-	{
-		return error;
-	}
-
-	memcpy(local_buf, buffer, count);
-	local_buf[count]=0;
-
-	str = local_buf;
-
-	data = memparse(str, &str);
-
-	//if the memparse succeeded
-	if((int)str > (int) local_buf)
-	{
-		if(probe_kernel_write((void *)address, &data, 4))
-		{
-			pr_emerg("%s: Unable to write 0x%X to 0x%X\n", __func__, data, address);
-			return -EACCES;
-		}
-	}
-	else
-	{
-		pr_emerg("%s: Invalid data: %s\n", __func__, local_buf);
-		return -EINVAL;
-	}
-
-	return count;
-}
-
-static int sec_debug_mem_read(struct file *file, char __user *buffer,
-                size_t count, loff_t *offs)
-{
-	unsigned data;
-	int read_count = 0;
-	unsigned address;
-        int error;
-
-	static int read_done = 0;
-
-        if((file->f_path.dentry->d_name.len == sizeof(MEM_ADDRESS_FILE_NAME)-1) &&
-        (!memcmp(file->f_path.dentry->d_name.name, MEM_ADDRESS_FILE_NAME, file->f_path.dentry->d_name.len)))
-        {
-                //do nothing
-                //the default file is accessed.
-                return 0;
-        }
-
-	if(read_done)
-	{
-		read_done = 0;
-		return 0;
-	}
-
-        if(buffer == NULL)
-        {
-                return -EINVAL;
-	}
-
-	error = parse_address((char *) file->f_path.dentry->d_iname, &address, __func__);
-
-        if(error)
-        {
-                return error;
-        }
-
-        if(probe_kernel_read(&data, (const void *)address, 4))
-        {
-                pr_emerg("%s: Unable to read from 0x%X\n", __func__, address);
-                return -EACCES;
-        }
-        else
-        {
-		read_count = sprintf(buffer, "0x%08X\n", data);
-		read_done = 1;
-        }
-
-	pr_emerg("%s: read %s", __func__, file->f_path.dentry->d_iname);
-	return read_count;
 }
 
 int __init sec_debug_procfs_init(void)
 {
-#if 0
-	sec_debug_dir_de = proc_mkdir("sec_debug", NULL);
-	if(!sec_debug_dir_de)
-	{
-		return -ENOMEM;
-	}
-
-	mem_access_dir_de = proc_mkdir("memaccess", sec_debug_dir_de);
-	if(!mem_access_dir_de)
-	{
-		remove_proc_entry("sec_debug", NULL);
-		sec_debug_dir_de = NULL;
-		return -ENOMEM;
-	}
-
-	mem_access_proc_dir_inode_operations = *(mem_access_dir_de->proc_iops);
-	mem_access_proc_dir_inode_operations.lookup = mem_access_lookup;
-	mem_access_dir_de->proc_iops = &mem_access_proc_dir_inode_operations;
-
-	mem_access_file_de = proc_create(MEM_ADDRESS_FILE_NAME, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP, mem_access_dir_de,
-			&sec_debug_mem_access_proc_fops);
-
-	if (!mem_access_file_de)
-	{
-		remove_proc_entry("memaccess", sec_debug_dir_de);
-		mem_access_dir_de = NULL;
-
-		remove_proc_entry("sec_debug", NULL);
-		sec_debug_dir_de = NULL;
-
-		return -ENOMEM;
-	}
-#endif
         return 0;
 }
 
@@ -2383,8 +1929,8 @@ int __init sec_debug_init(void)
 	pr_emerg("%s: enable=%d\n", __func__, enable);
 	pr_emerg("%s:__raw_readl restart_reason=%d\n", __func__, __raw_readl(restart_reason));
 	/* check restart_reason here */
-	pr_emerg("%s: restart_reason : 0x%x\n", __func__,
-		(unsigned int)restart_reason);
+	pr_emerg("%s: restart_reason : 0x%lx\n", __func__,
+		(unsigned long)restart_reason);
 
 	register_reboot_notifier(&nb_reboot_block);
 	atomic_notifier_chain_register(&panic_notifier_list, &nb_panic_block);
@@ -2818,12 +2364,12 @@ static int __init sec_dbg_setup(char *str)
 
 	pr_emerg("%s: str=%s\n", __func__, str);
 
-	if (size && (size == roundup_pow_of_two(size)) && (*str == '@')) {
-		secdbg_paddr = (unsigned int)memparse(++str, NULL);
+	if (size /*&& (size == roundup_pow_of_two(size))*/ && (*str == '@')) {
+		secdbg_paddr = (uint64_t)memparse(++str, NULL);
 		secdbg_size = size;
 	}
 
-	pr_emerg("%s: secdbg_paddr = 0x%x\n", __func__, secdbg_paddr);
+	pr_emerg("%s: secdbg_paddr = 0x%llx\n", __func__, secdbg_paddr);
 	pr_emerg("%s: secdbg_size = 0x%x\n", __func__, secdbg_size);
 
 	return 1;
@@ -2838,7 +2384,7 @@ static void sec_user_fault_dump(void)
 		panic("User Fault");
 }
 
-static int sec_user_fault_write(struct file *file, const char __user *buffer,
+static long sec_user_fault_write(struct file *file, const char __user *buffer,
 		size_t count, loff_t *offs)
 {
 	char buf[100];
