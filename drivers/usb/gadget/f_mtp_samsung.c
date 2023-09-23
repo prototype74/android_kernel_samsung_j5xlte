@@ -1198,6 +1198,15 @@ exit:
 	return status;
 }
 
+#ifdef CONFIG_COMPAT  //2014.11.12 for 64bit kernel & 32bit platform
+static long mtpg_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	int ret;
+	ret = mtpg_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+	return ret;
+}
+#endif
+
 static int mtpg_release_device(struct inode *ip, struct file *fp)
 {
 	printk(KERN_DEBUG "[%s]\tline = [%d]\n", __func__, __LINE__);
@@ -1214,6 +1223,9 @@ static const struct file_operations mtpg_fops = {
 	.open    = mtpg_open,
 	.unlocked_ioctl = mtpg_ioctl,
 	.release = mtpg_release_device,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl =   mtpg_compat_ioctl,
+#endif
 };
 
 static struct miscdevice mtpg_device = {
