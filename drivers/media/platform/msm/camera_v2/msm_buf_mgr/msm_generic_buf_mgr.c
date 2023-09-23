@@ -109,8 +109,8 @@ static void msm_buf_mngr_sd_shutdown(struct msm_buf_mngr_device *buf_mngr_dev)
 	if (!list_empty(&buf_mngr_dev->buf_qhead)) {
 		list_for_each_entry_safe(bufs,
 			save, &buf_mngr_dev->buf_qhead, entry) {
-			pr_err("%s: Error delete invalid bufs =%x, ses_id=%d, str_id=%d, idx=%d\n",
-				__func__, (unsigned int)bufs, bufs->session_id,
+			pr_err("%s: Error delete invalid bufs =%lx, ses_id=%d, str_id=%d, idx=%d\n",
+				__func__, (unsigned long)bufs, bufs->session_id,
 				bufs->stream_id, bufs->vb2_buf->v4l2_buf.index);
 			list_del_init(&bufs->entry);
 			kfree(bufs);
@@ -323,7 +323,8 @@ static int32_t __init msm_buf_mngr_init(void)
 	msm_buf_mngr_dev->subdev.sd.internal_ops =
 		&msm_generic_buf_mngr_subdev_internal_ops;
 	msm_buf_mngr_dev->subdev.close_seq = MSM_SD_CLOSE_4TH_CATEGORY;
-	rc = msm_sd_register(&msm_buf_mngr_dev->subdev);
+	//rc = msm_sd_register(&msm_buf_mngr_dev->subdev);
+	rc = 1;
 	if (rc != 0) {
 		pr_err("%s: msm_sd_register error = %d\n", __func__, rc);
 		goto end;

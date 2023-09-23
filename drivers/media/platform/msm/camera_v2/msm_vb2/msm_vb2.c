@@ -346,8 +346,8 @@ static int msm_vb2_buf_done(struct vb2_buffer *vb, int session_id,
 				break;
 		}
 		if (vb2_buf != vb) {
-			pr_err("%s:%d VB buffer is INVALID vb=%x, ses_id=%d, str_id=%d\n",
-				__func__, __LINE__, (unsigned int)vb,
+			pr_err("%s:%d VB buffer is INVALID vb=%pK, ses_id=%d, str_id=%d\n",
+				__func__, __LINE__, vb,
 				session_id, stream_id);
 			rc = -EINVAL;
 			goto out;

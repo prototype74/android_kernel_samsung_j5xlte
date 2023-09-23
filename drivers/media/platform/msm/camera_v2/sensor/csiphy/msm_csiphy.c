@@ -17,7 +17,6 @@
 #include <linux/module.h>
 #include <linux/irqreturn.h>
 #include <soc/qcom/socinfo.h>
-#include <mach/vreg.h>
 #include "msm_csiphy.h"
 #include "msm_sd.h"
 #include "msm_camera_io_util.h"

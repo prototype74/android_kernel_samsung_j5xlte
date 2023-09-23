@@ -13,7 +13,6 @@
 #define pr_fmt(fmt) "MSM-SENSOR-INIT %s:%d " fmt "\n", __func__, __LINE__
 
 /* Header files */
-#include <mach/gpiomux.h>
 #include "msm_sensor_init.h"
 #include "msm_sensor_driver.h"
 #include "msm_sensor.h"

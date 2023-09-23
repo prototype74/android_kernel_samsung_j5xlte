@@ -17,7 +17,7 @@
 #include <linux/io.h>
 #include <linux/err.h>
 #include <soc/qcom/camera2.h>
-#include <mach/gpiomux.h>
+//#include <mach/gpiomux.h>
 #include <linux/msm-bus.h>
 #include "msm_camera_io_util.h"
 

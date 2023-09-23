@@ -57,7 +57,7 @@ static int msm_eeprom_get_dt_data(struct msm_eeprom_ctrl_t *e_ctrl);
   */
 static int msm_eeprom_verify_sum(const char *mem, uint32_t size, uint32_t sum)
 {
-	uint32_t crc = ~0UL;
+	uint32_t crc = ~0;
 
 	/* check overflow */
 	if (size > crc - sizeof(uint32_t))
@@ -349,7 +349,7 @@ static int eeprom_config_read_compressed_data(struct msm_eeprom_ctrl_t *e_ctrl,
 	int rc = 0;
 	uint8_t *buf_comp = NULL;
 	uint8_t *buf_decomp = NULL;
-	uint32_t decomp_size;
+	size_t decomp_size;
 	uint16_t data;
 	int i;
 #if defined(CONFIG_SR544) || defined(CONFIG_SR552)
@@ -457,8 +457,8 @@ static int eeprom_config_write_data(struct msm_eeprom_ctrl_t *e_ctrl,
 	char *buf = NULL;
 	void *work_mem = NULL;
 	uint8_t *compressed_buf = NULL;
-	uint32_t compressed_size = 0;
-	uint32_t crc = ~0UL;
+	size_t compressed_size = 0;
+	uint32_t crc = ~0;
 	int i;
 #if defined(CONFIG_SR544) || defined(CONFIG_SR552)
 	uint8_t addr_h, addr_l;
@@ -501,7 +501,7 @@ static int eeprom_config_write_data(struct msm_eeprom_ctrl_t *e_ctrl,
 		crc = crc32_le(crc, compressed_buf, compressed_size);
 		crc = ~crc;
 
-		pr_err("%s: compressed size %d, crc=0x%0X", __func__, compressed_size, crc);
+		pr_err("%s: compressed size %d, crc=0x%0X \n", __func__, (uint32_t)compressed_size, crc);
 		*cdata->cfg.write_data.write_size = compressed_size + 4;  //  include CRC size
 	}
 	rc = msm_eeprom_power_up(e_ctrl);
@@ -545,7 +545,7 @@ static int eeprom_config_write_data(struct msm_eeprom_ctrl_t *e_ctrl,
 		for(i=0; i<4; i++) {
 			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_write(
 					&(e_ctrl->i2c_client), r_otp_wdata,
-					((uint8_t *)crc)[i], MSM_CAMERA_I2C_BYTE_DATA);
+					buf[i], MSM_CAMERA_I2C_BYTE_DATA);
 			if (rc < 0) {
 				pr_err("%s:(%d) write failed\n", __func__, __LINE__);
 				goto POWER_DOWN;

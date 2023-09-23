@@ -420,6 +420,24 @@ struct msm_isp_stream_ack {
 	uint32_t handle;
 };
 
+#ifdef CONFIG_COMPAT
+enum msm_vfe_error_type {
+	ISP_ERROR_NONE,
+	ISP_ERROR_CAMIF,
+	ISP_ERROR_BUS_OVERFLOW,
+	ISP_ERROR_RETURN_EMPTY_BUFFER,
+	ISP_ERROR_FRAME_ID_MISMATCH,
+	ISP_ERROR_MAX,
+};
+
+struct msm_isp_error_info {
+	enum msm_vfe_error_type err_type;
+	uint32_t session_id;
+	uint32_t stream_id;
+	uint8_t stream_id_mask;
+};
+#endif
+
 struct msm_isp_event_data {
 	/*Wall clock except for buffer divert events
 	 *which use monotonic clock

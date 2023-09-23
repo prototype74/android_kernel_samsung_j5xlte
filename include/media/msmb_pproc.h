@@ -253,7 +253,7 @@ struct msm_pproc_queue_buf_info {
 
 struct msm_camera_v4l2_ioctl_t {
 	uint32_t id;
-	uint32_t len;
+	size_t len;
 	int32_t trans_code;
 	void __user *ioctl_ptr;
 };

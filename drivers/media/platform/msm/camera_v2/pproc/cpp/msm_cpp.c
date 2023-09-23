@@ -30,7 +30,6 @@
 #include <linux/msm_iommu_domains.h>
 #include <linux/clk/msm-clk.h>
 #include <linux/qcom_iommu.h>
-#include <mach/vreg.h>
 #include <media/msm_isp.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-ioctl.h>
