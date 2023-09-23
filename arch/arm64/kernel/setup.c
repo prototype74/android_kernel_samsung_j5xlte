@@ -61,6 +61,16 @@
 #include <asm/psci.h>
 #include <asm/efi.h>
 
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
+
+// [ SEC_SELINUX_PORTING_QUALCOMM
+#ifdef CONFIG_PROC_AVC
+#include <linux/proc_avc.h>
+#endif
+// ] SEC_SELINUX_PORTING_QUALCOMM
+
 unsigned int processor_id;
 EXPORT_SYMBOL(processor_id);
 
@@ -97,7 +107,7 @@ unsigned int compat_elf_hwcap2 __read_mostly;
 #endif
 
 static const char *cpu_name;
-static const char *machine_name;
+const char *machine_name;
 phys_addr_t __fdt_pointer __initdata;
 
 /*
@@ -462,6 +472,15 @@ void __init setup_arch(char **cmdline_p)
 
 static int __init arm64_device_init(void)
 {
+#ifdef CONFIG_SEC_DEBUG
+	sec_debug_init();
+#endif
+// [ SEC_SELINUX_PORTING_QUALCOMM
+#ifdef CONFIG_PROC_AVC
+	sec_avc_log_init();
+#endif
+// ] SEC_SELINUX_PORTING_QUALCOMM
+
 	of_platform_populate(NULL, of_default_bus_match_table, NULL, NULL);
 	return 0;
 }
