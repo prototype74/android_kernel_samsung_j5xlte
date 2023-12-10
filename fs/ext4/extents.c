@@ -466,7 +466,7 @@ ext4_ext_show_eh(struct inode *inode, struct ext4_extent_header *eh)
 
 static int __ext4_ext_check(const char *function, unsigned int line,
 			    struct inode *inode, struct ext4_extent_header *eh,
-			    int depth)
+			    int depth, struct buffer_head *bh)
 {
 	const char *error_msg;
 	int max = 0;
@@ -505,9 +505,13 @@ static int __ext4_ext_check(const char *function, unsigned int line,
 	return 0;
 
 corrupted:
-	printk(KERN_ERR "Print invalid extent entries\n");
-	ext4_ext_show_eh(inode, eh);
-
+	if (bh) {
+		printk(KERN_ERR "Print invalid extent bh: %s\n", error_msg);
+		print_bh(inode->i_sb, bh, 0, EXT4_BLOCK_SIZE(inode->i_sb));
+	} else {
+		printk(KERN_ERR "Print invalid extent entries\n");
+		ext4_ext_show_eh(inode, eh);
+	}
 	ext4_error_inode(inode, function, line, 0,
 			"bad header/extent: %s - magic %x, "
 			"entries %u, max %u(%u), depth %u(%u)",
@@ -519,7 +523,7 @@ corrupted:
 }
 
 #define ext4_ext_check(inode, eh, depth)	\
-	__ext4_ext_check(__func__, __LINE__, inode, eh, depth)
+	__ext4_ext_check(__func__, __LINE__, inode, eh, depth, NULL)
 
 int ext4_ext_check_inode(struct inode *inode)
 {
@@ -536,7 +540,7 @@ static int __ext4_ext_check_block(const char *function, unsigned int line,
 
 	if (buffer_verified(bh))
 		return 0;
-	ret = ext4_ext_check(inode, eh, depth);
+	ret = __ext4_ext_check(__func__, __LINE__, inode, eh, depth, bh);
 	if (ret)
 		return ret;
 	set_buffer_verified(bh);

@@ -2304,6 +2304,55 @@ static const struct file_operations ext4_mb_seq_groups_fops = {
 	.release	= seq_release,
 };
 
+ssize_t ext4_mb_freefrag_show(struct ext4_sb_info *sbi, char *buf)
+{
+#define EXT4_FREEFRAG_COLUMN 14 /* sb->s_blocksize_bits + 2 */
+	ext4_group_t group = 0;
+	int i;
+	ext4_fsblk_t freeblock[EXT4_FREEFRAG_COLUMN] = {0,};
+	char *size[EXT4_FREEFRAG_COLUMN] = {"4K", "8K", "16K", "32K", "64K",
+		"128K", "256K", "512K", "1M", "2M", "4M", "8M", "16M", "32M"};
+
+	for (group = 0; group < sbi->s_groups_count; group++) {
+		struct super_block *sb = sbi->s_sb;
+		int err, buddy_loaded = 0;
+		struct ext4_buddy e4b;
+		struct ext4_group_info *grinfo;
+		struct sg {
+			struct ext4_group_info info;
+			ext4_grpblk_t counters[EXT4_FREEFRAG_COLUMN+2];
+		} sg;
+
+		i = (sb->s_blocksize_bits + 2) * sizeof(sg.info.bb_counters[0])
+			+ sizeof(struct ext4_group_info);
+		grinfo = ext4_get_group_info(sb, group);
+		/* Load the group info in memory only if not already loaded. */
+		if (unlikely(EXT4_MB_GRP_NEED_INIT(grinfo))) {
+			err = ext4_mb_load_buddy(sb, group, &e4b);
+			if (err) {
+				freeblock[0] = ULLONG_MAX;
+				goto out;
+			}
+			buddy_loaded = 1;
+		}
+
+		memcpy(&sg, ext4_get_group_info(sb, group), i);
+
+		if (buddy_loaded)
+			ext4_mb_unload_buddy(&e4b);
+		for (i = 0; i < EXT4_FREEFRAG_COLUMN; i++)
+			freeblock[i] += (i <= sb->s_blocksize_bits + 1) ?
+					sg.info.bb_counters[i] : 0;
+	}
+out:
+	for (i = 0; i < EXT4_FREEFRAG_COLUMN; i++)
+		snprintf(buf, PAGE_SIZE, "%s%s:%llu,", buf, size[i],
+			(unsigned long long)freeblock[i]);
+	buf[strlen(buf)-1] = '\n';
+
+	return strlen(buf);
+}
+
 static struct kmem_cache *get_groupinfo_cache(int blocksize_bits)
 {
 	int cache_index = blocksize_bits - EXT4_MIN_BLOCK_LOG_SIZE;
@@ -4391,6 +4440,9 @@ ext4_fsblk_t ext4_mb_new_blocks(handle_t *handle,
 	if (IS_NOQUOTA(ar->inode))
 		ar->flags |= EXT4_MB_USE_ROOT_BLOCKS;
 
+	if (ext4_test_inode_flag(ar->inode, EXT4_INODE_CORE_FILE))
+		ar->flags |= EXT4_MB_USE_EXTRA_ROOT_BLOCKS;
+
 	/*
 	 * For delayed allocation, we could skip the ENOSPC and
 	 * EDQUOT check, as blocks and quotas have been already
@@ -5004,13 +5056,15 @@ error_return:
  * @count:	number of blocks to TRIM
  * @group:	alloc. group we are working with
  * @e4b:	ext4 buddy for the group
+ * @blkdev_flags: flags for the block device
  *
  * Trim "count" blocks starting at "start" in the "group". To assure that no
  * one will allocate those blocks, mark it as used in buddy bitmap. This must
  * be called with under the group lock.
  */
 static int ext4_trim_extent(struct super_block *sb, int start, int count,
-			     ext4_group_t group, struct ext4_buddy *e4b)
+			    ext4_group_t group, struct ext4_buddy *e4b,
+			    unsigned long blkdev_flags)
 {
 	struct ext4_free_extent ex;
 	int ret = 0;
@@ -5042,6 +5096,7 @@ static int ext4_trim_extent(struct super_block *sb, int start, int count,
  * @start:		first group block to examine
  * @max:		last group block to examine
  * @minblocks:		minimum extent block count
+ * @blkdev_flags:	flags for the block device
  *
  * ext4_trim_all_free walks through group's buddy bitmap searching for free
  * extents. When the free block is found, ext4_trim_extent is called to TRIM
@@ -5056,7 +5111,7 @@ static int ext4_trim_extent(struct super_block *sb, int start, int count,
 static ext4_grpblk_t
 ext4_trim_all_free(struct super_block *sb, ext4_group_t group,
 		   ext4_grpblk_t start, ext4_grpblk_t max,
-		   ext4_grpblk_t minblocks)
+		   ext4_grpblk_t minblocks, unsigned long blkdev_flags)
 {
 	void *bitmap;
 	ext4_grpblk_t next, count = 0, free_count = 0;
@@ -5089,7 +5144,8 @@ ext4_trim_all_free(struct super_block *sb, ext4_group_t group,
 
 		if ((next - start) >= minblocks) {
 			ret = ext4_trim_extent(sb, start,
-					       next - start, group, &e4b);
+					       next - start, group, &e4b,
+					       blkdev_flags);
 			if (ret && ret != -EOPNOTSUPP)
 				break;
 			ret = 0;
@@ -5131,6 +5187,7 @@ out:
  * ext4_trim_fs() -- trim ioctl handle function
  * @sb:			superblock for filesystem
  * @range:		fstrim_range structure
+ * @blkdev_flags:	flags for the block device
  *
  * start:	First Byte to trim
  * len:		number of Bytes to trim from start
@@ -5139,7 +5196,8 @@ out:
  * start to start+len. For each such a group ext4_trim_all_free function
  * is invoked to trim all free space.
  */
-int ext4_trim_fs(struct super_block *sb, struct fstrim_range *range)
+int ext4_trim_fs(struct super_block *sb, struct fstrim_range *range,
+			unsigned long blkdev_flags)
 {
 	struct ext4_group_info *grp;
 	ext4_group_t group, first_group, last_group;
@@ -5195,7 +5253,7 @@ int ext4_trim_fs(struct super_block *sb, struct fstrim_range *range)
 
 		if (grp->bb_free >= minlen) {
 			cnt = ext4_trim_all_free(sb, group, first_cluster,
-						end, minlen);
+						end, minlen, blkdev_flags);
 			if (cnt < 0) {
 				ret = cnt;
 				break;

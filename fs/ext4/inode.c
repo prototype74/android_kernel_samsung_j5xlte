@@ -1301,7 +1301,9 @@ static int ext4_da_reserve_metadata(struct inode *inode, ext4_lblk_t lblock)
 	 * We do still charge estimated metadata to the sb though;
 	 * we cannot afford to run out of free blocks.
 	 */
-	if (ext4_claim_free_clusters(sbi, md_needed, 0)) {
+	if (ext4_claim_free_clusters(sbi, md_needed,
+			ext4_test_inode_flag(inode, EXT4_INODE_CORE_FILE) ?
+			EXT4_MB_USE_EXTRA_ROOT_BLOCKS : 0)) {
 		ei->i_da_metadata_calc_len = save_len;
 		ei->i_da_metadata_calc_last_lblock = save_last_lblock;
 		spin_unlock(&ei->i_block_reservation_lock);
@@ -1354,7 +1356,9 @@ static int ext4_da_reserve_space(struct inode *inode, ext4_lblk_t lblock)
 	 * We do still charge estimated metadata to the sb though;
 	 * we cannot afford to run out of free blocks.
 	 */
-	if (ext4_claim_free_clusters(sbi, md_needed + 1, 0)) {
+	if (ext4_claim_free_clusters(sbi, md_needed + 1,
+			ext4_test_inode_flag(inode, EXT4_INODE_CORE_FILE) ?
+			EXT4_MB_USE_EXTRA_ROOT_BLOCKS : 0)) {
 		ei->i_da_metadata_calc_len = save_len;
 		ei->i_da_metadata_calc_last_lblock = save_last_lblock;
 		spin_unlock(&ei->i_block_reservation_lock);

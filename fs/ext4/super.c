@@ -832,6 +832,10 @@ static void ext4_put_super(struct super_block *sb)
 		remove_proc_entry("options", sbi->s_proc);
 		remove_proc_entry(sb->s_id, ext4_proc_root);
 	}
+
+	if (le32_to_cpu(sbi->s_es->s_sec_magic) == EXT4_SEC_DATA_MAGIC)
+		sysfs_delete_link(&ext4_kset->kobj, &sbi->s_kobj, "userdata");
+
 	kobject_del(&sbi->s_kobj);
 
 	for (i = 0; i < sbi->s_gdb_count; i++)
@@ -2437,6 +2441,32 @@ static int parse_strtoull(const char *buf,
 	return ret;
 }
 
+static ssize_t sec_fs_stat_show(struct ext4_attr *a,
+				struct ext4_sb_info *sbi, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%s:%llu,%s:%llu,%s:%u,%s:%llu,%s:%u\n",
+		"F_BLOCKS",
+		(unsigned long long)ext4_blocks_count(sbi->s_es),
+		"F_BFREE",
+		(unsigned long long)percpu_counter_sum_positive(
+						&sbi->s_freeclusters_counter) -
+		(unsigned long long)percpu_counter_sum_positive(
+						&sbi->s_dirtyclusters_counter),
+		"F_FILES",
+		(unsigned int)le32_to_cpu(sbi->s_es->s_inodes_count),
+		"F_FFREE",
+		(unsigned long long)percpu_counter_sum_positive(
+						&sbi->s_freeinodes_counter),
+		"FS_ERROR",
+		(unsigned int)le32_to_cpu(sbi->s_es->s_error_count));
+}
+
+static ssize_t sec_fs_freefrag_show(struct ext4_attr *a,
+				struct ext4_sb_info *sbi, char *buf)
+{
+	return ext4_mb_freefrag_show(sbi, buf);
+}
+
 static ssize_t delayed_allocation_blocks_show(struct ext4_attr *a,
 					      struct ext4_sb_info *sbi,
 					      char *buf)
@@ -2483,9 +2513,11 @@ static ssize_t r_blocks_count_store(struct ext4_attr *a,
 {
 	unsigned long long val;
 
-	if (parse_strtoull(buf, -1ULL, &val))
+	if (parse_strtoull(buf, -1ULL, &val) || ext4_r_blocks_count(sbi->s_es))
 		return -EINVAL;
 	atomic64_set(&sbi->s_r_blocks_count, val);
+	ext4_msg(sbi->s_sb, KERN_INFO, "Root reserved blocks %llu",
+			(unsigned long long) atomic64_read(&sbi->s_r_blocks_count));
 
 	return count;
 }
@@ -2586,6 +2618,8 @@ static struct ext4_attr ext4_attr_##name = __ATTR(name, mode, show, store)
 	EXT4_ATTR_OFFSET(name, 0644, sbi_ui_show, sbi_ui_store, elname)
 #define ATTR_LIST(name) &ext4_attr_##name.attr
 
+EXT4_RO_ATTR(sec_fs_stat);
+EXT4_RO_ATTR(sec_fs_freefrag);
 EXT4_RO_ATTR(delayed_allocation_blocks);
 EXT4_RO_ATTR(session_write_kbytes);
 EXT4_RO_ATTR(lifetime_write_kbytes);
@@ -2605,6 +2639,8 @@ EXT4_RW_ATTR_SBI_UI(extent_max_zeroout_kb, s_extent_max_zeroout_kb);
 EXT4_ATTR(trigger_fs_error, 0200, NULL, trigger_test_error);
 
 static struct attribute *ext4_attrs[] = {
+	ATTR_LIST(sec_fs_stat),
+	ATTR_LIST(sec_fs_freefrag),
 	ATTR_LIST(delayed_allocation_blocks),
 	ATTR_LIST(session_write_kbytes),
 	ATTR_LIST(lifetime_write_kbytes),
@@ -4074,7 +4110,18 @@ no_journal:
 			 "available");
 	}
 
-	atomic64_set(&sbi->s_r_blocks_count, ext4_r_blocks_count(es));
+#define ANDROID_M_R_BLOCKS_COUNT	(1280)
+	if (le32_to_cpu(sbi->s_es->s_sec_magic) == EXT4_SEC_DATA_MAGIC)
+		atomic64_set(&sbi->s_r_blocks_count, ext4_r_blocks_count(es) ? :
+				ANDROID_M_R_BLOCKS_COUNT);
+	if (atomic64_read(&sbi->s_r_blocks_count))
+		ext4_msg(sb, KERN_INFO, "Root reserved blocks %llu",
+				(unsigned long long) atomic64_read(&sbi->s_r_blocks_count));
+
+	if (ext4_sec_r_blocks_count(es))
+		ext4_msg(sb, KERN_INFO, "SEC reserved blocks %llu",
+				ext4_sec_r_blocks_count(es) >>
+				sbi->s_cluster_bits);
 
 	err = ext4_reserve_clusters(sbi, ext4_calculate_resv_clusters(sb));
 	if (err) {
@@ -4118,6 +4165,14 @@ no_journal:
 			goto failed_mount8;
 	}
 #endif  /* CONFIG_QUOTA */
+
+	if (le32_to_cpu(sbi->s_es->s_sec_magic) == EXT4_SEC_DATA_MAGIC) {
+		err = sysfs_create_link(&ext4_kset->kobj, &sbi->s_kobj,
+			      "userdata");
+		if (err)
+			printk(KERN_ERR "Can not create sysfs link"
+					"for userdata(%d)", err);
+	}
 
 	EXT4_SB(sb)->s_mount_state |= EXT4_ORPHAN_FS;
 	ext4_orphan_cleanup(sb, es);
@@ -4495,6 +4550,14 @@ static int ext4_commit_super(struct super_block *sb, int sync)
 		clear_buffer_write_io_error(sbh);
 		set_buffer_uptodate(sbh);
 	}
+
+	if (unlikely(le16_to_cpu(es->s_magic) != EXT4_SUPER_MAGIC)) {
+		print_bh(sb, sbh, 0, EXT4_BLOCK_SIZE(sb));
+		if (test_opt(sb, ERRORS_PANIC))
+			panic("EXT4(Can not find EXT4_SUPER_MAGIC");
+		return -EIO;
+	}
+
 	/*
 	 * If the file system is mounted read-only, don't update the
 	 * superblock write time.  This avoids updating the superblock
@@ -4955,8 +5018,10 @@ static int ext4_statfs(struct dentry *dentry, struct kstatfs *buf)
 	/* prevent underflow in case that few free space is available */
 	buf->f_bfree = EXT4_C2B(sbi, max_t(s64, bfree, 0));
 	buf->f_bavail = buf->f_bfree -
-			(atomic64_read(&sbi->s_r_blocks_count) + resv_blocks);
-	if (buf->f_bfree < (atomic64_read(&sbi->s_r_blocks_count) + resv_blocks))
+			(atomic64_read(&sbi->s_r_blocks_count) + resv_blocks +
+			 ext4_sec_r_blocks_count(es));
+	if (buf->f_bfree < (atomic64_read(&sbi->s_r_blocks_count) +
+				resv_blocks + ext4_sec_r_blocks_count(es)))
 		buf->f_bavail = 0;
 	buf->f_files = le32_to_cpu(es->s_inodes_count);
 	buf->f_ffree = percpu_counter_sum_positive(&sbi->s_freeinodes_counter);
