@@ -2775,7 +2775,7 @@ int ext4_mb_release(struct super_block *sb)
 
 static inline int ext4_issue_discard(struct super_block *sb,
 		ext4_group_t block_group, ext4_grpblk_t cluster, int count,
-		struct bio **biop)
+		unsigned long flags, struct bio **biop)
 {
 	ext4_fsblk_t discard_block;
 
@@ -2788,9 +2788,10 @@ static inline int ext4_issue_discard(struct super_block *sb,
 		return __blkdev_issue_discard(sb->s_bdev,
 			(sector_t)discard_block << (sb->s_blocksize_bits - 9),
 			(sector_t)count << (sb->s_blocksize_bits - 9),
-			GFP_NOFS, 0, biop);
+			GFP_NOFS, flags, biop);
 	} else
-		return sb_issue_discard(sb, discard_block, count, GFP_NOFS, 0);
+		return sb_issue_discard(sb, discard_block, count,
+					GFP_NOFS, flags);
 }
 
 static void ext4_free_data_in_buddy(struct super_block *sb,
@@ -2851,6 +2852,7 @@ void ext4_process_freed_data(struct super_block *sb, tid_t commit_tid)
 	struct bio *discard_bio = NULL;
 	struct list_head freed_data_list;
 	struct list_head *cut_pos = NULL;
+	int type = REQ_WRITE | REQ_DISCARD | REQ_PRIO;
 	int err;
 
 	INIT_LIST_HEAD(&freed_data_list);
@@ -2871,6 +2873,7 @@ void ext4_process_freed_data(struct super_block *sb, tid_t commit_tid)
 			err = ext4_issue_discard(sb, entry->efd_group,
 						 entry->efd_start_cluster,
 						 entry->efd_count,
+						 BLKDEV_DISCARD_SYNC,
 						 &discard_bio);
 			if (err && err != -EOPNOTSUPP) {
 				ext4_msg(sb, KERN_WARNING, "discard request in"
@@ -2883,7 +2886,7 @@ void ext4_process_freed_data(struct super_block *sb, tid_t commit_tid)
 		}
 
 		if (discard_bio)
-			submit_bio_wait(discard_bio);
+			submit_bio_wait(type, discard_bio);
 	}
 
 	list_for_each_entry_safe(entry, tmp, &freed_data_list, efd_list)
@@ -4907,7 +4910,7 @@ do_more:
 		 */
 		if (test_opt(sb, DISCARD)) {
 			err = ext4_issue_discard(sb, block_group, bit, count,
-						 NULL);
+						 0, NULL);
 			if (err && err != -EOPNOTSUPP)
 				ext4_msg(sb, KERN_WARNING, "discard request in"
 					 " group:%d block:%d count:%lu failed"
@@ -5129,7 +5132,7 @@ static int ext4_trim_extent(struct super_block *sb, int start, int count,
 	 */
 	mb_mark_used(e4b, &ex);
 	ext4_unlock_group(sb, group);
-	ret = ext4_issue_discard(sb, group, start, count, NULL);
+	ret = ext4_issue_discard(sb, group, start, count, blkdev_flags, NULL);
 	ext4_lock_group(sb, group);
 	mb_free_blocks(NULL, e4b, start, ex.fe_len);
 	return ret;
