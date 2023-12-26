@@ -234,7 +234,7 @@ static int notrace ramoops_pstore_write_buf(enum pstore_type_id type,
 	struct ramoops_context *cxt = psi->data;
 	struct persistent_ram_zone *prz;
 	size_t hlen;
-	
+
 	if (type == PSTORE_TYPE_CONSOLE) {
 		if (!cxt->cprz)
 			return -ENOMEM;
@@ -383,10 +383,9 @@ static int ramoops_init_przs(struct device *dev, struct ramoops_context *cxt,
 
 	cxt->przs = kzalloc(sizeof(*cxt->przs) * cxt->max_dump_cnt,
 			     GFP_KERNEL);
-				 
 	if (!cxt->przs) {
 		dev_err(dev, "failed to initialize a prz array for dumps\n");
-		goto fail_prz;
+		return -ENOMEM;
 	}
 
 	for (i = 0; i < cxt->max_dump_cnt; i++) {
@@ -398,10 +397,10 @@ static int ramoops_init_przs(struct device *dev, struct ramoops_context *cxt,
 		if (IS_ERR(cxt->przs[i])) {
 			err = PTR_ERR(cxt->przs[i]);
 			dev_err(dev, "failed to request mem region (0x%zx@0x%llx): %d\n",
-				cxt->record_size, (unsigned long long)*paddr, err);
+				sz, (unsigned long long)*paddr, err);
 			goto fail_prz;
 		}
-		*paddr += cxt->record_size;
+		*paddr += sz;
 	}
 
 	return 0;
@@ -564,8 +563,8 @@ static int ramoops_probe(struct platform_device *pdev)
 
 	paddr = cxt->phys_addr;
 
-	dump_mem_sz = cxt->size - cxt->console_size - cxt->ftrace_size - cxt->pmsg_size;
-
+	dump_mem_sz = cxt->size - cxt->console_size - cxt->ftrace_size
+			- cxt->pmsg_size;
 	err = ramoops_init_przs(dev, cxt, &paddr, dump_mem_sz);
 	if (err)
 		goto fail_out;
