@@ -38,6 +38,7 @@
 #include <linux/sched/rt.h>
 #include <linux/mm_inline.h>
 #include <trace/events/writeback.h>
+#include <linux/version.h>
 
 #include "internal.h"
 
@@ -1383,6 +1384,20 @@ pause:
 					  period,
 					  pause,
 					  start_time);
+
+		/* Do not sleep if the backing device is removed */
+		if (unlikely(!bdi->dev))
+			return;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0))
+		bdi->last_thresh = thresh;
+		bdi->last_nr_dirty = dirty;
+#else
+		bdi->last_thresh = dirty_thresh;
+		bdi->last_nr_dirty = nr_dirty;
+#endif
+		bdi->paused_total += pause;
+
 		__set_current_state(TASK_KILLABLE);
 		io_schedule_timeout(pause);
 
