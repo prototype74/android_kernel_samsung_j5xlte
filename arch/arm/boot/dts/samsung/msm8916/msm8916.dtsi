@@ -2194,7 +2194,7 @@
 		booster,wacom_stage = <0x0001>;	// supported stage with OR operation
 
 		booster,level = <2>;			// default level
-		booster,head = <200 1190400 0>;	// default head value <time cpu_freq bimc_freq>
+		booster,head = <200 1152000 0>;	// default head value <time cpu_freq bimc_freq>
 		booster,tail = <300 998400 0>;	// default tail value <time cpu_freq bimc_freq>
 		/* --- Old input booster version --- */
 
@@ -2206,7 +2206,7 @@
 
 			/* Frequency table */
 			/* for level	:	1_Head */
-			input_booster,cpu_freqs = <1190400>;
+			input_booster,cpu_freqs = <1152000>;
 			input_booster,bimc_freqs = <0>;
 
 			/* Time table */
@@ -2237,7 +2237,7 @@
 
 			/* Frequency table */
 			/* for level	:	1_Head, 2_Head, 2_Tail */
-			input_booster,cpu_freqs = <1190400 1190400 998400>;
+			input_booster,cpu_freqs = <1152000 1152000 998400>;
 			input_booster,bimc_freqs = <0 0 0>;
 
 			/* Time table */
@@ -2252,7 +2252,7 @@
 
 			/* Frequency table */
 			/* for level	:	1_Head 2_Tail*/
-			input_booster,cpu_freqs = <1190400 1190400>;
+			input_booster,cpu_freqs = <1152000 1152000>;
 			input_booster,bimc_freqs = <0 0>;
 
 			/* Time table */
@@ -2267,7 +2267,7 @@
 
 			/* Frequency table */
 			/* for level	:	1_Head 2_Tail*/
-			input_booster,cpu_freqs = <1190400 1190400>;
+			input_booster,cpu_freqs = <1152000 1152000>;
 			input_booster,bimc_freqs = <0 0>;
 
 			/* Time table */
@@ -2282,7 +2282,7 @@
 
 			/* Frequency table */
 			/* for level	:	1_Head 2_Tail*/
-			input_booster,cpu_freqs = <1190400 998400>;
+			input_booster,cpu_freqs = <1152000 998400>;
 			input_booster,bimc_freqs = <0 0>;
 
 			/* Time table */
@@ -2297,7 +2297,7 @@
 
 			/* Frequency table */
 			/* for level	:	1_Head 2_Tail*/
-			input_booster,cpu_freqs = <1190400 0>;
+			input_booster,cpu_freqs = <1152000 0>;
 			input_booster,bimc_freqs = <0 0>;
 
 			/* Time table */
@@ -2312,7 +2312,7 @@
 
 			/* Frequency table */
 			/* for level	:	1_Head 2_Tail*/
-			input_booster,cpu_freqs = <1190400 998400>;
+			input_booster,cpu_freqs = <1152000 998400>;
 			input_booster,bimc_freqs = <0 0>;
 
 			/* Time table */
