@@ -46,7 +46,7 @@ void sec_cmd_set_default_result(struct sec_cmd_data *data)
 {
 	char delim = ':';
 	memset(data->cmd_result, 0x00, SEC_CMD_RESULT_STR_LEN);
-	memcpy(data->cmd_result, data->cmd, SEC_CMD_RESULT_STR_LEN);
+	memcpy(data->cmd_result, data->cmd, SEC_CMD_STR_LEN);
 	strncat(data->cmd_result, &delim, 1);
 }
 
@@ -75,6 +75,12 @@ static ssize_t sec_cmd_store(struct device *dev,
 
 	if (strlen(buf) >= SEC_CMD_STR_LEN) {
 		pr_err("%s: cmd length is over (%s,%d)!!\n", __func__, buf, (int)strlen(buf));
+		return -EINVAL;
+	}
+
+	if (count >= (unsigned int)SEC_CMD_STR_LEN) {
+		pr_err("%s: cmd length(count) is over (%d,%s)!!\n",
+				__func__, (unsigned int)count, buf);
 		return -EINVAL;
 	}
 
@@ -271,6 +277,12 @@ static ssize_t sec_cmd_store(struct device *dev, struct device_attribute *devatt
 		return -EINVAL;
 	}
 
+	if (count >= (unsigned int)SEC_CMD_STR_LEN) {
+		pr_err("%s: cmd length(count) is over (%d,%s)!!\n",
+				__func__, (unsigned int)count, buf);
+		return -EINVAL;
+	}
+
 	strncpy(cmd.cmd, buf, count);
 
 	mutex_lock(&data->fifo_lock);
@@ -408,7 +420,10 @@ int sec_cmd_init(struct sec_cmd_data *data, struct sec_cmd *cmds,
 	}
 
 	mutex_init(&data->cmd_lock);
+	/* check lock   */
+	mutex_lock(&data->cmd_lock);
 	data->cmd_is_running = false;
+	mutex_unlock(&data->cmd_lock);
 
 #ifdef USE_SEC_CMD_QUEUE
 	if (kfifo_alloc(&data->cmd_queue,
@@ -449,7 +464,6 @@ int sec_cmd_init(struct sec_cmd_data *data, struct sec_cmd *cmds,
 
 	return 0;
 
-	sysfs_remove_group(&data->fac_dev->kobj, &sec_fac_attr_group);
 err_sysfs_group:
 	device_destroy(sec_class, devt);
 err_sysfs_device:
