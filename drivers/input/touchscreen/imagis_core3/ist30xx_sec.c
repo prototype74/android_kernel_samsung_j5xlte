@@ -794,6 +794,13 @@ static ssize_t store_cmd(struct device *dev, struct device_attribute
 		return -EINVAL;
 	}
 
+	if (count >= (unsigned int)SEC_CMD_STR_LEN) {
+		dev_err(&client->dev,
+				"%s: cmd length(count) is over (%d,%s)!!\n",
+				__func__, (unsigned int)count, buf);
+		return -EINVAL;
+	}
+
 	if (sec->cmd_is_running == true) {
 		tsp_err("%s: tsp_cmd: other cmd is running.\n", __func__);
 		goto err_out;
