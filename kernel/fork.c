@@ -84,6 +84,10 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/task.h>
 
+#ifdef CONFIG_SECURITY_DEFEX
+#include <linux/defex.h>
+#endif
+
 /*
  * Protected counters by write_lock_irq(&tasklist_lock)
  */
@@ -1683,6 +1687,10 @@ long do_fork(unsigned long clone_flags,
 
 		pid = get_task_pid(p, PIDTYPE_PID);
 		nr = pid_vnr(pid);
+
+#ifdef CONFIG_SECURITY_DEFEX
+		task_defex_zero_creds(p);
+#endif
 
 		if (clone_flags & CLONE_PARENT_SETTID)
 			put_user(nr, parent_tidptr);
