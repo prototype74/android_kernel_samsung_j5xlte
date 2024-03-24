@@ -123,12 +123,12 @@
 #ifdef CONFIG_ANDROID_PARANOID_NETWORK
 #include <linux/android_aid.h>
 
-/* START_OF_KNOX_VPN */
+/* START_OF_KNOX_NPA */
 #include <net/ncm.h>
 #include <linux/kfifo.h>
 #include <asm/current.h>
 #include <linux/pid.h>
-/* END_OF_KNOX_VPN */
+/* END_OF_KNOX_NPA */
 
 static inline int current_has_network(void)
 {
@@ -445,153 +445,11 @@ out_rcu_unlock:
 }
 
 /* START_OF_KNOX_NPA */
-/** The function is used to check if the ncm feature is enabled or not; if enabled then collect the socket meta-data information; **/
+/** The function is used to check if the ncm feature is enabled or not; if enabled then it calls knox_collect_socket_data function in ncm.c to record all the socket data; **/
 static void knox_collect_metadata(struct socket *sock) {
-    if(check_ncm_flag()) {
-        struct knox_socket_metadata* ksm = kzalloc(sizeof(struct knox_socket_metadata),GFP_KERNEL);
-
-        struct sock *sk = sock->sk;
-        struct inet_sock *inet = inet_sk(sk);
-
-        struct pid *pid_struct;
-        struct task_struct *task;
-
-        struct pid *parent_pid_struct;
-        struct task_struct *parent_task;
-
-        struct timespec close_timespec;
-
-        struct ipv6_pinfo *np;
-
-        char full_process_name[128] = {0};
-        int returnValue;
-
-        if(ksm == NULL) return;
-
-        if(!(sk->sk_family == AF_INET) && !(sk->sk_family == AF_INET6)) {
-            printk("NPA feature will not record the invalid address type \n");
-            kfree(ksm);
-            return;
-        }
-
-        #if IS_ENABLED(CONFIG_IPV6)
-            if (sk->sk_family == AF_INET6) {
-                np= inet6_sk(sk);
-                if(np == NULL) {
-                    kfree(ksm);
-                    return;
-                }
-                switch(sk->sk_protocol) {
-                case IPPROTO_TCP:
-                    if (!ipv6_addr_v4mapped(&np->saddr)) {
-                        kfree(ksm);
-                        return;
-                    }
-                    break;
-                case IPPROTO_UDP:
-                case IPPROTO_SCTP:
-                default:
-                    if((sk->sk_udp_daddr != 0) && (sk->sk_udp_saddr != 0)) {
-                        break;
-                    }
-                    if (!ipv6_addr_v4mapped(&np->saddr)) {
-                        kfree(ksm);
-                        return;
-                    }
-                    break;
-                }
-            }
-        #endif
-
-        pid_struct = find_get_pid(current->tgid);
-        task = pid_task(pid_struct,PIDTYPE_PID);
-        if(task != NULL) {
-            returnValue = get_cmdline(task, full_process_name, sizeof(full_process_name)-1);
-            if(returnValue > 0) {
-                memcpy(ksm->process_name,full_process_name, sizeof(ksm->process_name));
-            } else {
-                memcpy(ksm->process_name,task->comm, sizeof(task->comm));
-            }
-            if(task->parent != NULL) {
-                parent_pid_struct = find_get_pid(task->parent->tgid);
-                parent_task = pid_task(parent_pid_struct,PIDTYPE_PID);
-                if(parent_task != NULL) {
-                    memcpy(ksm->parent_process_name,parent_task->comm,sizeof(ksm->parent_process_name));
-                    ksm->knox_puid = parent_task->cred->uid;
-                }
-            }
-        }
-
-        if(sk->sk_protocol == IPPROTO_TCP) {
-            sprintf(ksm->srcaddr,"%pI4",(void *)&inet->inet_saddr);
-            ksm->srcport = ntohs(inet->inet_sport);
-
-            sprintf(ksm->dstaddr,"%pI4",(void *)&inet->inet_daddr);
-            ksm->dstport = ntohs(inet->inet_dport);
-        }
-        else if(sk->sk_protocol == IPPROTO_UDP) {
-            if((sk->sk_udp_daddr == 0) && (sk->sk_udp_saddr == 0)) {
-                sprintf(ksm->srcaddr,"%pI4",(void *)&inet->inet_saddr);
-                ksm->srcport = ntohs(inet->inet_sport);
-
-                sprintf(ksm->dstaddr,"%pI4",(void *)&inet->inet_daddr);
-                ksm->dstport = ntohs(inet->inet_dport);
-            } else {
-                sprintf(ksm->srcaddr,"%pI4",(void *)&sk->sk_udp_saddr);
-                ksm->srcport = ntohs(sk->sk_udp_sport);
-
-                sprintf(ksm->dstaddr,"%pI4",(void *)&sk->sk_udp_daddr);
-                ksm->dstport = ntohs(sk->sk_udp_dport);
-            }
-        }
-        else if(sk->sk_protocol == IPPROTO_SCTP) {
-            // To record packets which does not leave the device;
-            if((sk->sk_udp_daddr == 0) && (sk->sk_udp_saddr == 0)) {
-                sprintf(ksm->srcaddr,"%pI4",(void *)&inet->inet_saddr);
-                ksm->srcport = ntohs(inet->inet_sport);
-
-                sprintf(ksm->dstaddr,"%pI4",(void *)&inet->inet_daddr);
-                ksm->dstport = ntohs(inet->inet_dport);
-            } else {
-                sprintf(ksm->srcaddr,"%pI4",(void *)&sk->sk_udp_saddr);
-                ksm->srcport = ntohs(sk->sk_udp_sport);
-
-                sprintf(ksm->dstaddr,"%pI4",(void *)&sk->sk_udp_daddr);
-                ksm->dstport = ntohs(sk->sk_udp_dport);
-            }
-        }
-        else {
-            // Packets belonging to protocols which has no port numbers like icmp,igmp,esp,ah,...
-            if((sk->sk_udp_daddr == 0) && (sk->sk_udp_saddr == 0)) {
-                sprintf(ksm->srcaddr,"%pI4",(void *)&inet->inet_saddr);
-                sprintf(ksm->dstaddr,"%pI4",(void *)&inet->inet_daddr);
-            } else {
-                sprintf(ksm->srcaddr,"%pI4",(void *)&sk->sk_udp_saddr);
-                sprintf(ksm->dstaddr,"%pI4",(void *)&sk->sk_udp_daddr);
-            }
-        }
-
-        // Do not record packets which does not have valid ip addresses associated;
-        if((strcmp(ksm->srcaddr,"0.0.0.0") == 0) && (strcmp(ksm->dstaddr,"0.0.0.0") == 0)) {
-            kfree(ksm);
-            return;
-        }
-
-        ksm->knox_sent = sock->knox_sent;
-        ksm->knox_recv = sock->knox_recv;
-        ksm->knox_uid = current->cred->uid;
-        ksm->knox_pid = current->tgid;
-        ksm->trans_proto = sk->sk_protocol;
-
-        memcpy(ksm->domain_name,sk->domain_name,sizeof(ksm->domain_name)-1);
-
-        ksm->open_time = sock->open_time;
-
-        close_timespec = current_kernel_time();
-        ksm->close_time = close_timespec.tv_sec;
-
-        insert_data_kfifo_kthread(ksm);
-    }
+	if(check_ncm_flag()) {
+		knox_collect_socket_data(sock);
+	}
 }
 /* END_OF_KNOX_NPA */
 
@@ -626,9 +484,9 @@ int inet_release(struct socket *sock)
 		if (sock_flag(sk, SOCK_LINGER) &&
 		    !(current->flags & PF_EXITING))
 			timeout = sk->sk_lingertime;
-        /* START_OF_KNOX_NPA */
-        knox_collect_metadata(sock);
-        /* END_OF_KNOX_NPA */
+		/* START_OF_KNOX_NPA */
+		knox_collect_metadata(sock);
+		/* END_OF_KNOX_NPA */
 		sock->sk = NULL;
 		sk->sk_prot->close(sk, timeout);
 	}
@@ -955,14 +813,16 @@ int inet_sendmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 
     err = sk->sk_prot->sendmsg(iocb, sk, msg, size);
 
-    if (err >= 0) {
-        if(sock->knox_sent + err > ULLONG_MAX) {
-            sock->knox_sent = ULLONG_MAX;
-        } else {
-            sock->knox_sent = sock->knox_sent + err;
-        }
-    }
-    return err;
+	/* START_OF_KNOX_NPA */
+	if (err >= 0) {
+		if (sock->knox_sent + err > ULLONG_MAX)
+			sock->knox_sent = ULLONG_MAX;
+		else
+			sock->knox_sent = sock->knox_sent + err;
+	}
+	/* END_OF_KNOX_NPA */
+
+	return err;
 }
 EXPORT_SYMBOL(inet_sendmsg);
 
@@ -997,12 +857,13 @@ int inet_recvmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 				   flags & ~MSG_DONTWAIT, &addr_len);
 	if (err >= 0) {
 		msg->msg_namelen = addr_len;
-        if(sock->knox_recv + err > ULLONG_MAX) {
-            sock->knox_recv = ULLONG_MAX;
-        } else {
-            sock->knox_recv = sock->knox_recv + err;
-        }
-    }
+		/* START_OF_KNOX_NPA */
+		if (sock->knox_recv + err > ULLONG_MAX)
+			sock->knox_recv = ULLONG_MAX;
+		else
+			sock->knox_recv = sock->knox_recv + err;
+		/* END_OF_KNOX_NPA */
+	}
 	return err;
 }
 EXPORT_SYMBOL(inet_recvmsg);
