@@ -29,8 +29,6 @@
 
 #define CCI_PINCTRL_STATE_DEFAULT "cci_default"
 #define CCI_PINCTRL_STATE_SLEEP "cci_suspend"
-#define CCI_NUM_CLK_MAX 16
-
 
 #define CCI_NUM_CLK_MAX	16
 
