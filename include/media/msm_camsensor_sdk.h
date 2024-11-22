@@ -32,9 +32,6 @@
 
 #define MAX_EEPROM_NAME           32
 
-#define MAX_NAME_SIZE             32
-#define MAX_FLASH_NUM             8
-
 enum msm_sensor_camera_id_t {
 	CAMERA_0,
 	CAMERA_1,
