@@ -529,7 +529,7 @@ static int32_t msm_actuator_move_focus(
 	return rc;
 }
 
-static int32_t msm_actuator_vcm_init_step_table(struct msm_actuator_ctrl_t *a_ctrl,
+static int32_t msm_actuator_init_step_table(struct msm_actuator_ctrl_t *a_ctrl,
 	struct msm_actuator_set_info_t *set_info)
 {
 	int16_t code_per_step = 0;
@@ -540,6 +540,7 @@ static int32_t msm_actuator_vcm_init_step_table(struct msm_actuator_ctrl_t *a_ct
 	uint32_t max_code_size = 1;
 	uint16_t data_size = set_info->actuator_params.data_size;
 	CDBG("Enter\n");
+
 	for (; data_size > 0; data_size--)
 		max_code_size *= 2;
 
@@ -548,11 +549,21 @@ static int32_t msm_actuator_vcm_init_step_table(struct msm_actuator_ctrl_t *a_ct
 		kfree(a_ctrl->step_position_table);
 	}
 	a_ctrl->step_position_table = NULL;
+
+	if (set_info->af_tuning_params.total_steps
+		>  MAX_ACTUATOR_AF_TOTAL_STEPS) {
+		pr_err("Max actuator totalsteps exceeded = %d\n",
+		set_info->af_tuning_params.total_steps);
+		return -EFAULT;
+	}
+	/* Fill step position table */
 	a_ctrl->step_position_table =
 		kzalloc(sizeof(uint16_t) *
 		(set_info->af_tuning_params.total_steps + 1), GFP_KERNEL);
+
 	if (a_ctrl->step_position_table == NULL)
 		return -ENOMEM;
+
 	cur_code = set_info->af_tuning_params.initial_code;
 	a_ctrl->step_position_table[step_index++] = cur_code;
 	for (region_index = 0;
@@ -1774,82 +1785,6 @@ static int32_t msm_actuator_hall_effect_set_position(
 	return rc;
 }
 
-
-static int32_t msm_actuator_init_step_table(struct msm_actuator_ctrl_t *a_ctrl,
-	struct msm_actuator_set_info_t *set_info)
-{
-	int16_t code_per_step = 0;
-	uint32_t qvalue = 0;
-	int16_t cur_code = 0;
-	int16_t step_index = 0, region_index = 0;
-	uint16_t step_boundary = 0;
-	uint32_t max_code_size = 1;
-	uint16_t data_size = set_info->actuator_params.data_size;
-	CDBG("Enter\n");
-
-	for (; data_size > 0; data_size--)
-			max_code_size *= 2;
-
-	if ((a_ctrl->actuator_state == ACTUATOR_POWER_UP) &&
-		(a_ctrl->step_position_table != NULL)) {
-		kfree(a_ctrl->step_position_table);
-	}
-
-	a_ctrl->step_position_table = NULL;
-
-	if (set_info->af_tuning_params.total_steps
-		>  MAX_ACTUATOR_AF_TOTAL_STEPS) {
-		pr_err("[%s::%d] Max actuator totalsteps exceeded = %d\n",
-		__func__, __LINE__, set_info->af_tuning_params.total_steps);
-		return -EFAULT;
-	}
-	/* Fill step position table */
-	a_ctrl->step_position_table =
-		kzalloc(sizeof(uint16_t) *
-		(set_info->af_tuning_params.total_steps + 1), GFP_KERNEL);
-	if (a_ctrl->step_position_table == NULL) {
-		pr_err("[%s::%d] mem alloc fail !\n", __func__, __LINE__);
-		return -ENOMEM;
-	}
-
-	cur_code = set_info->af_tuning_params.initial_code;
-	a_ctrl->step_position_table[step_index++] = cur_code;
-	for (region_index = 0;
-		region_index < a_ctrl->region_size;
-		region_index++) {
-		code_per_step =
-				a_ctrl->region_params[region_index].code_per_step;
-		qvalue =
-			a_ctrl->region_params[region_index].qvalue;
-		step_boundary =
-				a_ctrl->region_params[region_index].
-				step_bound[MOVE_NEAR];
-		for (; step_index <= step_boundary; step_index++) {
-			if ( qvalue > 1 && qvalue <= MAX_QVALUE)
-				cur_code = step_index * code_per_step / qvalue;
-			else
-				cur_code = step_index * code_per_step;
-			cur_code += set_info->af_tuning_params.initial_code;
-			if (cur_code < max_code_size){
-				a_ctrl->step_position_table[step_index] =
-					cur_code;
-			} else {
-				for (; step_index <
-					set_info->af_tuning_params.total_steps;
-					step_index++)
-					a_ctrl->
-						step_position_table[
-						step_index] =
-						max_code_size;
-			}
-			CDBG("step_position_table [%d] %d\n", step_index,
-			a_ctrl->step_position_table[step_index]);
-		}
-	}
-	CDBG("Exit\n");
-	return 0;
-}
-
 static const struct of_device_id msm_actuator_i2c_dt_match[] = {
 	{.compatible = "qcom,actuator"},
 	{}
@@ -1898,7 +1833,7 @@ static int __init msm_actuator_init_module(void)
 static struct msm_actuator msm_vcm_actuator_table = {
 	.act_type = ACTUATOR_VCM,
 	.func_tbl = {
-		.actuator_init_step_table = msm_actuator_vcm_init_step_table,
+		.actuator_init_step_table = msm_actuator_init_step_table,
 		.actuator_move_focus = msm_actuator_move_focus,
 		.actuator_write_focus = msm_actuator_write_focus,
 		.actuator_set_default_focus = msm_actuator_set_default_focus,
