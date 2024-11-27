@@ -101,13 +101,6 @@ struct msm_vfe_camif_subsample_cfg {
 	uint32_t line_skip;
 };
 
-struct msm_vfe_camif_subsample_cfg {
-	uint32_t irq_subsample_period;
-	uint32_t irq_subsample_pattern;
-	uint32_t pixel_skip;
-	uint32_t line_skip;
-};
-
 struct msm_vfe_camif_cfg {
 	uint32_t lines_per_frame;
 	uint32_t pixels_per_line;
