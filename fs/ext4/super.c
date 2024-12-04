@@ -5345,8 +5345,9 @@ void print_bh(struct super_block *sb, struct buffer_head *bh
 {
 	if (bh) {
 		printk(KERN_ERR " print_bh: bh %p,"
-				" bh->b_size %u, bh->b_data %p\n",
-				(void *) bh, bh->b_size, (void *) bh->b_data);
+				" bh->b_size %lu, bh->b_data %p\n",
+				(void *) bh, (unsigned long) bh->b_size,
+				(void *) bh->b_data);
 		print_block_data(sb, bh->b_blocknr, bh->b_data, start, len);
 	}
 	else
@@ -5364,10 +5365,11 @@ void print_block_data(struct super_block *sb, sector_t blocknr
 	struct mount *mnt = NULL;
 
 	printk(KERN_ERR "As EXT4-fs error, printing data in hex\n");
-	printk(KERN_ERR " [partition info] s_id : %s, start sector# : %llu\n"
-			, sb->s_id, sb->s_bdev->bd_part->start_sect);
-	printk(KERN_ERR " dump block# : %llu, start offset(byte) : %d\n"
-			, blocknr, start);
+	printk(KERN_ERR " [partition info] s_id : %s, start sector# : %lu\n"
+			, sb->s_id
+			, (unsigned long) sb->s_bdev->bd_part->start_sect);
+	printk(KERN_ERR " dump block# : %lu, start offset(byte) : %d\n"
+			, (unsigned long) blocknr, start);
 	printk(KERN_ERR " length(byte) : %d, data_to_dump 0x%p\n"
 			, len, (void *)data_to_dump);
 	if (!list_empty(&sb->s_mounts)) {
