@@ -643,6 +643,9 @@ static const struct file_operations pn547_dev_fops = {
 	.write = pn547_dev_write,
 	.open = pn547_dev_open,
 	.unlocked_ioctl = pn547_dev_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = pn547_dev_ioctl,
+#endif
 };
 
 #ifdef CONFIG_NFC_PN547_LDO_CONTROL
