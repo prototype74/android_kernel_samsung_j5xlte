@@ -30,7 +30,6 @@
 #include <linux/firmware.h>
 #include <linux/wakelock.h>
 #include <linux/blkdev.h>
-#include <mach/gpio.h>
 #include <linux/sec_param.h>
 #include <linux/sec_debug.h>
 #include <linux/sec_class.h>
