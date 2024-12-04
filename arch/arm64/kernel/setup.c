@@ -64,6 +64,15 @@
 unsigned int processor_id;
 EXPORT_SYMBOL(processor_id);
 
+unsigned int system_rev;
+EXPORT_SYMBOL(system_rev);
+
+unsigned int system_serial_low;
+EXPORT_SYMBOL(system_serial_low);
+
+unsigned int system_serial_high;
+EXPORT_SYMBOL(system_serial_high);
+
 unsigned long elf_hwcap __read_mostly;
 EXPORT_SYMBOL_GPL(elf_hwcap);
 
@@ -343,6 +352,30 @@ static int __init early_mem(char *p)
 }
 early_param("mem", early_mem);
 
+static int __init msm_serialnr_setup(char *p)
+{
+#ifdef CONFIG_EXTEND_SERIAL_NUM_16
+	unsigned long long serial = 0;
+	serial = simple_strtoull(p, NULL, 16);
+	system_serial_high = serial>>32;
+	system_serial_low = serial & 0xFFFFFFFF;
+#else
+	system_serial_low = simple_strtoul(p, NULL, 16);
+	system_serial_high = (system_serial_low&0xFFFF0000)>>16;
+	system_serial_low = system_serial_low&0x0000FFFF;
+#endif
+	return 0;
+}
+early_param("androidboot.serialno", msm_serialnr_setup);
+
+static int __init msm_hw_rev_setup(char *p)
+{
+	system_rev = memparse(p, NULL);
+	printk("androidboot.revision %x", system_rev);
+	return 0;
+}
+early_param("androidboot.revision", msm_hw_rev_setup);
+
 static void __init request_standard_resources(void)
 {
 	struct memblock_region *region;
@@ -506,6 +539,9 @@ static int c_show(struct seq_file *m, void *v)
 		seq_printf(m, "Hardware\t: %s\n", machine_name);
 	else
 		seq_printf(m, "Hardware\t: %s\n", arch_read_hardware_id());
+	seq_printf(m, "Revision\t: %04x\n", system_rev);
+	seq_printf(m, "Serial\t\t: %08x%08x\n",
+		   system_serial_high, system_serial_low);
 
 	return 0;
 }
