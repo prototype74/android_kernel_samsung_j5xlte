@@ -272,7 +272,7 @@ static void fw_update(void *dev_data)
 		fp = filp_open(fw_path, O_RDONLY, 0);
 		if (IS_ERR(fp)) {
 			tsp_warn("%s(), file %s open error:%d\n", __func__,
-					fw_path, (s32)fp);
+					fw_path, PTR_ERR(fp));
 			sec->cmd_state= CMD_STATE_FAIL;
 			set_fs(old_fs);
 			break;

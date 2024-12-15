@@ -322,7 +322,7 @@ static int read_data_from_file(unsigned char *fw_data)
 
 	filp = filp_open("/sdcard/ist30xx_fw.h", O_RDONLY, 0);
 	if (IS_ERR(filp)) {
-		tsp_err("%s: file open error:%d\n", __func__, (s32)filp);
+		tsp_err("%s: file open error:%d\n", __func__, PTR_ERR(filp));
 		return -1;
 	}
 

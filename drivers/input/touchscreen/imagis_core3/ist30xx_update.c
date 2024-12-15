@@ -1096,7 +1096,7 @@ ssize_t ist30xx_fw_store(struct device *dev, struct device_attribute *attr,
 			 IST30XXB_FW_NAME);
 		fp = filp_open(fw_path, O_RDONLY, 0);
 		if (IS_ERR(fp)) {
-			tsp_warn("%s: file %s open error:%d\n", __func__, fw_path, (s32)fp);
+			tsp_warn("%s: file %s open error:%d\n", __func__, fw_path, PTR_ERR(fp));
 			goto err_file_open;
 		}
 
@@ -1187,7 +1187,7 @@ ssize_t ist30xx_fw_sdcard_show(struct device *dev,
 		 IST30XXB_FW_NAME);
 	fp = filp_open(fw_path, O_RDONLY, 0);
 	if (IS_ERR(fp)) {
-		tsp_info("%s: file %s open error:%d\n", __func__, fw_path, (s32)fp);
+		tsp_info("%s: file %s open error:%d\n", __func__, fw_path, PTR_ERR(fp));
 		goto err_file_open;
 	}
 
