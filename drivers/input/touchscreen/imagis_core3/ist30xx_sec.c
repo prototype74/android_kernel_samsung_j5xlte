@@ -218,8 +218,7 @@ static void boost_level(void *dev_data)
 
         tsp_info("%s(), [%d][%d]: %s\n", __func__,
                  sec->cmd_param[0], sec->cmd_param[1], buf);
-        dev_info(&info->client->dev, "%s: %s(%d)\n", __func__, buf,
-                 strnlen(buf, sizeof(buf)));
+        dev_info(&info->client->dev, "%s: %s\n", __func__, buf);
 
         return;
 }
@@ -735,8 +734,7 @@ void run_cm_test(void *dev_data)
 
 	sec->cmd_state = CMD_STATE_OK;
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
-	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-		 strnlen(buf, sizeof(buf)));
+	dev_info(&data->client->dev, "%s: %s\n", __func__, buf);
 }
 
 void get_cm_value(void *dev_data)
@@ -762,8 +760,7 @@ void get_cm_value(void *dev_data)
 	set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
 	tsp_info("%s(), [%d][%d]: %s\n", __func__,
 		 sec->cmd_param[0], sec->cmd_param[1], buf);
-	dev_info(&data->client->dev, "%s: %s(%d)\n", __func__, buf,
-		 strnlen(buf, sizeof(buf)));
+	dev_info(&data->client->dev, "%s: %s\n", __func__, buf);
 }
 
 /* sysfs: /sys/class/sec/tsp/close_tsp_test */
