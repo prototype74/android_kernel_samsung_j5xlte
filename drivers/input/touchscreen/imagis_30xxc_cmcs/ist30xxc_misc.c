@@ -1173,10 +1173,15 @@ ssize_t ist30xx_direct_show(struct device *dev, struct device_attribute *attr,
     ist30xx_cmd_hold(data, IST30XX_ENABLE);
 
     buf32 = kzalloc(max_len * sizeof(u32), GFP_KERNEL);
+    if (unlikely(!buf32)) {
+        tsp_err("failed to allocate %s %d\n", __func__, __LINE__);
+        return 0;
+    }
+
     while (len > 0) {
         if (len < max_len) max_len = len;
 
-        memset(buf32, 0, sizeof(buf32));
+        memset(buf32, 0, max_len * sizeof(u32));
         ret = ist30xx_burst_read(data->client, addr, buf32, max_len, true);
         if (unlikely(ret)) {
             count = sprintf(buf, "I2C Burst read fail\n");
