@@ -248,18 +248,16 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 			e_ctrl->i2c_client.addr_type = emap[j].mem.addr_t;
 
 #ifdef EEPROM_QUP_I2C
-                        /* In A8 Project, EEPROM uses QUP I2C, QUP supports 3825bytes I2C read at a time,
-                           Here 4608Bytes will be read from EEPROM, So 4608Bytes are divided into two parts,
+			/* In A8 Project, EEPROM uses QUP I2C, QUP supports 3825bytes I2C read at a time,
+			   Here 4608Bytes will be read from EEPROM, So 4608Bytes are divided into two parts,
 			   3824 bytes and 784 bytes. */
-                        if(emap[j].mem.valid_size > MAX_READ_SIZE)
+			if(emap[j].mem.valid_size > MAX_READ_SIZE)
 			{
-				memptr = block->mapdata + emap[j].mem.addr;
 				size = MAX_READ_SIZE;
-				CDBG("%s %d mem.addr %x memptr %x size %d\n", __func__, __LINE__, \
-					(uint32_t)emap[j].mem.addr, (uint32_t)memptr, size);
+				memptr = block->mapdata + emap[j].mem.addr;
 				rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
-					&(e_ctrl->i2c_client), emap[j].mem.addr,
-					memptr, size);
+						&(e_ctrl->i2c_client), emap[j].mem.addr,
+						memptr, size);
 				if (rc < 0) {
 					pr_err("%s: read failed\n", __func__);
 					return rc;
@@ -267,30 +265,25 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 
 				size = emap[j].mem.valid_size - MAX_READ_SIZE;
 				memptr += MAX_READ_SIZE;
-
-				CDBG("%s %d mem.addr %x memptr %x size %d\n", __func__, __LINE__, \
-					(uint32_t)(emap[j].mem.addr + MAX_READ_SIZE), (uint32_t)memptr, size);
-                                rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
-                                        &(e_ctrl->i2c_client),(emap[j].mem.addr + MAX_READ_SIZE) ,
-                                        memptr, size);
-                                if (rc < 0) {
-                                        pr_err("%s: read failed\n", __func__);
-                                        return rc;
-                                }
+				rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
+						&(e_ctrl->i2c_client),(emap[j].mem.addr + MAX_READ_SIZE) ,
+						memptr, size);
+				if (rc < 0) {
+					pr_err("%s: read failed\n", __func__);
+					return rc;
+				}
 				memptr += size;
 			}
 			else
 			{
 			memptr = block->mapdata + emap[j].mem.addr;
-			CDBG("%s %d mem.addr %x memptr %x size %d\n", __func__, __LINE__, \
-				(uint32_t)emap[j].mem.addr, (uint32_t)memptr, emap[j].mem.valid_size);
-			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
-				&(e_ctrl->i2c_client), emap[j].mem.addr,
-				memptr, emap[j].mem.valid_size);
-			if (rc < 0) {
-				pr_err("%s: read failed\n", __func__);
-				return rc;
-			}
+				rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
+						&(e_ctrl->i2c_client), emap[j].mem.addr,
+						memptr, emap[j].mem.valid_size);
+				if (rc < 0) {
+					pr_err("%s: read failed\n", __func__);
+					return rc;
+				}
 				memptr += emap[j].mem.valid_size;
 			}
 #else
@@ -501,7 +494,7 @@ static int eeprom_config_read_data(struct msm_eeprom_ctrl_t *e_ctrl,
 	rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
 			&(e_ctrl->i2c_client), cdata->cfg.read_data.addr,
 			buf, cdata->cfg.read_data.num_bytes);
-	CDBG("%s:  read data, rc addr = 0x%p %d %d\n", __func__, (void*)cdata->cfg.read_data.addr, cdata->cfg.read_data.num_bytes, rc);
+	CDBG("%s:  read data, rc addr = 0x%lx %d %d\n", __func__, (uintptr_t)cdata->cfg.read_data.addr, cdata->cfg.read_data.num_bytes, rc);
 	if (rc < 0) {
 		pr_err("%s: failed to read data, rc %d\n", __func__, rc);
 		goto POWER_DOWN;
@@ -531,7 +524,7 @@ static int eeprom_config_read_compressed_data(struct msm_eeprom_ctrl_t *e_ctrl,
 
 	uint8_t *buf_comp = NULL;
 	uint8_t *buf_decomp = NULL;
-	uint32_t decomp_size;
+	size_t decomp_size;
 
 	pr_err("%s: address (0x%x) comp_size (%d) after decomp (%d)", __func__,
    cdata->cfg.read_data.addr,
@@ -609,8 +602,8 @@ static int eeprom_config_write_data(struct msm_eeprom_ctrl_t *e_ctrl,
 	bool down;
 	void *work_mem = NULL;
   uint8_t *compressed_buf = NULL;
-	uint32_t compressed_size = 0;
-  uint32_t crc = ~0UL;
+	size_t compressed_size = 0;
+  uint32_t crc = ~0;
 
 	pr_warn("%s: compress ? %d size %d", __func__,
 		cdata->cfg.write_data.compress, cdata->cfg.write_data.num_bytes);
@@ -649,7 +642,7 @@ static int eeprom_config_write_data(struct msm_eeprom_ctrl_t *e_ctrl,
     crc = crc32_le(crc, compressed_buf, compressed_size);
     crc = ~crc;
 
-		pr_err("%s: compressed size %d, crc=0x%0X", __func__, compressed_size, crc);
+		pr_err("%s: compressed size %d, crc=0x%0X \n", __func__, (uint32_t)compressed_size, crc);
 		*cdata->cfg.write_data.write_size = compressed_size + 4;  //  include CRC size
   }
 	rc = msm_eeprom_power_up(e_ctrl, &down);
@@ -1465,7 +1458,7 @@ static int msm_eeprom_i2c_probe(struct i2c_client *client,
 	}
 	e_ctrl->eeprom_v4l2_subdev_ops = &msm_eeprom_subdev_ops;
 	e_ctrl->eeprom_mutex = &msm_eeprom_mutex;
-	CDBG("%s client = %x\n", __func__, (unsigned int)client);
+	CDBG("%s client = 0x%p\n", __func__, client);
 	e_ctrl->eboard_info = kzalloc(sizeof(
 		struct msm_eeprom_board_info), GFP_KERNEL);
 	if (!e_ctrl->eboard_info) {
