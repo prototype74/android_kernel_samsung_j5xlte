@@ -452,8 +452,8 @@ struct msm_isp_event_data32 {
 	union {
 		struct msm_isp_stats_event stats;
 		struct msm_isp_buf_event buf_done;
-		struct msm_isp_error_info error_info;
 	} u;
+	uint32_t is_skip_pproc;
 };
 #endif
 #define V4L2_PIX_FMT_QBGGR8  v4l2_fourcc('Q', 'B', 'G', '8')

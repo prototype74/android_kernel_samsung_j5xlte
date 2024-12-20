@@ -323,6 +323,8 @@ struct msm_cpp_frame_info32_t {
 	compat_uint_t cpp_cmd_msg;
 	int src_fd;
 	int dst_fd;
+	compat_uptr_t src_ion_handle;
+	compat_uptr_t dest_ion_handle;
 	struct compat_timeval in_time, out_time;
 	compat_caddr_t cookie;
 	compat_int_t status;
@@ -330,7 +332,6 @@ struct msm_cpp_frame_info32_t {
 	uint32_t duplicate_identity;
 	struct msm_cpp_buffer_info_t input_buffer_info;
 	struct msm_cpp_buffer_info_t output_buffer_info[2];
-	struct msm_cpp_buffer_info_t tnr_scratch_buffer_info[2];
 };
 
 struct msm_cpp_clock_settings32_t {

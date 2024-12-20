@@ -674,6 +674,9 @@ int32_t msm_sensor_driver_probe(void *setting)
 		strlcpy(slave_info->sensor_name, setting32.sensor_name,
 			sizeof(slave_info->sensor_name));
 
+		strlcpy(slave_info->subdev_name, setting32.subdev_name,
+			sizeof(slave_info->subdev_name));
+
 		slave_info->addr_type = setting32.addr_type;
 		slave_info->camera_id = setting32.camera_id;
 
@@ -695,7 +698,8 @@ int32_t msm_sensor_driver_probe(void *setting)
 		slave_info->is_init_params_valid =
 			setting32.is_init_params_valid;
 		slave_info->sensor_init_params = setting32.sensor_init_params;
-		slave_info->is_flash_supported = setting32.is_flash_supported;
+		slave_info->is_probe_succeed = setting32.is_probe_succeed;
+		slave_info->sensor_info = setting32.sensor_info;
 	} else
 #endif
 	{

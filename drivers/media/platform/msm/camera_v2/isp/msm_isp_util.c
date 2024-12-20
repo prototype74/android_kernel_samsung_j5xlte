@@ -619,6 +619,7 @@ static int msm_isp_proc_cmd_list_unlocked(struct vfe_device *vfe_dev, void *arg)
 struct msm_vfe_cfg_cmd2_32 {
 	uint16_t num_cfg;
 	uint16_t cmd_len;
+	uint32_t frame_id;
 	compat_caddr_t cfg_data;
 	compat_caddr_t cfg_cmd;
 };
@@ -639,6 +640,7 @@ static void msm_isp_compat_to_proc_cmd(struct msm_vfe_cfg_cmd2 *proc_cmd,
 {
 	proc_cmd->num_cfg = proc_cmd_ptr32->num_cfg;
 	proc_cmd->cmd_len = proc_cmd_ptr32->cmd_len;
+	proc_cmd->frame_id = proc_cmd_ptr32->frame_id;
 	proc_cmd->cfg_data = compat_ptr(proc_cmd_ptr32->cfg_data);
 	proc_cmd->cfg_cmd = compat_ptr(proc_cmd_ptr32->cfg_cmd);
 }
