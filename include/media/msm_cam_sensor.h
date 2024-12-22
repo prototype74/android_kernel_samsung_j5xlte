@@ -779,6 +779,11 @@ struct msm_camera_i2c_reg_setting32 {
 	uint16_t delay;
 };
 
+struct msm_camera_i2c_array_write_config32 {
+	struct msm_camera_i2c_reg_setting32 conf_array;
+	uint16_t slave_addr;
+};
+
 struct msm_actuator_tuning_params_t32 {
 	int16_t initial_code;
 	uint16_t pwd_step;
