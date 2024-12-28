@@ -455,6 +455,49 @@ struct msm_isp_event_data32 {
 	} u;
 	uint32_t is_skip_pproc;
 };
+
+// v4l2_plane32 and v4l2_buffer32 are copied from v4l2-compat-ioctl32.c
+struct v4l2_plane32 {
+	__u32			bytesused;
+	__u32			length;
+	union {
+		__u32		mem_offset;
+		compat_long_t	userptr;
+		__s32		fd;
+	} m;
+	__u32			data_offset;
+	__u32			reserved[11];
+};
+
+struct v4l2_buffer32 {
+	__u32			index;
+	__u32			type;	/* enum v4l2_buf_type */
+	__u32			bytesused;
+	__u32			flags;
+	__u32			field;	/* enum v4l2_field */
+	struct compat_timeval	timestamp;
+	struct v4l2_timecode	timecode;
+	__u32			sequence;
+
+	/* memory location */
+	__u32			memory;	/* enum v4l2_memory */
+	union {
+		__u32           offset;
+		compat_long_t   userptr;
+		compat_caddr_t  planes;
+		__s32		fd;
+	} m;
+	__u32			length;
+	__u32			reserved2;
+	__u32			reserved;
+};
+
+struct msm_isp_qbuf_info32 {
+	uint32_t handle;
+	int32_t buf_idx;
+	struct v4l2_buffer32 buffer;
+	uint32_t dirty_buf;
+};
 #endif
 #define V4L2_PIX_FMT_QBGGR8  v4l2_fourcc('Q', 'B', 'G', '8')
 #define V4L2_PIX_FMT_QGBRG8  v4l2_fourcc('Q', 'G', 'B', '8')
@@ -520,6 +563,9 @@ struct msm_isp_event_data32 {
 	_IOWR('V', BASE_VIDIOC_PRIVATE+14, struct msm_vfe_cfg_cmd_list)
 
 #ifdef CONFIG_COMPAT
+#define VIDIOC_MSM_ISP_ENQUEUE_BUF_COMPAT \
+	_IOWR('V', BASE_VIDIOC_PRIVATE+2, struct msm_isp_qbuf_info32)
+
 #define VIDIOC_MSM_ISP_BUF_DONE \
 	_IOWR('V', BASE_VIDIOC_PRIVATE+21, struct msm_isp_event_data32)
 #else

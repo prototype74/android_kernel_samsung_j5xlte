@@ -195,6 +195,43 @@ static void msm_isp_unprepare_v4l2_buf(
 	return;
 }
 
+#ifdef CONFIG_COMPAT
+static int msm_isp_copy_to_v4l2_plane_compat(
+	struct v4l2_buffer *buf, struct v4l2_plane *plane)
+{
+	struct v4l2_plane32 *plane32 = NULL;
+	int rc = -1;
+	int i;
+
+	plane32 = kzalloc(sizeof(struct v4l2_plane32) * buf->length, GFP_KERNEL);
+	if (!plane32) {
+		pr_err("%s: Cannot alloc plane32\n", __func__);
+		return rc;
+	}
+
+	if (copy_from_user(plane32,
+			(void __user *)(buf->m.planes),
+		sizeof(struct v4l2_plane32) * buf->length)) {
+		pr_err("%s: Copy v4l2_plane32 failed\n", __func__);
+		kfree(plane32);
+		return rc;
+	}
+
+	for (i = 0; i < buf->length; i++) {
+		plane[i].bytesused = plane32[i].bytesused;
+		plane[i].length = plane32[i].length;
+		plane[i].m.mem_offset = plane32[i].m.mem_offset;
+		plane[i].m.userptr = (unsigned long)compat_ptr(plane32[i].m.userptr);
+		plane[i].m.fd = plane32[i].m.fd;
+		plane[i].data_offset = plane32[i].data_offset;
+		memcpy(plane[i].reserved, plane32[i].reserved, sizeof(plane[i].reserved));
+	}
+
+	kfree(plane32);
+	return 0;
+}
+#endif
+
 static int msm_isp_buf_prepare(struct msm_isp_buf_mgr *buf_mgr,
 	struct msm_isp_qbuf_info *info, struct vb2_buffer *vb2_buf)
 {
@@ -246,11 +283,23 @@ static int msm_isp_buf_prepare(struct msm_isp_buf_mgr *buf_mgr,
 			__func__, buf_info->state);
 			return rc;
 		}
-		if (copy_from_user(plane,
-				(void __user *)(buf->m.planes),
-			sizeof(struct v4l2_plane) * buf->length)) {
-			kfree(plane);
-			return rc;
+#ifdef CONFIG_COMPAT
+		if (is_compat_task()) {
+			rc = msm_isp_copy_to_v4l2_plane_compat(buf, plane);
+			if (rc < 0) {
+				kfree(plane);
+				return rc;
+			}
+		}
+		else
+#endif
+		{
+			if (copy_from_user(plane,
+					(void __user *)(buf->m.planes),
+				sizeof(struct v4l2_plane) * buf->length)) {
+				kfree(plane);
+				return rc;
+			}
 		}
 		buf->m.planes = plane;
 	}

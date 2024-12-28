@@ -861,6 +861,34 @@ static long msm_isp_ioctl_compat(struct v4l2_subdev *sd,
 		mutex_unlock(&vfe_dev->realtime_mutex);
 		break;
 	}
+	case VIDIOC_MSM_ISP_ENQUEUE_BUF_COMPAT: {
+		struct msm_isp_qbuf_info buf_enqeue;
+		struct msm_isp_qbuf_info32 *buf_enqeue32;
+		memset(&buf_enqeue, 0, sizeof(buf_enqeue));
+		buf_enqeue32 = (struct msm_isp_qbuf_info32 *)arg;
+		buf_enqeue.handle = buf_enqeue32->handle;
+		buf_enqeue.buf_idx = buf_enqeue32->buf_idx;
+		buf_enqeue.buffer.index = buf_enqeue32->buffer.index;
+		buf_enqeue.buffer.type = buf_enqeue32->buffer.type;
+		buf_enqeue.buffer.bytesused = buf_enqeue32->buffer.bytesused;
+		buf_enqeue.buffer.flags = buf_enqeue32->buffer.flags;
+		buf_enqeue.buffer.field = buf_enqeue32->buffer.field;
+		buf_enqeue.buffer.timestamp.tv_sec = buf_enqeue32->buffer.timestamp.tv_sec;
+		buf_enqeue.buffer.timestamp.tv_usec = buf_enqeue32->buffer.timestamp.tv_usec;
+		buf_enqeue.buffer.timecode = buf_enqeue32->buffer.timecode;
+		buf_enqeue.buffer.sequence = buf_enqeue32->buffer.sequence;
+		buf_enqeue.buffer.memory = buf_enqeue32->buffer.memory;
+		buf_enqeue.buffer.m.offset = buf_enqeue32->buffer.m.offset;
+		buf_enqeue.buffer.m.userptr = (unsigned long)compat_ptr(buf_enqeue32->buffer.m.userptr);
+		buf_enqeue.buffer.m.planes = compat_ptr(buf_enqeue32->buffer.m.planes);
+		buf_enqeue.buffer.m.fd = buf_enqeue32->buffer.m.fd;
+		buf_enqeue.buffer.length = buf_enqeue32->buffer.length;
+		buf_enqeue.buffer.reserved2 = buf_enqeue32->buffer.reserved2;
+		buf_enqeue.buffer.reserved = buf_enqeue32->buffer.reserved;
+		buf_enqeue.dirty_buf = buf_enqeue32->dirty_buf;
+		cmd = VIDIOC_MSM_ISP_ENQUEUE_BUF;
+		return msm_isp_ioctl_unlocked(sd, cmd, &buf_enqeue);
+	}
 	case VIDIOC_MSM_ISP_BUF_DONE: {
 		struct msm_isp_event_data buf_event;
 		struct msm_isp_event_data32 *buf_event32;
