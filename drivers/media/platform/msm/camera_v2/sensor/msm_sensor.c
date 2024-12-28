@@ -825,6 +825,7 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 	case CFG_WRITE_I2C_ARRAY: {
 		struct msm_camera_i2c_reg_setting32 conf_array32;
 		struct msm_camera_i2c_reg_setting conf_array;
+		struct msm_camera_i2c_burst_reg_array32 *burst_reg_setting32 = NULL;
 		struct msm_camera_i2c_burst_reg_array *burst_reg_setting = NULL;
 		struct msm_camera_i2c_reg_array *reg_setting = NULL;
 		uint8_t *reg_data = NULL;
@@ -874,11 +875,20 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 				rc = -ENOMEM;
 				break;
 			}
-			if (copy_from_user((void *)burst_reg_setting,
+			burst_reg_setting32 = (void *)kzalloc(conf_array.size *
+				(sizeof(struct msm_camera_i2c_burst_reg_array32)), GFP_KERNEL);
+			if (!burst_reg_setting32) {
+				pr_err("%s:%d burst_reg_setting32 failed\n", __func__, __LINE__);
+				kfree(burst_reg_setting);
+				rc = -ENOMEM;
+				break;
+			}
+			if (copy_from_user((void *)burst_reg_setting32,
 				(void *)conf_array.reg_setting,
 				conf_array.size *
-				sizeof(struct msm_camera_i2c_burst_reg_array))) {
+				sizeof(struct msm_camera_i2c_burst_reg_array32))) {
 				pr_err("%s:%d failed\n", __func__, __LINE__);
+				kfree(burst_reg_setting32);
 				kfree(burst_reg_setting);
 				rc = -EFAULT;
 				break;
@@ -888,6 +898,11 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 			conf_array.size = 1;
 
 			for (i = 0; i < size; i++) {
+				burst_reg_setting[i].reg_addr = burst_reg_setting32[i].reg_addr;
+				burst_reg_setting[i].reg_burst_data = compat_ptr(burst_reg_setting32[i].reg_burst_data);
+				burst_reg_setting[i].reg_data_size = burst_reg_setting32[i].reg_data_size;
+				burst_reg_setting[i].delay = burst_reg_setting32[i].delay;
+
 				reg_data = kzalloc(burst_reg_setting[i].reg_data_size *
 					(sizeof(uint8_t)), GFP_KERNEL);
 				if (!reg_data) {
@@ -914,8 +929,8 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 				}
 				kfree(reg_data);
 			}
-
-			kfree(reg_setting);
+			kfree(burst_reg_setting32);
+			kfree(burst_reg_setting);
 		} else {
 			CDBG("%s:%d CFG_WRITE_I2C_ARRAY\n", __func__,	__LINE__);
 			reg_setting = kzalloc(conf_array.size *
@@ -971,9 +986,6 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 			}
 			kfree(reg_setting);
 		}
-
-		kfree(burst_reg_setting);
-		burst_reg_setting = NULL;
 		break;
 	}
 	case CFG_SLAVE_READ_I2C: {
@@ -1584,8 +1596,7 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 				}
 				kfree(reg_data);
 			}
-
-			kfree(reg_setting);
+			kfree(burst_reg_setting);
 		}else {
 			CDBG("%s:%d CFG_WRITE_I2C_ARRAY\n", __func__,	__LINE__);
 			reg_setting = kzalloc(conf_array.size *
@@ -1641,9 +1652,6 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 			}
 			kfree(reg_setting);
 		}
-
-		kfree(burst_reg_setting);
-		burst_reg_setting = NULL;
 		break;
 	}
 	case CFG_SLAVE_READ_I2C: {

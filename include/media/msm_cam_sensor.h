@@ -771,6 +771,13 @@ enum msm_cam_flicker_type {
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 12, struct msm_ois_cfg_data)
 
 #ifdef CONFIG_COMPAT
+struct msm_camera_i2c_burst_reg_array32 {
+	uint16_t reg_addr;
+	compat_uptr_t reg_burst_data;
+	uint16_t reg_data_size;
+	uint32_t delay;
+};
+
 struct msm_camera_i2c_reg_setting32 {
 	compat_uptr_t reg_setting;
 	uint16_t size;
