@@ -1341,6 +1341,23 @@ static long msm_actuator_subdev_do_ioctl(
 				sizeof(struct msm_actuator_set_position_t));
 			parg = &actuator_data;
 			break;
+		case CFG_SET_ACTUATOR_SW_LANDING:
+			actuator_data.cfgtype = u32->cfgtype;
+			actuator_data.sw_landing_type = u32->sw_landing_type;
+			actuator_data.is_af_supported = u32->is_af_supported;
+			actuator_data.cfg.move.dir = u32->cfg.move.dir;
+			actuator_data.cfg.move.sign_dir =
+				u32->cfg.move.sign_dir;
+			actuator_data.cfg.move.dest_step_pos =
+				u32->cfg.move.dest_step_pos;
+			actuator_data.cfg.move.num_steps =
+				u32->cfg.move.num_steps;
+			actuator_data.cfg.move.curr_lens_pos =
+				u32->cfg.move.curr_lens_pos;
+			actuator_data.cfg.move.ringing_params =
+				compat_ptr(u32->cfg.move.ringing_params);
+			parg = &actuator_data;
+			break;
 		default:
 			actuator_data.cfgtype = u32->cfgtype;
 			parg = &actuator_data;
