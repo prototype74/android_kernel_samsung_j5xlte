@@ -620,6 +620,7 @@ static int32_t msm_csid_cmd32(struct csid_device *csid_dev, void __user *arg)
 	switch (cdata->cfgtype) {
 	case CSID_INIT:
 		rc = msm_csid_init(csid_dev, &cdata->cfg.csid_version);
+		msm_isp_camera_boost(true);
 		arg32->cfg.csid_version = local_arg.cfg.csid_version;
 		CDBG("%s csid version 0x%x\n", __func__,
 			cdata->cfg.csid_version);
@@ -697,6 +698,9 @@ static int32_t msm_csid_cmd32(struct csid_device *csid_dev, void __user *arg)
 	}
 	case CSID_RELEASE:
 		rc = msm_csid_release(csid_dev);
+		break;
+	case CSID_BOOSTOFF:
+		msm_isp_camera_boost(false);
 		break;
 	default:
 		pr_err("%s: %d failed\n", __func__, __LINE__);
