@@ -639,6 +639,9 @@ int32_t msm_sensor_driver_probe(void *setting)
 	struct msm_sensor_ctrl_t            *s_ctrl = NULL;
 	struct msm_camera_cci_client        *cci_client = NULL;
 	struct msm_camera_sensor_slave_info *slave_info = NULL;
+#ifdef CONFIG_COMPAT
+	struct msm_camera_sensor_slave_info32 *slave_info32 = NULL;
+#endif
 	struct msm_camera_slave_info        *camera_info = NULL;
 	int probe_fail = 0;
 
@@ -657,20 +660,21 @@ int32_t msm_sensor_driver_probe(void *setting)
 
 #ifdef CONFIG_COMPAT
 	if (is_compat_task()) {
-		struct msm_camera_sensor_slave_info32 *slave_info32 =
-			kzalloc(sizeof(*slave_info32), GFP_KERNEL);
+		slave_info32 = kzalloc(sizeof(*slave_info32), GFP_KERNEL);
 		if (!slave_info32) {
 			pr_err("failed: no memory for slave_info32 %p\n",
 				slave_info32);
 			rc = -ENOMEM;
-			goto free_slave_info;
+			kfree(slave_info);
+			return rc;
 		}
 		if (copy_from_user((void *)slave_info32, setting,
 			sizeof(*slave_info32))) {
 				pr_err("failed: copy_from_user");
 				rc = -EFAULT;
 				kfree(slave_info32);
-				goto free_slave_info;
+				kfree(slave_info);
+				return rc;
 			}
 
 		strlcpy(slave_info->actuator_name, slave_info32->actuator_name,
@@ -709,7 +713,6 @@ int32_t msm_sensor_driver_probe(void *setting)
 		slave_info->is_probe_succeed =
 			slave_info32->is_probe_succeed;
 		slave_info->sensor_info = slave_info32->sensor_info;
-		kfree(slave_info32);
 	} else
 #endif
 	{
@@ -907,6 +910,11 @@ int32_t msm_sensor_driver_probe(void *setting)
 		goto camera_power_down;
 	}
 
+	/*
+	 * Copy sensor name, session id, sensor subdev ids and tell the
+	 * user space the sensor probe succeed. So user space can
+	 * properly read and set the sensor full eeprom version.
+	 */
 	memcpy(slave_info->subdev_name, s_ctrl->msm_sd.sd.entity.name,
 		sizeof(slave_info->subdev_name));
 	slave_info->is_probe_succeed = 1;
@@ -914,12 +922,27 @@ int32_t msm_sensor_driver_probe(void *setting)
 	for (i = 0; i < SUB_MODULE_MAX; i++) {
 		slave_info->sensor_info.subdev_id[i] =
 			s_ctrl->sensordata->sensor_info->subdev_id[i];
-		pr_err("sensor_subdev_id = %d i = %d\n",slave_info->sensor_info.subdev_id[i], i);
+		pr_err("sensor_subdev_id = %d i = %d\n", slave_info->sensor_info.subdev_id[i], i);
 	}
-	if (copy_to_user((void __user *)setting,
-		(void *)slave_info, sizeof(*slave_info))) {
-		pr_err("%s:%d copy failed\n", __func__, __LINE__);
-		rc = -EFAULT;
+
+#ifdef CONFIG_COMPAT
+	if (is_compat_task()) {
+		strlcpy(slave_info32->subdev_name, slave_info->subdev_name,
+			sizeof(slave_info32->subdev_name));
+		slave_info32->is_probe_succeed = slave_info->is_probe_succeed;
+		slave_info32->sensor_info = slave_info->sensor_info;
+		if (copy_to_user((void __user *)setting,
+			(void *)slave_info32, sizeof(*slave_info32))) {
+			pr_err("%s:%d copy slave_info32 to user failed\n", __func__, __LINE__);
+		}
+		kfree(slave_info32);
+	} else
+#endif
+	{
+		if (copy_to_user((void __user *)setting,
+			(void *)slave_info, sizeof(*slave_info))) {
+			pr_err("%s:%d copy slave_info to user failed\n", __func__, __LINE__);
+		}
 	}
 
 	/* Power down */
@@ -962,6 +985,11 @@ camera_power_down:
 free_camera_info:
 	kfree(camera_info);
 free_slave_info:
+#ifdef CONFIG_COMPAT
+	if (is_compat_task()) {
+		kfree(slave_info32);
+	}
+#endif
 	kfree(slave_info);
 	return rc;
 }
