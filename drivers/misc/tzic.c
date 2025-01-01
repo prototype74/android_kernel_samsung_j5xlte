@@ -392,9 +392,20 @@ static long tzic_ioctl(struct file *file, unsigned cmd,
 	return ret;
 }
 
+#ifdef CONFIG_COMPAT
+static long tzic_ioctl32(struct file *file, unsigned cmd,
+		unsigned long arg)
+{
+	return tzic_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+}
+#endif
+
 static const struct file_operations tzic_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = tzic_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = tzic_ioctl32,
+#endif
 };
 
 static int __init tzic_init(void)
