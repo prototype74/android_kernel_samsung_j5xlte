@@ -829,6 +829,48 @@ static ssize_t mtpg_write(struct file *fp, const char __user *buf,
 	return r;
 }
 
+static ssize_t interrupt_write_config_compat(struct file *fd,
+			const char __user *buf, size_t count)
+{
+	struct mtpg_dev *dev = fd->private_data;
+	struct usb_request *req = 0;
+	int  ret;
+
+	DEBUG_MTPB("[%s] \tline = [%d]\n", __func__, __LINE__);
+
+	if (count > MTPG_INTR_BUFFER_SIZE)
+			return -EINVAL;
+
+	ret = wait_event_interruptible_timeout(dev->intr_wq,
+		(req = mtpg_req_get(dev, &dev->intr_idle)),
+						msecs_to_jiffies(1000));
+
+	if (!req) {
+		printk(KERN_ERR "[%s]Alloc has failed\n", __func__);
+		return -ENOMEM;
+	}
+
+	if (copy_from_user(req->buf, buf, count)) {
+		mtpg_req_put(dev, &dev->intr_idle, req);
+		printk(KERN_ERR "[%s]copy from user has failed\n", __func__);
+		return -EIO;
+	}
+
+	req->length = count;
+	/*req->complete = interrupt_complete;*/
+
+	ret = usb_ep_queue(dev->int_in, req, GFP_ATOMIC);
+
+	if (ret) {
+		printk(KERN_ERR "[%s:%d]\n", __func__, __LINE__);
+		mtpg_req_put(dev, &dev->intr_idle, req);
+	}
+
+	DEBUG_MTPB("[%s] \tline = [%d] returning ret is %d\\n",
+						__func__, __LINE__, ret);
+	return ret;
+}
+
 static ssize_t interrupt_write(struct file *fd,
 			struct mtp_event *event, size_t count)
 {
@@ -992,6 +1034,7 @@ static long  mtpg_ioctl(struct file *fd, unsigned int code, unsigned long arg)
 	int max_pkt = 0;
 	char *buf_ptr = NULL;
 	char buf[USB_PTPREQUEST_GETSTATUS_SIZE+1] = {0};
+	size_t kernelLongbit = sizeof(long)*8;
 
 	cdev = dev->cdev;
 	if (!cdev) {
@@ -1037,23 +1080,40 @@ static long  mtpg_ioctl(struct file *fd, unsigned int code, unsigned long arg)
 		status = usb_ep_clear_halt(dev->bulk_out);
 		break;
 	case MTP_WRITE_INT_DATA:
-		printk(KERN_INFO "[%s]\t%d MTP intrpt_Write no slep\n",
-						__func__, __LINE__);
+		printk(KERN_INFO "[%s]\t%d MTP intrpt_Write no slep, kernel is %zu bits\n",
+						__func__, __LINE__, kernelLongbit);
+
 		if (copy_from_user(&event, (void __user *)arg, sizeof(event))){
 			status = -EFAULT;
 			printk(KERN_ERR "[%s]\t%d:copyfrmuser fail\n",
 							 __func__, __LINE__);
 			break;
 		}
-		ret_value = interrupt_write(fd, &event, MTP_MAX_PACKET_LEN_FROM_APP);
-		if (ret_value < 0) {
-			printk(KERN_ERR "[%s]\t%d interptFD failed\n",
-							 __func__, __LINE__);
-			status = -EIO;
-		} else {
-			printk(KERN_DEBUG "[%s]\t%d intruptFD suces\n",
-							 __func__, __LINE__);
-			status = MTP_MAX_PACKET_LEN_FROM_APP;
+		printk(KERN_INFO "[%s]\t%d event length : %zu\n", __func__, __LINE__, event.length);
+
+		if (event.length == MTP_MAX_PACKET_LEN_FROM_APP && kernelLongbit == 64){
+			ret_value = interrupt_write(fd, &event, MTP_MAX_PACKET_LEN_FROM_APP);
+			if (ret_value < 0) {
+				printk(KERN_ERR "[%s]\t%d interptFD failed : %d\n",
+								 __func__, __LINE__, ret_value);
+				status = -EIO;
+			} else {
+				printk(KERN_DEBUG "[%s]\t%d intruptFD sucess\n",
+								 __func__, __LINE__);
+				status = MTP_MAX_PACKET_LEN_FROM_APP;
+			}
+		}
+		else {
+			ret_value = interrupt_write_config_compat(fd, (const char *)arg , MTP_MAX_PACKET_LEN_FROM_APP);
+			if (ret_value < 0) {
+				printk(KERN_ERR "[%s]\t%d MTP_WRITE_INT_DATA_CONFIG_COMPAT interptFD failed\n",
+								 __func__, __LINE__);
+				status = -EIO;
+			} else {
+				printk(KERN_DEBUG "[%s]\t%d MTP_WRITE_INT_DATA_CONFIG_COMPAT intruptFD sucess\n",
+								 __func__, __LINE__);
+				status = MTP_MAX_PACKET_LEN_FROM_APP;
+			}
 		}
 		break;
 
