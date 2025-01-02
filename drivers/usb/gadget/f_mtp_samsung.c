@@ -945,12 +945,6 @@ static void read_send_work(struct work_struct *work)
 	printk(KERN_DEBUG "[%s:%d] offset=[%lld]\t leth+hder=[%lld]\n",
 					 __func__, __LINE__, file_pos, count);
 
-	if(count<0) {
-		r = -EIO;
-		printk(KERN_ERR "[%s]\t%d ret = %d\n",
-						 __func__, __LINE__, r);
-		}
-
 	/* Zero Length Packet should be sent if the last trasfer
 	 * size is equals to the max packet size.
 	 */
@@ -1169,8 +1163,11 @@ static long  mtpg_ioctl(struct file *fd, unsigned int code, unsigned long arg)
 		printk(KERN_DEBUG "[%s]SET_SETUP_DATA size=%d line=[%d]\n",
 						 __func__, size, __LINE__);
 
-		if ( size > USB_PTPREQUEST_GETSTATUS_SIZE) {
-			size = USB_PTPREQUEST_GETSTATUS_SIZE;
+		if (size < 0) {
+			status = -EIO;
+			printk(KERN_ERR "[%s]\t%d:size is negative\n",
+							 __func__, __LINE__);
+			break;
 		}
 
 		memcpy(req->buf, buf, size);
