@@ -29,13 +29,6 @@
 };
 
 &soc {
-	samsung,simslot {
-	compatible = "simslot";
-	samsung,sim-slot = <&msm_gpio 69 0x1>;
-	//low-is-dual; // If the value of sim-slot gpio is 'low' in 'dual sim' device, you must set this boolean property.
-	status = "ok";
-	};
-
 	samsung,vibrator {
 		compatible = "haptic_vib";
 		pinctrl-names = "tlmm_motor_active","tlmm_motor_suspend";
