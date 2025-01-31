@@ -330,12 +330,21 @@ static int tdmb_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	vma->vm_flags |= VM_RESERVED;
 	size = vma->vm_end - vma->vm_start;
+#ifdef CONFIG_ARM64
+	DPRINTK("size given : %lx\n", size);
+#else
 	DPRINTK("size given : %x\n", size);
+#endif
 
 #if TDMB_PRE_MALLOC
 	size = TDMB_RING_BUFFER_MAPPING_SIZE;
 	if (!ts_ring) {
+
+#ifdef CONFIG_ARM64
+		DPRINTK("RING Buff ReAlloc(%ld)!!\n", size);
+#else
 		DPRINTK("RING Buff ReAlloc(%d)!!\n", size);
+#endif
 #endif
 		/* size should aligned in PAGE_SIZE */
 		if (size % PAGE_SIZE) /* klaatu hard coding */
