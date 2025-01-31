@@ -242,6 +242,13 @@ config MACH_J5XLTE_EUR_OPEN
 	help
 	  Support for Samsung J5XLTE EUR OPEN device.
 
+config MACH_J5XLTE_KOR_OPEN
+	depends on SEC_J5X_PROJECT
+	default n
+	bool "Samsung J5XLTE KOR OPEN"
+	help
+	  Support for Samsung J5XLTE KOR OPEN device.
+
 config SEC_J5_PROJECT
 	depends on ARCH_MSM8916
 	default n
