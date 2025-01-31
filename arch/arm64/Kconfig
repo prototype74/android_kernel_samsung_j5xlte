@@ -263,6 +263,20 @@ config MACH_J5LTE_EUR_OPEN
 	help
 	  Support for Samsung J5LTE EUR OPEN device.
 
+config SEC_J5N_PROJECT
+	depends on ARCH_MSM8916
+	default n
+	bool "Samsung J5N Project"
+	help
+	  Support for Samsung J5N Project
+
+config MACH_J5NLTE_EUR_OPEN
+	depends on SEC_J5N_PROJECT
+	default n
+	bool "Samsung J5NLTE EUR OPEN"
+	help
+	  Support for Samsung J5NLTE EUR OPEN device.
+
 config ARCH_MSM8994
 	bool "Enable Support for Qualcomm MSM8994"
 	depends on ARCH_MSM
