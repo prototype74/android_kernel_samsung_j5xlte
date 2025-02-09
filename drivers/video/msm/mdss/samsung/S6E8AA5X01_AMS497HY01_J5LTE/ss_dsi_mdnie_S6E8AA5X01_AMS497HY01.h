@@ -346,6 +346,292 @@ static char DSI0_NEGATIVE_MDNIE_2[] ={
 	//end
 };
 
+static char DSI0_GRAYSCALE_MDNIE_1[] = {
+	//start
+	0xEB,
+	0x01, //mdnie_en
+	0x30, //scr_roi 1 scr algo_roi 1 algo 00 1 0 00 1 0
+	0x00, //data_width mask 00 000
+};
+
+static char DSI0_GRAYSCALE_MDNIE_2[] = {
+	0xEC,
+	0x00, //roi ctrl
+	0x00, //roi1 y end
+	0x00,
+	0x00, //roi1 y start
+	0x00,
+	0x00, //roi1 x end
+	0x00,
+	0x00, //roi1 x strat
+	0x00,
+	0x00, //roi0 y end
+	0x00,
+	0x00, //roi0 y start
+	0x00,
+	0x00, //roi0 x end
+	0x00,
+	0x00, //roi0 x start
+	0x00,
+	0x00, // nr de cs cc 0000
+	0xff, // nr_mask_th
+	0x00, // de_gain 10
+	0x00,
+	0x07, // de_maxplus 11
+	0xff,
+	0x07, // de_maxminus 11
+	0xff,
+	0x01, // CS Gain 10
+	0x83,
+	0x00, //curve 1 b
+	0x20, //curve 1 a
+	0x00, //curve 2 b
+	0x20, //curve 2 a
+	0x00, //curve 3 b
+	0x20, //curve 3 a
+	0x00, //curve 4 b
+	0x20, //curve 4 a
+	0x00, //curve 5 b
+	0x20, //curve 5 a
+	0x00, //curve 6 b
+	0x20, //curve 6 a
+	0x00, //curve 7 b
+	0x20, //curve 7 a
+	0x00, //curve 8 b
+	0x20, //curve 8 a
+	0x00, //curve 9 b
+	0x20, //curve 9 a
+	0x00, //curve10 b
+	0x20, //curve10 a
+	0x00, //curve11 b
+	0x20, //curve11 a
+	0x00, //curve12 b
+	0x20, //curve12 a
+	0x00, //curve13 b
+	0x20, //curve13 a
+	0x00, //curve14 b
+	0x20, //curve14 a
+	0x00, //curve15 b
+	0x20, //curve15 a
+	0x00, //curve16 b
+	0x20, //curve16 a
+	0x00, //curve17 b
+	0x20, //curve17 a
+	0x00, //curve18 b
+	0x20, //curve18 a
+	0x00, //curve19 b
+	0x20, //curve19 a
+	0x00, //curve20 b
+	0x20, //curve20 a
+	0x00, //curve21 b
+	0x20, //curve21 a
+	0x00, //curve22 b
+	0x20, //curve22 a
+	0x00, //curve23 b
+	0x20, //curve23 a
+	0x00, //curve24 b
+	0xFF, //curve24 a
+	0x00, //ascr_skin_on strength 0 00000
+	0x67, //ascr_skin_cb
+	0xa9, //ascr_skin_cr
+	0x0c, //ascr_dist_up
+	0x0c, //ascr_dist_down
+	0x0c, //ascr_dist_right
+	0x0c, //ascr_dist_left
+	0x00, //ascr_div_up 20
+	0xaa,
+	0xab,
+	0x00, //ascr_div_down
+	0xaa,
+	0xab,
+	0x00, //ascr_div_right
+	0xaa,
+	0xab,
+	0x00, //ascr_div_left
+	0xaa,
+	0xab,
+	0xd5, // ascr_skin_Rr
+	0x2c, // ascr_skin_Rg
+	0x2a, // ascr_skin_Rb
+	0xff, // ascr_skin_Yr
+	0xf5, // ascr_skin_Yg
+	0x63, // ascr_skin_Yb
+	0xfe, // ascr_skin_Mr
+	0x4a, // ascr_skin_Mg
+	0xff, // ascr_skin_Mb
+	0xff, // ascr_skin_Wr
+	0xf9, // ascr_skin_Wg
+	0xf8, // ascr_skin_Wb
+	0xb3, // ascr_Cr
+	0x4c, // ascr_Rr
+	0xb3, // ascr_Cg
+	0x4c, // ascr_Rg
+	0xb3, // ascr_Cb
+	0x4c, // ascr_Rb
+	0x69, // ascr_Mr
+	0x96, // ascr_Gr
+	0x69, // ascr_Mg
+	0x96, // ascr_Gg
+	0x69, // ascr_Mb
+	0x96, // ascr_Gb
+	0xe2, // ascr_Yr
+	0x1d, // ascr_Br
+	0xe2, // ascr_Yg
+	0x1d, // ascr_Bg
+	0xe2, // ascr_Yb
+	0x1d, // ascr_Bb
+	0xff, // ascr_Wr
+	0x00, // ascr_Kr
+	0xff, // ascr_Wg
+	0x00, // ascr_Kg
+	0xff, // ascr_Wb
+	0x00, // ascr_Kb
+	//end
+};
+
+static char DSI0_GRAYSCALE_NEGATIVE_MDNIE_1[] = {
+	//start
+	0xEB,
+	0x01, //mdnie_en
+	0x30, //scr_roi 1 scr algo_roi 1 algo 00 1 0 00 1 0
+	0x00, //data_width mask 00 000
+};
+
+static char DSI0_GRAYSCALE_NEGATIVE_MDNIE_2[] = {
+	0xEC,
+	0x00, //roi ctrl
+	0x00, //roi1 y end
+	0x00,
+	0x00, //roi1 y start
+	0x00,
+	0x00, //roi1 x end
+	0x00,
+	0x00, //roi1 x strat
+	0x00,
+	0x00, //roi0 y end
+	0x00,
+	0x00, //roi0 y start
+	0x00,
+	0x00, //roi0 x end
+	0x00,
+	0x00, //roi0 x start
+	0x00,
+	0x00, // nr de cs cc 0000
+	0xff, // nr_mask_th
+	0x00, // de_gain 10
+	0x00,
+	0x07, // de_maxplus 11
+	0xff,
+	0x07, // de_maxminus 11
+	0xff,
+	0x01, // CS Gain 10
+	0x83,
+	0x00, //curve 1 b
+	0x20, //curve 1 a
+	0x00, //curve 2 b
+	0x20, //curve 2 a
+	0x00, //curve 3 b
+	0x20, //curve 3 a
+	0x00, //curve 4 b
+	0x20, //curve 4 a
+	0x00, //curve 5 b
+	0x20, //curve 5 a
+	0x00, //curve 6 b
+	0x20, //curve 6 a
+	0x00, //curve 7 b
+	0x20, //curve 7 a
+	0x00, //curve 8 b
+	0x20, //curve 8 a
+	0x00, //curve 9 b
+	0x20, //curve 9 a
+	0x00, //curve10 b
+	0x20, //curve10 a
+	0x00, //curve11 b
+	0x20, //curve11 a
+	0x00, //curve12 b
+	0x20, //curve12 a
+	0x00, //curve13 b
+	0x20, //curve13 a
+	0x00, //curve14 b
+	0x20, //curve14 a
+	0x00, //curve15 b
+	0x20, //curve15 a
+	0x00, //curve16 b
+	0x20, //curve16 a
+	0x00, //curve17 b
+	0x20, //curve17 a
+	0x00, //curve18 b
+	0x20, //curve18 a
+	0x00, //curve19 b
+	0x20, //curve19 a
+	0x00, //curve20 b
+	0x20, //curve20 a
+	0x00, //curve21 b
+	0x20, //curve21 a
+	0x00, //curve22 b
+	0x20, //curve22 a
+	0x00, //curve23 b
+	0x20, //curve23 a
+	0x00, //curve24 b
+	0xFF, //curve24 a
+	0x00, //ascr_skin_on strength 0 00000
+	0x67, //ascr_skin_cb
+	0xa9, //ascr_skin_cr
+	0x0c, //ascr_dist_up
+	0x0c, //ascr_dist_down
+	0x0c, //ascr_dist_right
+	0x0c, //ascr_dist_left
+	0x00, //ascr_div_up 20
+	0xaa,
+	0xab,
+	0x00, //ascr_div_down
+	0xaa,
+	0xab,
+	0x00, //ascr_div_right
+	0xaa,
+	0xab,
+	0x00, //ascr_div_left
+	0xaa,
+	0xab,
+	0xd5, // ascr_skin_Rr
+	0x2c, // ascr_skin_Rg
+	0x2a, // ascr_skin_Rb
+	0xff, // ascr_skin_Yr
+	0xf5, // ascr_skin_Yg
+	0x63, // ascr_skin_Yb
+	0xfe, // ascr_skin_Mr
+	0x4a, // ascr_skin_Mg
+	0xff, // ascr_skin_Mb
+	0xff, // ascr_skin_Wr
+	0xf9, // ascr_skin_Wg
+	0xf8, // ascr_skin_Wb
+	0x4c, // ascr_Cr
+	0xb3, // ascr_Rr
+	0x4c, // ascr_Cg
+	0xb3, // ascr_Rg
+	0x4c, // ascr_Cb
+	0xb3, // ascr_Rb
+	0x96, // ascr_Mr
+	0x69, // ascr_Gr
+	0x96, // ascr_Mg
+	0x69, // ascr_Gg
+	0x96, // ascr_Mb
+	0x69, // ascr_Gb
+	0x1d, // ascr_Yr
+	0xe2, // ascr_Br
+	0x1d, // ascr_Yg
+	0xe2, // ascr_Bg
+	0x1d, // ascr_Yb
+	0xe2, // ascr_Bb
+	0x00, // ascr_Wr
+	0xff, // ascr_Kr
+	0x00, // ascr_Wg
+	0xff, // ascr_Kg
+	0x00, // ascr_Wb
+	0xff, // ascr_Kb
+	//end
+};
+
 static char DSI0_COLOR_BLIND_MDNIE_1[] ={
 	//start
 	0xEB,
@@ -6618,6 +6904,24 @@ static struct dsi_cmd_desc DSI0_NEGATIVE_MDNIE[] = {
 	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(level_2_key_on)}, level_2_key_on},
 	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_1)}, DSI0_NEGATIVE_MDNIE_1},
 	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_NEGATIVE_MDNIE_2)}, DSI0_NEGATIVE_MDNIE_2},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(level_2_key_off)}, level_2_key_off},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(level_1_key_off)}, level_1_key_off},
+};
+
+static struct dsi_cmd_desc DSI0_GRAYSCALE_MDNIE[] = {
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(level_1_key_on)}, level_1_key_on},
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(level_2_key_on)}, level_2_key_on},
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_GRAYSCALE_MDNIE_1)}, DSI0_GRAYSCALE_MDNIE_1},
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_GRAYSCALE_MDNIE_2)}, DSI0_GRAYSCALE_MDNIE_2},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(level_2_key_off)}, level_2_key_off},
+	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(level_1_key_off)}, level_1_key_off},
+};
+
+static struct dsi_cmd_desc DSI0_GRAYSCALE_NEGATIVE_MDNIE[] = {
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(level_1_key_on)}, level_1_key_on},
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(level_2_key_on)}, level_2_key_on},
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_GRAYSCALE_NEGATIVE_MDNIE_1)}, DSI0_GRAYSCALE_NEGATIVE_MDNIE_1},
+	{{DTYPE_DCS_LWRITE, 0, 0, 0, 0, sizeof(DSI0_GRAYSCALE_NEGATIVE_MDNIE_2)}, DSI0_GRAYSCALE_NEGATIVE_MDNIE_2},
 	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(level_2_key_off)}, level_2_key_off},
 	{{DTYPE_DCS_LWRITE, 1, 0, 0, 0, sizeof(level_1_key_off)}, level_1_key_off},
 };

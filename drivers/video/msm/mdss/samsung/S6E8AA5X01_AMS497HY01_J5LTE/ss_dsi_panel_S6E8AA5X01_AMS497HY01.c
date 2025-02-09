@@ -669,6 +669,9 @@ static void dsi_update_mdnie_data(void)
 	mdnie_data.DSI0_TDMB_MOVIE_MDNIE = DSI0_UI_MOVIE_MDNIE;
 	mdnie_data.DSI0_TDMB_AUTO_MDNIE = DSI0_UI_AUTO_MDNIE;
 
+	mdnie_data.DSI0_GRAYSCALE_MDNIE = DSI0_GRAYSCALE_MDNIE;
+	mdnie_data.DSI0_GRAYSCALE_NEGATIVE_MDNIE = DSI0_GRAYSCALE_NEGATIVE_MDNIE;
+
 	mdnie_data.mdnie_tune_value_dsi0 = mdnie_tune_value_dsi0;
 
 	/* Update MDNIE data related with size, offset or index */
