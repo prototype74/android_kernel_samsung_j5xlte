@@ -34,7 +34,7 @@ Copyright (C) 2012, Samsung Electronics. All rights reserved.
 
 #include "../ss_dsi_mdnie_lite_common.h"
 
-#define MDNIE_COLOR_BLINDE_CMD_OFFSET 18
+#define MDNIE_COLOR_BLINDE_CMD_OFFSET 107
 
 #define ADDRESS_SCR_WHITE_RED   0x7D
 #define ADDRESS_SCR_WHITE_GREEN 0x7F
