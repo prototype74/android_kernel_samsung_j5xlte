@@ -263,6 +263,13 @@ config MACH_J5LTE_EUR_OPEN
 	help
 	  Support for Samsung J5LTE EUR OPEN device.
 
+config MACH_J53G_EUR_OPEN
+	depends on SEC_J5_PROJECT
+	default n
+	bool "Samsung J53G EUR OPEN"
+	help
+	  Support for Samsung J53G EUR OPEN device.
+
 config SEC_J5N_PROJECT
 	depends on ARCH_MSM8916
 	default n
