@@ -27,7 +27,6 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <asm/irq.h>
-#include <asm/mach/irq.h>
 #include <linux/regulator/consumer.h>
 
 #ifdef __KERNEL__
