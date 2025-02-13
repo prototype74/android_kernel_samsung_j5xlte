@@ -228,6 +228,20 @@ config ARCH_MSM8916
 	  This enables support for the MSM8916 chipset. If you dont
 	  know what do here, say N
 
+config SEC_A3_PROJECT
+    depends on ARCH_MSM8916
+	default n
+	bool "Samsung A3 Project"
+	help
+	  Support for Samsung A3 Project
+
+config MACH_A3U_EUR_OPEN
+    depends on SEC_A3_PROJECT
+	default n
+	bool "Samsung A3U EUR Open"
+	help
+	  Support for Samsung A3U EUR Open device.
+
 config SEC_J5X_PROJECT
 	depends on ARCH_MSM8916
 	default n
