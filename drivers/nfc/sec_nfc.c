@@ -192,8 +192,7 @@ static ssize_t sec_nfc_read(struct file *file, char __user *buf,
 		count = info->i2c_info.buflen;
 
 	if (count > SEC_NFC_MSG_MAX_SIZE) {
-		dev_err(info->dev, "[NFC] user required wrong size :%d\n",
-				count);
+		dev_err(info->dev, "[NFC] user required wrong size :%zu\n", count);
 		ret = -EINVAL;
 		goto out;
 	}
@@ -208,7 +207,7 @@ static ssize_t sec_nfc_read(struct file *file, char __user *buf,
 		ret = -ERESTART;
 		goto read_error;
 	} else if (ret != count) {
-		dev_err(info->dev, "[NFC] read failed: return: %d count: %d\n",
+		dev_err(info->dev, "[NFC] read failed: return: %d count: %zu\n",
 			ret, count);
 		/* ret = -EREMOTEIO; */
 		goto read_error;
@@ -260,8 +259,7 @@ static ssize_t sec_nfc_write(struct file *file, const char __user *buf,
 		count = info->i2c_info.buflen;
 
 	if (count > SEC_NFC_MSG_MAX_SIZE) {
-		dev_err(info->dev, "[NFC] user required wrong size :%d\n",
-			count);
+		dev_err(info->dev, "[NFC] user required wrong size :%zu\n", count);
 		ret = -EINVAL;
 		goto out;
 	}
@@ -281,14 +279,14 @@ static ssize_t sec_nfc_write(struct file *file, const char __user *buf,
 	mutex_unlock(&info->i2c_info.read_mutex);
 
 	if (ret == -EREMOTEIO) {
-		dev_err(info->dev, "[NFC] send failed: return: %d count: %d\n",
+		dev_err(info->dev, "[NFC] send failed: return: %d count: %zu\n",
 		ret, count);
 		ret = -ERESTART;
 		goto out;
 	}
 
 	if (ret != count) {
-		dev_err(info->dev, "[NFC] send failed: return: %d count: %d\n",
+		dev_err(info->dev, "[NFC] send failed: return: %d count: %zu\n",
 		ret, count);
 		ret = -EREMOTEIO;
 	}
