@@ -29,7 +29,6 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/io.h>
-#include <mach/gpio.h>
 #include <asm/unaligned.h>
 #include <linux/regulator/consumer.h>
 #include <linux/pinctrl/consumer.h>
