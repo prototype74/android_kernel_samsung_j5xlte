@@ -232,6 +232,83 @@ config ARCH_MSM8916
 	  This enables support for the MSM8916 chipset. If you dont
 	  know what do here, say N
 
+config SEC_A3_PROJECT
+    depends on ARCH_MSM8916
+	default n
+	bool "Samsung A3 Project"
+	help
+	  Support for Samsung A3 Project
+
+config MACH_A3U_EUR_OPEN
+    depends on SEC_A3_PROJECT
+	default n
+	bool "Samsung A3U EUR Open"
+	help
+	  Support for Samsung A3U EUR Open device.
+
+config SEC_J5X_PROJECT
+	depends on ARCH_MSM8916
+	default n
+	bool "Samsung J5X Project"
+	help
+	  Support for Samsung J5X Project
+
+config MACH_J5XLTE_EUR_OPEN
+	depends on SEC_J5X_PROJECT
+	default n
+	bool "Samsung J5XLTE EUR OPEN"
+	help
+	  Support for Samsung J5XLTE EUR OPEN device.
+
+config MACH_J5XLTE_KOR_OPEN
+	depends on SEC_J5X_PROJECT
+	default n
+	bool "Samsung J5XLTE KOR OPEN"
+	help
+	  Support for Samsung J5XLTE KOR OPEN device.
+
+config MACH_J5X3G_MEA_JV
+	depends on SEC_J5X_PROJECT
+	default n
+	bool "Samsung J5X3G MEA JV"
+	help
+	  Support for Samsung J5X3G MEA JV device.
+
+config SEC_J5_PROJECT
+	depends on ARCH_MSM8916
+	default n
+	bool "Samsung J5 Project"
+	help
+	  Support for Samsung J5 Project
+
+config MACH_J5LTE_EUR_OPEN
+	depends on SEC_J5_PROJECT
+	default n
+	bool "Samsung J5LTE EUR OPEN"
+	help
+	  Support for Samsung J5LTE EUR OPEN device.
+
+config MACH_J53G_EUR_OPEN
+	depends on SEC_J5_PROJECT
+	default n
+	bool "Samsung J53G EUR OPEN"
+	help
+	  Support for Samsung J53G EUR OPEN device.
+
+config SEC_J5N_PROJECT
+	depends on ARCH_MSM8916
+	default n
+	bool "Samsung J5N Project"
+	help
+	  Support for Samsung J5N Project
+
+config MACH_J5NLTE_EUR_OPEN
+	depends on SEC_J5N_PROJECT
+	default n
+	bool "Samsung J5NLTE EUR OPEN"
+	help
+	  Support for Samsung J5NLTE EUR OPEN device.
+
 config ARCH_MSM8994
 	bool "Enable Support for Qualcomm MSM8994"
 	depends on ARCH_MSM
@@ -268,6 +345,16 @@ config ARCH_XGENE
 	bool "AppliedMicro X-Gene SOC Family"
 	help
 	  This enables support for AppliedMicro X-Gene SOC Family
+
+config SEC_FACTORY
+	bool "when it comes to sec factory mode"
+	default n
+	help
+	  It will support a sec factory mode.
+
+config SAMSUNG_PRODUCT_SHIP
+        bool "set up for product shipping"
+        default n
 
 endmenu
 
@@ -670,6 +757,153 @@ endif
 source "drivers/cpuidle/Kconfig"
 
 endmenu
+
+config USER_RESET_DEBUG
+        bool "KOR reset reason debug feature in user version"
+        default n
+        help
+          This option enables debugging log for B10 project.
+          This option provides reset history log in user version.
+          This option enable proc/reset_reason support
+          It's only support KOR Model
+
+config KNOX_KAP
+       bool "Enable KNOX KAP mode"
+       default n
+
+config SEC_DEBUG_ENABLE_QSEE
+	bool "Enable QSEE Log"
+	default n
+
+config TIMA_LKMAUTH
+       bool "Enable LKM authentication TIMA feature"
+       default n
+       help
+         TIMA authenticates loaded kernel modules. Disable it if you don't
+         want TIMA enabled.
+
+config TIMA_LKMAUTH_CODE_PROT
+       bool
+       depends on TIMA_LKMAUTH
+       default y
+       help
+         When enabled, this feature will mark all Executable sections in an
+         LKM as RO
+
+config TIMA_TEST_INFRA
+       tristate "Testing infrastructure for TIMA"
+       default n
+       help
+         Kernel bits of the TIMA test infrastructure
+
+config TIMA_UEVENT
+       bool "Uevent message propagation for TIMA"
+       default n
+       help
+         Uevent messages for TIMA PKM/LKM
+
+config TIMA_LOG
+       bool "Log dumping support for TIMA"
+       default n
+       help
+         TIMA Log dumping support
+
+config TIMA_RKP
+       bool "Enable RKP (Realtime Kernel Protection) TIMA feature"
+       default n
+       help
+         This is enabled from defconfig
+
+config TIMA_RKP_30
+       bool "Enable RKP TIMA 3.0 features"
+       depends on (ARCH_MSM8974PRO || ARCH_MSM8226 || ARCH_APQ8084 ||  ARCH_MSM8916)
+       depends on TIMA_RKP
+       default y
+       help
+         RKP 3.0 features
+
+config TIMA_RKP_COHERENT_TT
+       bool
+       depends on TIMA_RKP_30
+       default y
+       help
+         RKP cache coherence feature- depends on corresponding TZ RKP code!!!
+
+config TIMA_RKP_L1_TABLES
+       bool
+       depends on TIMA_RKP
+       default y
+       help
+         TIMA takes over management of L1 tables.
+
+config TIMA_RKP_L2_TABLES
+       bool
+       depends on TIMA_RKP
+       default y
+       help
+         TIMA takes over management L2 tables
+
+config TIMA_RKP_L2_GROUP
+        bool
+        depends on TIMA_RKP_L2_TABLES
+        default n
+        help
+         TIMA groups page table writes; enable only with cache coherence
+
+config TIMA_RKP_LAZY_MMU
+        bool
+        depends on TIMA_RKP_L2_TABLES
+        default y
+        help
+         TIMA lazy MMU for L2 pages
+
+config  TIMA_RKP_EMUL_CP15_INSTR
+        bool
+        depends on TIMA_RKP_30
+        default n
+        help
+         RKP emulates CP15 instructions affecting MMU
+
+config TIMA_RKP_DEBUG
+       bool
+       depends on TIMA_RKP
+       default n
+       help
+         TIMA debug infrastructure.
+
+config BARCODE_PAINTER
+        bool "Bootloader Barcode Print MSM8916"
+        depends on ARCH_MSM8916
+        default n
+        help
+          This option is used to add Barcode Print Func.
+          Say Y if you want to enable this feature.
+
+config RTC_AUTO_PWRON
+        bool "RTC Auto Power on PM8x16 PMICs"
+        depends on ARCH_MSM8916
+        default n
+        help
+          Support for the auto power on alarm on the PM8X16 PMIC.
+          Say Y if you want to enable this feature.
+
+config RTC_AUTO_PWRON_PARAM
+        bool "RTC Auto Power on with param PM8x16 PMICs"
+        depends on RTC_AUTO_PWRON
+        default n
+        help
+          This option is used to prevent invalid RTC alarm power on.
+          Say Y if you want to enable this feature.
+
+config SEC_PERIPHERAL_SECURE_CHK
+	bool "PERIPHERAL SECURE check"
+	default n
+	help
+	  To check the authentication of peripheral image.
+
+config EXTEND_SERIAL_NUM_16
+	bool "serial number is 16 digit"
+	default n
 
 source "net/Kconfig"
 

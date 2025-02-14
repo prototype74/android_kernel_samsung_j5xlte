@@ -860,23 +860,6 @@ config SEC_GPIO_SETTINGS
 	  Use this driver to configure active,
 	  suspend settings of gpios
 
-config CHECK_SIMSLOT_COUNT
-	bool "Dual/Single sim support"
-
-config CHECK_SIMSLOT_COUNT_GPIO
-	int "Number simslot count gpio"
-	depends on CHECK_SIMSLOT_COUNT
-	default 0
-	help
-	  Provides Number of SS/DS detect GPIO value.
-
-config CHECK_SIMSLOT_COUNT_DT
-	bool "Define number of simslot count gpio at DeviceTree file"
-	depends on CHECK_SIMSLOT_COUNT
-	default n
-	help
-	  Say 'y' if you want to define gpio number at DeviceTree file instead of defconfig file.
-
 config MACH_KOR_EARJACK_WR
 	bool "enable earjack-noise workaround"
 	default n

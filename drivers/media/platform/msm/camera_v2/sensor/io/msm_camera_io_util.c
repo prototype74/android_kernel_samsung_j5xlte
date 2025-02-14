@@ -17,7 +17,6 @@
 #include <linux/io.h>
 #include <linux/err.h>
 #include <soc/qcom/camera2.h>
-#include <mach/gpiomux.h>
 #include <linux/msm-bus.h>
 #include "msm_camera_io_util.h"
 
@@ -25,11 +24,7 @@
 #define CDBG(fmt, args...) pr_err(fmt, ##args)
 
 #undef CDBG
-#ifdef CONFIG_MSMB_CAMERA_DEBUG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
-#else
-#define CDBG(fmt, args...) do { } while (0)
-#endif
 
 #ifdef CONFIG_MFD_RT5033_RESET_WA
 #ifdef CONFIG_CAM_USE_EXT_VANA_GPIO
@@ -50,13 +45,13 @@ extern unsigned int system_rev;
 
 void msm_camera_io_w(u32 data, void __iomem *addr)
 {
-	CDBG("%s: 0x%p %08x\n", __func__,  (addr), (data));
+	CDBG("%s: 0x%pK %08x\n", __func__,  (addr), (data));
 	writel_relaxed((data), (addr));
 }
 
 void msm_camera_io_w_mb(u32 data, void __iomem *addr)
 {
-	CDBG("%s: 0x%p %08x\n", __func__,  (addr), (data));
+	CDBG("%s: 0x%pK %08x\n", __func__,  (addr), (data));
 	wmb();
 	writel_relaxed((data), (addr));
 	wmb();
@@ -65,7 +60,7 @@ void msm_camera_io_w_mb(u32 data, void __iomem *addr)
 u32 msm_camera_io_r(void __iomem *addr)
 {
 	uint32_t data = readl_relaxed(addr);
-	CDBG("%s: 0x%p %08x\n", __func__,  (addr), (data));
+	CDBG("%s: 0x%pK %08x\n", __func__,  (addr), (data));
 	return data;
 }
 
@@ -75,7 +70,7 @@ u32 msm_camera_io_r_mb(void __iomem *addr)
 	rmb();
 	data = readl_relaxed(addr);
 	rmb();
-	CDBG("%s: 0x%p %08x\n", __func__,  (addr), (data));
+	CDBG("%s: 0x%pK %08x\n", __func__,  (addr), (data));
 	return data;
 }
 
@@ -96,12 +91,12 @@ void msm_camera_io_dump(void __iomem *addr, int size)
 	int i;
 	u32 *p = (u32 *) addr;
 	u32 data;
-	CDBG("%s: %p %d\n", __func__, addr, size);
+	CDBG("%s: %pK %d\n", __func__, addr, size);
 	line_str[0] = '\0';
 	p_str = line_str;
 	for (i = 0; i < size/4; i++) {
 		if (i % 4 == 0) {
-			snprintf(p_str, 12, "0x%p: ",  p);
+			snprintf(p_str, 12, "0x%pK: ",  p);
 			p_str += 10;
 		}
 		data = readl_relaxed(p++);
@@ -120,7 +115,7 @@ void msm_camera_io_dump(void __iomem *addr, int size)
 void msm_camera_io_memcpy(void __iomem *dest_addr,
 	void __iomem *src_addr, u32 len)
 {
-	CDBG("%s: %p %p %d\n", __func__, dest_addr, src_addr, len);
+	CDBG("%s: %pK %pK %d\n", __func__, dest_addr, src_addr, len);
 	msm_camera_io_memcpy_toio(dest_addr, src_addr, len / 4);
 	msm_camera_io_dump(dest_addr, len);
 }
@@ -181,13 +176,21 @@ int msm_cam_clk_enable(struct device *dev, struct msm_cam_clk_info *clk_info,
 				goto cam_clk_get_err;
 			}
 			if (clk_info[i].clk_rate > 0) {
-				rc = clk_set_rate(clk_ptr[i],
-							clk_info[i].clk_rate);
-				if (rc < 0) {
-					pr_err("%s set failed\n",
+				clk_rate = clk_round_rate(clk_ptr[i],
+					clk_info[i].clk_rate);
+				if (clk_rate < 0) {
+					pr_err("%s round failed\n",
 						   clk_info[i].clk_name);
 					goto cam_clk_set_err;
 				}
+				rc = clk_set_rate(clk_ptr[i],
+					clk_rate);
+				if (rc < 0) {
+					pr_err("%s set failed\n",
+						clk_info[i].clk_name);
+					goto cam_clk_set_err;
+				}
+
 			} else if (clk_info[i].clk_rate == INIT_RATE) {
 				clk_rate = clk_get_rate(clk_ptr[i]);
 				if (clk_rate == 0) {
@@ -479,7 +482,7 @@ void msm_camera_bus_scale_cfg(uint32_t bus_perf_client,
 	case S_DEFAULT:
 		break;
 	default:
-		pr_warning("%s: INVALID CASE\n", __func__);
+		pr_debug("%s: INVALID CASE\n", __func__);
 	}
 }
 
@@ -659,7 +662,7 @@ int msm_camera_request_gpio_table(struct gpio *gpio_tbl, uint8_t size,
 	int rc = 0, i = 0, err = 0;
 
 	if (!gpio_tbl || !size) {
-		pr_err("%s:%d invalid gpio_tbl %p / size %d\n", __func__,
+		pr_err("%s:%d invalid gpio_tbl %pK / size %d\n", __func__,
 			__LINE__, gpio_tbl, size);
 		return -EINVAL;
 	}

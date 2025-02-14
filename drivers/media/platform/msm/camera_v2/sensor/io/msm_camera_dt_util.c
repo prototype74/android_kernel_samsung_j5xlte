@@ -10,7 +10,6 @@
  * GNU General Public License for more details.
  */
 
-#include <mach/gpiomux.h>
 #include "msm_camera_dt_util.h"
 #include "msm_camera_io_util.h"
 #include "msm_camera_i2c_mux.h"
@@ -18,13 +17,10 @@
 
 #define CAM_SENSOR_PINCTRL_STATE_SLEEP "cam_suspend"
 #define CAM_SENSOR_PINCTRL_STATE_DEFAULT "cam_default"
-//#define CONFIG_MSM_CAMERA_DT_DEBUG
+/*#define CONFIG_MSM_CAMERA_DT_DEBUG*/
+
 #undef CDBG
-#ifdef CONFIG_MSM_CAMERA_DT_DEBUG
-#define CDBG(fmt, args...) pr_err(fmt, ##args)
-#else
-#define CDBG(fmt, args...) do { } while (0)
-#endif
+#define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
 int msm_camera_fill_vreg_params(struct camera_vreg_t *cam_vreg,
 	int num_vreg, struct msm_sensor_power_setting *power_setting,
@@ -1477,10 +1473,6 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 	}
 	if (ctrl->gpio_conf->cam_gpiomux_conf_tbl != NULL) {
 		pr_err("%s:%d mux install\n", __func__, __LINE__);
-		msm_gpiomux_install(
-			(struct msm_gpiomux_config *)
-			ctrl->gpio_conf->cam_gpiomux_conf_tbl,
-			ctrl->gpio_conf->cam_gpiomux_conf_tbl_size);
 	}
 	ret = msm_camera_pinctrl_init(ctrl);
 	if (ret < 0) {
@@ -1553,7 +1545,7 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 			gpio_set_value_cansleep(
 				ctrl->gpio_conf->gpio_num_info->gpio_num
 				[power_setting->seq_val],
-				power_setting->config_val);
+				(int) power_setting->config_val);
 			break;
 		case SENSOR_VREG:
 			if (power_setting->seq_val >= CAM_VREG_MAX) {
@@ -1562,18 +1554,23 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 					SENSOR_GPIO_MAX);
 				goto power_up_failed;
 			}
+			if (power_setting->seq_val < ctrl->num_vreg)
 #if defined(CONFIG_CAM_DUAL_POWER_SEQ)
-			msm_camera_config_single_vreg(ctrl->dev,
+				msm_camera_config_single_vreg(ctrl->dev,
 				&ctrl->cam_vreg[power_setting->seq_val],
 				(struct regulator **)&ctrl->cam_vreg\
 				[power_setting->seq_val].regulator[0],
 				power_setting->config_val);
 #else
-			msm_camera_config_single_vreg(ctrl->dev,
+				msm_camera_config_single_vreg(ctrl->dev,
 				&ctrl->cam_vreg[power_setting->seq_val],
 				(struct regulator **)&power_setting->data[0],
 				1);
 #endif
+			else
+				pr_err("ERR:%s: %d usr_idx:%d dts_idx:%d\n",
+					__func__, __LINE__,
+					power_setting->seq_val, ctrl->num_vreg);
 			break;
 		case SENSOR_I2C_MUX:
 			if (ctrl->i2c_conf && ctrl->i2c_conf->use_i2c_mux)
@@ -1626,6 +1623,8 @@ power_up_failed:
 				0);
 			break;
 		case SENSOR_GPIO:
+			if (!ctrl->gpio_conf->gpio_num_info)
+				continue;
 			if (!ctrl->gpio_conf->gpio_num_info->valid
 				[power_setting->seq_val])
 				continue;
@@ -1634,19 +1633,23 @@ power_up_failed:
 				[power_setting->seq_val], GPIOF_OUT_INIT_LOW);
 			break;
 		case SENSOR_VREG:
+			if (power_setting->seq_val < ctrl->num_vreg)
 #if defined(CONFIG_CAM_DUAL_POWER_SEQ)
-			msm_camera_config_single_vreg(ctrl->dev,
+				msm_camera_config_single_vreg(ctrl->dev,
 				&ctrl->cam_vreg[power_setting->seq_val],
 				(struct regulator **)&ctrl->cam_vreg\
 				[power_setting->seq_val].regulator[0],
 				0);
 #else
-
-			msm_camera_config_single_vreg(ctrl->dev,
+				msm_camera_config_single_vreg(ctrl->dev,
 				&ctrl->cam_vreg[power_setting->seq_val],
 				(struct regulator **)&power_setting->data[0],
 				0);
 #endif
+			else
+				pr_err("%s:%d:seq_val: %d > num_vreg: %d\n",
+					__func__, __LINE__,
+					power_setting->seq_val, ctrl->num_vreg);
 			break;
 		case SENSOR_I2C_MUX:
 			if (ctrl->i2c_conf && ctrl->i2c_conf->use_i2c_mux)
@@ -1761,7 +1764,7 @@ int msm_camera_power_down(struct msm_camera_power_ctrl_t *ctrl,
 			gpio_set_value_cansleep(
 				ctrl->gpio_conf->gpio_num_info->gpio_num
 				[pd->seq_val],
-				0);
+				(int) pd->config_val);
 			break;
 		case SENSOR_VREG:
 			if (pd->seq_val >= CAM_VREG_MAX) {
@@ -1775,20 +1778,26 @@ int msm_camera_power_down(struct msm_camera_power_ctrl_t *ctrl,
 						pd->seq_type,
 						pd->seq_val);
 
-			if (ps)
+			if (ps) {
+				if (pd->seq_val < ctrl->num_vreg)
 #if defined(CONFIG_CAM_DUAL_POWER_SEQ)
-				msm_camera_config_single_vreg(ctrl->dev,
+					msm_camera_config_single_vreg(ctrl->dev,
 					&ctrl->cam_vreg[pd->seq_val],
 					(struct regulator **)&ctrl->cam_vreg\
 					[pd->seq_val].regulator[0],
 					0);
 #else
-				msm_camera_config_single_vreg(ctrl->dev,
+					msm_camera_config_single_vreg(ctrl->dev,
 					&ctrl->cam_vreg[pd->seq_val],
 					(struct regulator **)&ps->data[0],
 					0);
 #endif
-			else
+				else
+					pr_err("%s:%d:seq_val:%d > num_vreg: %d\n"
+						, __func__, __LINE__,
+						pd->seq_val, ctrl->num_vreg);
+
+			} else
 				pr_err("%s error in power up/down seq data\n",
 								__func__);
 			break;

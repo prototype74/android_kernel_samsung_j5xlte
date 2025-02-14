@@ -34,13 +34,8 @@
 #include "msm.h"
 #include "msm_buf_mgr.h"
 
-/*#define CONFIG_MSM_ISP_DBG*/
 #undef CDBG
-#ifdef CONFIG_MSM_ISP_DBG
-#define CDBG(fmt, args...) pr_err(fmt, ##args)
-#else
-#define CDBG(fmt, args...) do { } while (0)
-#endif
+#define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
 static struct msm_isp_bufq *msm_isp_get_bufq(
 	struct msm_isp_buf_mgr *buf_mgr,
@@ -48,8 +43,10 @@ static struct msm_isp_bufq *msm_isp_get_bufq(
 {
 	struct msm_isp_bufq *bufq = NULL;
 	uint32_t bufq_index = bufq_handle & 0xFF;
-	if (bufq_index >= buf_mgr->num_buf_q)
-		return bufq;
+
+	if ((bufq_handle == 0) ||
+		(bufq_index >= buf_mgr->num_buf_q))
+		return NULL;
 
 	bufq = &buf_mgr->bufq[bufq_index];
 	if (bufq->bufq_handle == bufq_handle)
@@ -130,7 +127,7 @@ static int msm_isp_prepare_v4l2_buf(struct msm_isp_buf_mgr *buf_mgr,
 		ion_import_dma_buf(buf_mgr->client,
 			v4l2_buf->m.planes[i].m.userptr);
 		if (IS_ERR_OR_NULL(mapped_info->handle)) {
-			pr_err("%s: buf has null/error ION handle %p\n",
+			pr_err("%s: buf has null/error ION handle %pK\n",
 				__func__, mapped_info->handle);
 			goto ion_map_error;
 		}
@@ -145,7 +142,7 @@ static int msm_isp_prepare_v4l2_buf(struct msm_isp_buf_mgr *buf_mgr,
 		}
 		mapped_info->paddr += v4l2_buf->m.planes[i].data_offset;
 		CDBG("%s: plane: %d addr:%lu\n",
-			__func__, i, (unsigned long int)(mapped_info->paddr));
+			__func__, i, (unsigned long)mapped_info->paddr);
 
 		buf_pending = kzalloc(sizeof(struct buffer_cmd), GFP_ATOMIC);
 		if (!buf_pending) {
@@ -198,6 +195,43 @@ static void msm_isp_unprepare_v4l2_buf(
 	return;
 }
 
+#ifdef CONFIG_COMPAT
+static int msm_isp_copy_to_v4l2_plane_compat(
+	struct v4l2_buffer *buf, struct v4l2_plane *plane)
+{
+	struct v4l2_plane32 *plane32 = NULL;
+	int rc = -1;
+	int i;
+
+	plane32 = kzalloc(sizeof(struct v4l2_plane32) * buf->length, GFP_KERNEL);
+	if (!plane32) {
+		pr_err("%s: Cannot alloc plane32\n", __func__);
+		return rc;
+	}
+
+	if (copy_from_user(plane32,
+			(void __user *)(buf->m.planes),
+		sizeof(struct v4l2_plane32) * buf->length)) {
+		pr_err("%s: Copy v4l2_plane32 failed\n", __func__);
+		kfree(plane32);
+		return rc;
+	}
+
+	for (i = 0; i < buf->length; i++) {
+		plane[i].bytesused = plane32[i].bytesused;
+		plane[i].length = plane32[i].length;
+		plane[i].m.mem_offset = plane32[i].m.mem_offset;
+		plane[i].m.userptr = (unsigned long)compat_ptr(plane32[i].m.userptr);
+		plane[i].m.fd = plane32[i].m.fd;
+		plane[i].data_offset = plane32[i].data_offset;
+		memcpy(plane[i].reserved, plane32[i].reserved, sizeof(plane[i].reserved));
+	}
+
+	kfree(plane32);
+	return 0;
+}
+#endif
+
 static int msm_isp_buf_prepare(struct msm_isp_buf_mgr *buf_mgr,
 	struct msm_isp_qbuf_info *info, struct vb2_buffer *vb2_buf)
 {
@@ -249,11 +283,23 @@ static int msm_isp_buf_prepare(struct msm_isp_buf_mgr *buf_mgr,
 			__func__, buf_info->state);
 			return rc;
 		}
-		if (copy_from_user(plane,
-				(void __user *)(buf->m.planes),
-			sizeof(struct v4l2_plane) * buf->length)) {
-			kfree(plane);
-			return rc;
+#ifdef CONFIG_COMPAT
+		if (is_compat_task()) {
+			rc = msm_isp_copy_to_v4l2_plane_compat(buf, plane);
+			if (rc < 0) {
+				kfree(plane);
+				return rc;
+			}
+		}
+		else
+#endif
+		{
+			if (copy_from_user(plane,
+					(void __user *)(buf->m.planes),
+				sizeof(struct v4l2_plane) * buf->length)) {
+				kfree(plane);
+				return rc;
+			}
 		}
 		buf->m.planes = plane;
 	}
@@ -425,6 +471,7 @@ static int msm_isp_get_buf(struct msm_isp_buf_mgr *buf_mgr, uint32_t id,
 	default:
 		pr_err("%s: Incorrect buf source.\n", __func__);
 		rc = -EINVAL;
+		spin_unlock_irqrestore(&bufq->bufq_lock, flags);
 		return rc;
 	}
 

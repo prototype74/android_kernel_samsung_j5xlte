@@ -27,7 +27,6 @@
 #include <linux/of_gpio.h>
 #include <linux/wakelock.h>
 #include <linux/regulator/consumer.h>
-#include <mach/gpiomux.h>
 
 #include <linux/sensor/sensors_core.h>
 

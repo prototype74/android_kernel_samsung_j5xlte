@@ -211,6 +211,7 @@
 			stm,negate_z = <0>;
 			stm,poll_interval = <100>;
 			stm,min_interval = <2>;
+			stm,reactive_alert_threshold = <32>;
 		};
 		gp2a-i2c@44{
 			compatible = "gp2a-i2c";

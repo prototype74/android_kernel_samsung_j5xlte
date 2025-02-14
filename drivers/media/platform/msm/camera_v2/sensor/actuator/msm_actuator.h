@@ -30,8 +30,8 @@
 struct msm_actuator_ctrl_t;
 
 enum msm_actuator_state_t {
-	ACTUATOR_POWER_UP,
 	ACTUATOR_POWER_DOWN,
+	ACTUATOR_POWER_UP,
 };
 
 struct msm_actuator_func_tbl {
@@ -92,8 +92,6 @@ struct msm_actuator_ctrl_t {
 	struct msm_actuator_reg_params_t reg_tbl[MAX_ACTUATOR_REG_TBL_SIZE];
 	uint16_t region_size;
 	void *user_data;
-	uint32_t vcm_pwd;
-	uint32_t vcm_enable;
 	uint32_t total_steps;
 	uint16_t pwd_step;
 	uint16_t initial_code;

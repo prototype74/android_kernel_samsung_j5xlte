@@ -51,7 +51,7 @@ REAR_FRONT_TUNING
 #define MSM_CAMERA_STREAM_CNT_BITS  32
 
 #if !defined(CONFIG_ARCH_MSM8939) && !defined(CONFIG_ARCH_MSM8929)
-#define CAMERA_DISABLE_PC_LATENCY 200
+#define CAMERA_DISABLE_PC_LATENCY 100
 #define CAMERA_ENABLE_PC_LATENCY PM_QOS_DEFAULT_VALUE
 #endif
 
@@ -122,7 +122,7 @@ struct msm_session {
 	struct msm_queue_head stream_q;
 	struct mutex lock;
 	struct mutex lock_q;
-	rwlock_t	stream_rwlock;
+	rwlock_t stream_rwlock;
 
 };
 

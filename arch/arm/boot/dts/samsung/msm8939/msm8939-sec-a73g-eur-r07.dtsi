@@ -18,12 +18,6 @@
 #include "../../../../../../drivers/video/msm/mdss/samsung/S6E3FA2_AMS549EH01/dsi_panel_S6E3FA2_AMS549EH01_fhd_octa_cmd.dtsi"
 
 &soc {
-	samsung,simslot {
-		compatible = "simslot";
-		samsung,sim-slot = <&msm_gpio 95 0x1>;
-		status = "ok";
-	};
-
 	samsung,vibrator {
 		compatible = "samsung_vib";
 		pinctrl-names = "tlmm_motor_active","tlmm_motor_suspend";
