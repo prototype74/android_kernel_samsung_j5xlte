@@ -702,9 +702,9 @@ CONFIG_SEC_RESTRICT_ROOTING_LOG=y
 CONFIG_TZ_ICCC=y
 
 ################################
-# Qualcomm WLAN Built-in driver
+# Qualcomm WLAN module driver
 ################################
-CONFIG_PRONTO_WLAN=y
+CONFIG_PRONTO_WLAN=m
 CONFIG_PRIMA_WLAN_BTAMP=n
 CONFIG_PRIMA_WLAN_LFR=y
 CONFIG_PRIMA_WLAN_11AC_HIGH_TP=y
