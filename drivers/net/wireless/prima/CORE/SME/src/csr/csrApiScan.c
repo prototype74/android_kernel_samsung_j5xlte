@@ -3397,10 +3397,6 @@ tANI_BOOLEAN csrRemoveDupBssDescription( tpAniSirGlobal pMac, tSirBssDescription
 
     tCsrScanResult *pBssDesc;
     tANI_BOOLEAN fRC = FALSE;
-    tDot11fBeaconIEs *temp_ie = pIes;
-
-    if (!temp_ie)
-        csrGetParsedBssDescriptionIEs(pMac, pSirBssDescr, &temp_ie);
 
     // Walk through all the chained BssDescriptions.  If we find a chained BssDescription that
     // matches the BssID of the BssDescription passed in, then these must be duplicate scan
@@ -3413,35 +3409,9 @@ tANI_BOOLEAN csrRemoveDupBssDescription( tpAniSirGlobal pMac, tSirBssDescription
 
         // we have a duplicate scan results only when BSSID, SSID, Channel and NetworkType
         // matches
-        if (csrIsDuplicateBssDescription(pMac, &pBssDesc->Result.BssDescriptor,
-                                          pSirBssDescr, temp_ie, fForced))
+        if ( csrIsDuplicateBssDescription( pMac, &pBssDesc->Result.BssDescriptor, 
+                                                        pSirBssDescr, pIes, fForced ) )
         {
-           /*
-            * Due to Rx sensitivity issue, sometime beacons are seen on adjacent
-            * channel so workaround in software is needed. If DS params or HT
-            * info are present driver can get proper channel info from these IEs
-            * and the older RSSI values are used in new entry.
-            *
-            * For the cases where DS params and HT info is not present, driver
-            * needs to check below conditions to get proper channel so that the
-            * older RSSI values are used in new entry:
-            *
-            * -- The old entry channel and new entry channel are not same
-            * -- RSSI is less than -80, this indicate that the signal has leaked
-            *     in adjacent channel.
-            */
-            if (!pSirBssDescr->fProbeRsp &&
-                (temp_ie && !temp_ie->DSParams.present &&
-                !temp_ie->HTInfo.present) &&
-                (pSirBssDescr->channelId !=
-                 pBssDesc->Result.BssDescriptor.channelId) &&
-                ((pBssDesc->Result.BssDescriptor.rssi - pSirBssDescr->rssi) >
-                 SIR_ADJACENT_CHANNEL_RSSI_DIFF_THRESHOLD)) {
-                 pSirBssDescr->channelId =
-                            pBssDesc->Result.BssDescriptor.channelId;
-                pSirBssDescr->rssi =
-                                 pBssDesc->Result.BssDescriptor.rssi;
-            }
             pSirBssDescr->rssi = (tANI_S8)( (((tANI_S32)pSirBssDescr->rssi * CSR_SCAN_RESULT_RSSI_WEIGHT ) +
                                              ((tANI_S32)pBssDesc->Result.BssDescriptor.rssi * (100 - CSR_SCAN_RESULT_RSSI_WEIGHT) )) / 100 );
             // Remove the 'old' entry from the list....
@@ -3467,9 +3437,6 @@ tANI_BOOLEAN csrRemoveDupBssDescription( tpAniSirGlobal pMac, tSirBssDescription
 
         pEntry = csrLLNext( &pMac->scan.scanResultList, pEntry, LL_ACCESS_LOCK );
     }
-
-    if (!pIes && temp_ie)
-       vos_mem_free(temp_ie);
 
     return fRC;
 }
@@ -4170,32 +4137,6 @@ void csrApplyChannelPowerCountryInfo( tpAniSirGlobal pMac, tCsrChannel *pChannel
         smsLog( pMac, LOGE, FL("  11D channel list is empty"));
     }
     csrSetCfgCountryCode(pMac, countryCode);
-}
-
-void csrUpdateFCCChannelList(tpAniSirGlobal pMac)
-{
-    tCsrChannel ChannelList;
-    tANI_U8 chnlIndx = 0;
-    int i;
-
-    for ( i = 0; i < pMac->scan.base20MHzChannels.numChannels; i++ )
-    {
-        if (pMac->scan.fcc_constraint &&
-                    ((pMac->scan.base20MHzChannels.channelList[i] == 12) ||
-                    (pMac->scan.base20MHzChannels.channelList[i] == 13)))
-        {
-            VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
-                          FL("removing channel %d"),
-                          pMac->scan.base20MHzChannels.channelList[i]);
-            continue;
-        }
-        ChannelList.channelList[chnlIndx] =
-                    pMac->scan.base20MHzChannels.channelList[i];
-        chnlIndx++;
-    }
-    csrSetCfgValidChannelList(pMac, ChannelList.channelList, chnlIndx);
-    csrScanFilterResults(pMac);
-
 }
 
 void csrResetCountryInformation( tpAniSirGlobal pMac, tANI_BOOLEAN fForce, tANI_BOOLEAN updateRiva )
@@ -5357,16 +5298,13 @@ tANI_BOOLEAN csrScanComplete( tpAniSirGlobal pMac, tSirSmeScanRsp *pScanRsp )
 }
 
 
+
 static void csrScanRemoveDupBssDescriptionFromInterimList( tpAniSirGlobal pMac, 
                                                            tSirBssDescription *pSirBssDescr,
                                                            tDot11fBeaconIEs *pIes)
 {
     tListElem *pEntry;
     tCsrScanResult *pCsrBssDescription;
-    tDot11fBeaconIEs *temp_ie = pIes;
-
-    if (!temp_ie)
-        csrGetParsedBssDescriptionIEs(pMac, pSirBssDescr, &temp_ie);
 
     // Walk through all the chained BssDescriptions.  If we find a chained BssDescription that
     // matches the BssID of the BssDescription passed in, then these must be duplicate scan
@@ -5379,37 +5317,9 @@ static void csrScanRemoveDupBssDescriptionFromInterimList( tpAniSirGlobal pMac,
         // we have a duplicate scan results only when BSSID, SSID, Channel and NetworkType
         // matches
 
-        if (csrIsDuplicateBssDescription(pMac,
-                                     &pCsrBssDescription->Result.BssDescriptor,
-                                     pSirBssDescr, temp_ie, FALSE))
+        if ( csrIsDuplicateBssDescription( pMac, &pCsrBssDescription->Result.BssDescriptor, 
+                                             pSirBssDescr, pIes, FALSE ) )
         {
-           /*
-            * Due to Rx sensitivity issue, sometime beacons are seen on adjacent
-            * channel so workaround in software is needed. If DS params or HT
-            * info are present driver can get proper channel info from these IEs
-            * and older RSSI values are used in new entry.
-            *
-            * For the cases where DS params and HT info is not present, driver
-            * needs to check below conditions to get proper channel so that the
-            * older RSSI values are used in new entry:
-            *
-            * -- The old entry channel and new entry channel are not same
-            * -- RSSI is less than -80, this indicate that the signal has leaked
-            *     in adjacent channel.
-            */
-            if (!pSirBssDescr->fProbeRsp &&
-                (temp_ie && !temp_ie->DSParams.present &&
-                !temp_ie->HTInfo.present) &&
-                (pSirBssDescr->channelId !=
-                 pCsrBssDescription->Result.BssDescriptor.channelId) &&
-                ((pCsrBssDescription->Result.BssDescriptor.rssi -
-                  pSirBssDescr->rssi) >
-                 SIR_ADJACENT_CHANNEL_RSSI_DIFF_THRESHOLD)) {
-                 pSirBssDescr->channelId =
-                            pCsrBssDescription->Result.BssDescriptor.channelId;
-                pSirBssDescr->rssi =
-                                 pCsrBssDescription->Result.BssDescriptor.rssi;
-            }
             pSirBssDescr->rssi = (tANI_S8)( (((tANI_S32)pSirBssDescr->rssi * CSR_SCAN_RESULT_RSSI_WEIGHT ) +
                                     ((tANI_S32)pCsrBssDescription->Result.BssDescriptor.rssi * (100 - CSR_SCAN_RESULT_RSSI_WEIGHT) )) / 100 );
 
@@ -5427,9 +5337,6 @@ static void csrScanRemoveDupBssDescriptionFromInterimList( tpAniSirGlobal pMac,
 
         pEntry = csrLLNext( &pMac->scan.tempScanResults, pEntry, LL_ACCESS_LOCK );
     }
-
-    if (!pIes && temp_ie)
-       vos_mem_free(temp_ie);
 }
 
 
@@ -9183,13 +9090,6 @@ eHalStatus csrScanSavePreferredNetworkFound(tpAniSirGlobal pMac,
           (SIR_MAC_HDR_LEN_3A + SIR_MAC_B_PR_SSID_OFFSET);
    }
 
-   if (uLen > (UINT_MAX - sizeof(tCsrScanResult))) {
-       smsLog(pMac, LOGE, FL("Incorrect len: %d, may leads to int overflow, uLen %d"),
-              pPrefNetworkFoundInd->frameLength, uLen);
-       vos_mem_vfree(pParsedFrame);
-       return eHAL_STATUS_FAILURE;
-   }
-   
    pScanResult = vos_mem_malloc(sizeof(tCsrScanResult) + uLen);
    if ( NULL == pScanResult )
    {

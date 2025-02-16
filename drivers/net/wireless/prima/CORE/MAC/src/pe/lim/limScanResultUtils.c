@@ -389,7 +389,6 @@ limCheckAndAddBssDescription(tpAniSirGlobal pMac,
     tANI_U8               dontUpdateAll = 0;
     tANI_U8               rfBand = 0;
     tANI_U8               rxChannelInBD = 0;
-    bool chan_info_present = true;
 
     tSirMacAddr bssid = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     tSirMacAddr bssid_zero =  {0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
@@ -505,10 +504,6 @@ limCheckAndAddBssDescription(tpAniSirGlobal pMac,
            }
         }
     }
-    else
-    {
-        chan_info_present = false;
-    }
 
     /**
      * Allocate buffer to hold BSS description from
@@ -575,13 +570,11 @@ limCheckAndAddBssDescription(tpAniSirGlobal pMac,
     //If it is not scanning, only save unique results
     if (pMac->lim.gLimReturnUniqueResults || (!fScanning))
     {
-        status = limLookupNaddHashEntry(pMac, pBssDescr, LIM_HASH_UPDATE,
-                                        dontUpdateAll, chan_info_present);
+        status = limLookupNaddHashEntry(pMac, pBssDescr, LIM_HASH_UPDATE, dontUpdateAll);
     }
     else
     {
-        status = limLookupNaddHashEntry(pMac, pBssDescr, LIM_HASH_ADD,
-                                        dontUpdateAll, chan_info_present);
+        status = limLookupNaddHashEntry(pMac, pBssDescr, LIM_HASH_ADD, dontUpdateAll);
     }
 
     if(fScanning)
@@ -722,7 +715,7 @@ limInitHashTable(tpAniSirGlobal pMac)
 eHalStatus
 limLookupNaddHashEntry(tpAniSirGlobal pMac,
                        tLimScanResultNode *pBssDescr, tANI_U8 action,
-                       tANI_U8 dontUpdateAll, bool chan_info_present)
+                       tANI_U8 dontUpdateAll)
 {
     tANI_U8                  index, ssidLen = 0;
     tANI_U8                found = false;
@@ -796,32 +789,6 @@ limLookupNaddHashEntry(tpAniSirGlobal pMac,
                         pbIe += pbIe[1] + 2;
                     }
                 }
-                /*
-                 * Due to Rx sensitivity issue, sometime beacons are seen on adjacent
-                 * channel so workaround in software is needed. If DS params or HT
-                 * info are present driver can get proper channel info from these IEs
-                 * and the older RSSI values are used in new entry.
-                 *
-                 * For the cases where DS params and HT info is not present, driver
-                 * needs to check below conditions to get proper channel so that the
-                 * older RSSI values are used in new entry:
-                 *
-                 * -- The old entry channel and new entry channel are not same
-                 * -- RSSI is less than -80, this indicate that the signal has leaked
-                 *     in adjacent channel.
-                 */
-                 if (!pBssDescr->bssDescription.fProbeRsp &&
-                     !chan_info_present &&
-                     (pBssDescr->bssDescription.channelId !=
-                      ptemp->bssDescription.channelId) &&
-                     ((ptemp->bssDescription.rssi -
-                       pBssDescr->bssDescription.rssi) >
-                      SIR_ADJACENT_CHANNEL_RSSI_DIFF_THRESHOLD)) {
-                      pBssDescr->bssDescription.channelId =
-                                 ptemp->bssDescription.channelId;
-                      pBssDescr->bssDescription.rssi =
-                                      ptemp->bssDescription.rssi;
-                 }
 
 
                 if(NULL != pMac->lim.gpLimMlmScanReq)

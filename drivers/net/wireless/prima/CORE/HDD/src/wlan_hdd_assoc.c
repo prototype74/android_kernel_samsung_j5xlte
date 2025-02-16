@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -744,9 +744,6 @@ static void hdd_save_bss_info(hdd_adapter_t *adapter,
     } else {
         hdd_sta_ctx->conn_info.conn_flag.vht_op_present = false;
     }
-    /* Cache last connection info */
-    vos_mem_copy(&hdd_sta_ctx->cache_conn_info, &hdd_sta_ctx->conn_info,
-                 sizeof(connection_info_t));
 }
 
 void hdd_connSaveConnectInfo( hdd_adapter_t *pAdapter, tCsrRoamInfo *pRoamInfo, eCsrRoamBssType eBssType )
@@ -1153,10 +1150,10 @@ static void hdd_SendAssociationEvent(struct net_device *dev,tCsrRoamInfo *pCsrRo
              }
         }
 #endif
-        hddLog(VOS_TRACE_LEVEL_ERROR, MAC_ADDRESS_STR " connected to "
-                MAC_ADDRESS_STR,
-                MAC_ADDR_ARRAY(pAdapter->macAddressCurrent.bytes),
-                MAC_ADDR_ARRAY(wrqu.ap_addr.sa_data));
+	hddLog(VOS_TRACE_LEVEL_ERROR, MAC_ADDRESS_STR " connected to "
+	       MAC_ADDRESS_STR,
+	       MAC_ADDR_ARRAY(pAdapter->macAddressCurrent.bytes),
+	       MAC_ADDR_ARRAY(wrqu.ap_addr.sa_data));
         hdd_SendUpdateBeaconIEsEvent(pAdapter, pCsrRoamInfo);
 
         hdd_manage_delack_timer(pHddCtx);
@@ -1550,23 +1547,18 @@ static void hdd_check_and_move_if_sap_is_on_dfs_chan(hdd_context_t *hdd_ctx,
             return;
         }
 
-        if (sap_ctx->sapsMachine != eSAP_STARTED) {
-            hddLog(LOG1, FL("SAP is not in eSAP_STARTED state"));
-            return;
-        }
-
         chan_state = vos_nv_getChannelEnabledState(sap_ctx->channel);
 
         hddLog(LOG1, "SAP is operating on channel (%hu), chan_state %d",
                 sap_ctx->channel, chan_state);
+
         if (vos_nv_getChannelEnabledState(sap_ctx->channel) !=
                 NV_CHANNEL_DFS) {
             hddLog(LOG1, "SAP is on non DFS channel. nothing to do");
             return;
         }
-
         hddLog(LOG1, "Schedule workqueue to move the SAP to non DFS channel");
-        schedule_delayed_work(&hdd_ctx->ecsa_chan_change_work, 500);
+        schedule_delayed_work(&hdd_ctx->ecsa_chan_change_work, 0);
     }
 }
 
@@ -1596,6 +1588,8 @@ static eHalStatus hdd_DisConnectHandler( hdd_adapter_t *pAdapter, tCsrRoamInfo *
     netif_carrier_off(dev);
     //TxTimeoutCount need to reset in case of disconnect handler
     pAdapter->hdd_stats.hddTxRxStats.continuousTxTimeoutCount = 0;
+
+    wlan_hdd_check_and_stop_mon(pAdapter, false);
 
     INIT_COMPLETION(pAdapter->disconnect_comp_var);
     /* If only STA mode is on */
@@ -1982,7 +1976,6 @@ static VOS_STATUS hdd_roamRegisterSTA( hdd_adapter_t *pAdapter,
    staDesc.ucIsEseSta = pRoamInfo->isESEAssoc;
 #endif //FEATURE_WLAN_ESE
 
-#ifdef VOLANS_ENABLE_SW_REPLAY_CHECK
    /* check whether replay check is valid for the station or not */
    if( (eCSR_ENCRYPT_TYPE_TKIP == connectedCipherAlgo) || (eCSR_ENCRYPT_TYPE_AES == connectedCipherAlgo))
    {
@@ -1993,7 +1986,6 @@ static VOS_STATUS hdd_roamRegisterSTA( hdd_adapter_t *pAdapter,
        VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                  "HDD register TL ucIsReplayCheckValid %d: Replay check is needed for station", staDesc.ucIsReplayCheckValid);
    }
-
    else
    {
       /* For other encryption modes replay check is
@@ -2002,7 +1994,6 @@ static VOS_STATUS hdd_roamRegisterSTA( hdd_adapter_t *pAdapter,
         VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                  "HDD register TL ucIsReplayCheckValid %d", staDesc.ucIsReplayCheckValid);
    }
-#endif
 
 #ifdef FEATURE_WLAN_WAPI
    hddLog(LOG1, "%s: WAPI STA Registered: %d", __func__, pAdapter->wapi_info.fIsWapiSta);
@@ -2767,10 +2758,6 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
              }
         }
     }
-    else if (roamStatus == eCSR_ROAM_ASSOCIATION_FAILURE)
-    {
-        hdd_check_and_move_if_sap_is_on_dfs_chan(pHddCtx, pAdapter);
-    }
     return eHAL_STATUS_SUCCESS;
 }
 
@@ -3525,12 +3512,10 @@ VOS_STATUS hdd_roamRegisterTDLSSTA(hdd_adapter_t *pAdapter,
     /* tdls Direct Link do not need bcastSig */
     staDesc.ucBcastSig  = 0 ;
 
-#ifdef VOLANS_ENABLE_SW_REPLAY_CHECK
     if(staDesc.ucProtectedFrame)
         staDesc.ucIsReplayCheckValid = VOS_TRUE;
     else
         staDesc.ucIsReplayCheckValid = VOS_FALSE;
-#endif
 
     staDesc.ucInitState = WLANTL_STA_CONNECTED ;
 
@@ -4000,6 +3985,12 @@ eHalStatus hdd_smeRoamCallback( void *pContext, tCsrRoamInfo *pRoamInfo, tANI_U3
 #endif
             }
            break;
+        case eCSR_ROAM_LOSTLINK_DETECTED:
+             {
+                 if (wlan_hdd_check_and_stop_mon(pAdapter, false))
+                     halStatus = eHAL_STATUS_FAILURE;
+             }
+             break;
         case eCSR_ROAM_LOSTLINK:
         case eCSR_ROAM_DISASSOCIATED:
             {
@@ -4287,8 +4278,7 @@ eHalStatus hdd_smeRoamCallback( void *pContext, tCsrRoamInfo *pRoamInfo, tANI_U3
                          (pHostapdAdapter->sessionCtx.ap.operatingChannel !=
                           pRoamInfo->chan_info.chan_id))
                  {
-                     hdd_schedule_ecsa_chan_change_work(pHddCtx,
-                             pAdapter->sessionId);
+                     schedule_delayed_work(&pHddCtx->ecsa_chan_change_work, 0);
                  }
                  else
                      hddLog(LOG1, FL("SAP restart not required"));
@@ -4869,6 +4859,9 @@ int __iw_set_essid(struct net_device *dev,
     if( SIR_MAC_MAX_SSID_LENGTH < wrqu->essid.length )
         return -EINVAL;
     pRoamProfile = &pWextState->roamProfile;
+
+    if (wlan_hdd_check_and_stop_mon(pAdapter, true))
+        return -EINVAL;
 
     /*Try disconnecting if already in connected state*/
     status = wlan_hdd_try_disconnect(pAdapter);

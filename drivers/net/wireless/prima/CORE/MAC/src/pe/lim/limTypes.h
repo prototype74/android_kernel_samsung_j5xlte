@@ -210,8 +210,13 @@ typedef struct sLimMlmScanCnf
 {
     tSirResultCodes         resultCode;
     tANI_U16                scanResultLength;
-    tSirBssDescription      bssDescription[1];
     tANI_U8                 sessionId;
+    tSirBssDescription      bssDescription[1];
+    /*
+     * WARNING: Pls make bssDescription as last variable in struct
+     * tLimMlmScanCnf as it has ieFields followed after this bss
+     * description. Adding a variable after this corrupts the ieFields
+     */
 } tLimMlmScanCnf, *tpLimMlmScanCnf;
 
 typedef struct sLimScanResult
@@ -1139,6 +1144,7 @@ tSirRetStatus lim_process_sme_del_ba_ses_req(tpAniSirGlobal pMac,
  */
 void lim_send_chan_switch_action_frame(tpAniSirGlobal mac_ctx,
      uint16_t new_channel, tpPESession session_entry);
+
 
 #endif /* __LIM_TYPES_H */
 

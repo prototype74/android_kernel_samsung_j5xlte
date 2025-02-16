@@ -387,9 +387,6 @@ limCreateTimers(tpAniSirGlobal pMac)
         }
         cfgValue = SYS_MS_TO_TICKS(cfgValue);
 
-		// change timer to 1sec.
-        cfgSetInt(pMac, WNI_CFG_PROBE_AFTER_HB_FAIL_TIMEOUT, 1000);		
-
         if (tx_timer_create(&pMac->lim.limTimers.gLimHeartBeatTimer,
                             "Heartbeat TIMEOUT",
                             limTimerHandler,
@@ -416,8 +413,6 @@ limCreateTimers(tpAniSirGlobal pMac)
                FL("could not retrieve PROBE_AFTER_HB_FAIL_TIMEOUT value"));
         }
 
-		limLog(pMac, LOGE, FL("hb_timeout = %d"), cfgValue);
-		
         // Change timer to reactivate it in future
         cfgValue = SYS_MS_TO_TICKS(cfgValue);
 

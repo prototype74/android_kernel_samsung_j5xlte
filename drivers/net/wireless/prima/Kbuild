@@ -61,8 +61,8 @@ SAP_AUTH_OFFLOAD := y
 
 # To enable CONFIG_QCOM_ESE_UPLOAD, dependent config
 # CONFIG_QCOM_ESE must be enabled.
-CONFIG_QCOM_ESE := y
-CONFIG_QCOM_ESE_UPLOAD := y
+CONFIG_QCOM_ESE := n
+CONFIG_QCOM_ESE_UPLOAD := n
 
 # Feature flags which are not (currently) configurable via Kconfig
 
@@ -178,10 +178,6 @@ EXTRA_CFLAGS += -DSEC_WRITE_ANT_GPIO_INFO_IN_FILE
 
 # SS grip power control
 EXTRA_CFLAGS += -DSEC_CONFIG_GRIP_POWER
-
-ifneq ($(CONFIG_WLAN_USE_OLD_NV),0)
-EXTRA_CFLAGS += -DSEC_WLAN_USE_OLD_NV
-endif
 endif
 ifeq ($(CONFIG_QCOM_TDLS),y)
 HDD_OBJS +=	$(HDD_SRC_DIR)/wlan_hdd_tdls.o

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -231,6 +231,7 @@ enum qca_wlan_vendor_attr_get_station {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INVALID = 0,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_ASSOC_FAIL_REASON,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_REMOTE,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_AFTER_LAST,
@@ -335,6 +336,21 @@ enum qca_wlan_vendor_attr_get_station_info {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_HT_OPERATION,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_VHT_OPERATION,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOC_FAIL_REASON,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_MAX_PHY_RATE,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_PACKETS,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_BYTES,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_PACKETS,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_BYTES,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_LAST_TX_RATE,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_LAST_RX_RATE,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_WMM,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_SUPPORTED_MODE,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_AMPDU,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_STBC,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_STBC,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_CH_WIDTH,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_SGI_ENABLE,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_MAX =
@@ -360,6 +376,12 @@ enum qca_wlan_vendor_attr_get_station_info {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_VHT_OPERATION
 #define INFO_ASSOC_FAIL_REASON \
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOC_FAIL_REASON
+#define REMOTE_SUPPORTED_MODE \
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_SUPPORTED_MODE
+#define REMOTE_CH_WIDTH\
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_CH_WIDTH
+#define REMOTE_LAST_RX_RATE \
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_LAST_RX_RATE
 
 enum qca_nl80211_vendor_subcmds_index {
 #ifdef FEATURE_WLAN_CH_AVOID
@@ -1566,15 +1588,6 @@ void* wlan_hdd_change_country_code_cb(void *pAdapter);
 void hdd_select_cbmode( hdd_adapter_t *pAdapter,v_U8_t operationChannel);
 
 /*
- * wlan_hdd_restore_channels() Restore the channels which were cached
- * and disabled in __wlan_hdd_disable_channels api.
- * @hdd_ctx: Pointer to the HDD context
- *
- * @Return: 0 on success, Error code on failure
- */
-int wlan_hdd_restore_channels(hdd_context_t *pHddCtx);
-
-/*
  * hdd_update_indoor_channel() - enable/disable indoor channel
  * @hdd_ctx: hdd context
  * @disable: whether to enable / disable indoor channel
@@ -1598,8 +1611,8 @@ void hdd_update_indoor_channel(hdd_context_t *hdd_ctx,
  */
 void hdd_modify_indoor_channel_state_flags(
     struct ieee80211_channel *wiphy_chan,
-    v_U32_t rfChannel, bool disable, hdd_context_t *hdd_ctx);
-
+    v_U32_t rfChannel,
+    bool disable);
 
 
 v_U8_t* wlan_hdd_cfg80211_get_ie_ptr(

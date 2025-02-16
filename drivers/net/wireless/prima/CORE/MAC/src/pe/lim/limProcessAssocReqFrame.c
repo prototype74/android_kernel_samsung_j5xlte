@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2017-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013, 2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -173,7 +173,6 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
     tANI_U8                 *pBody;
     tANI_U16                peerIdx, temp;
     tANI_U32                val;
-    tANI_U16                prevAuthSeqno = 0xFFFF;
     tANI_S32                framelen;
     tSirRetStatus           status;
     tpSirMacMgmtHdr         pHdr;
@@ -234,8 +233,7 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
                              &psessionEntry->dph.dphHashTable);
     if (NULL != pStaDs)
     {
-        if (pStaDs->PrevAssocSeqno == ((pHdr->seqControl.seqNumHi << 4) |
-                                        (pHdr->seqControl.seqNumLo)))
+        if (pHdr->fc.retry > 0)
         {
             /* Ignore the Retry */
             limLog(pMac, LOGE,
@@ -1013,11 +1011,6 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
             {
                 /// STA has triggered pre-auth again
                 authType = pStaPreAuthContext->authType;
-
-               /// Store the previous auth frame's seq no
-               prevAuthSeqno = pStaPreAuthContext->seqNo;
-
-
                 limDeletePreAuthNode(pMac, pHdr->sa);
             }
             else
@@ -1135,16 +1128,7 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
 
         goto error;
     }
-     /// Store the previous auth frame's seq no
-    if (prevAuthSeqno != 0xFFFF)
-    {
-        pStaDs->PrevAuthSeqno = prevAuthSeqno;
-    }
-     /// Store the current assoc seq no
-    pStaDs->PrevAssocSeqno = ((pHdr->seqControl.seqNumHi << 4) |
-                              (pHdr->seqControl.seqNumLo));
-    limLog(pMac, LOG1, FL("Prev auth seq no %d Prev Assoc seq no. %d"),
-                          pStaDs->PrevAuthSeqno, pStaDs->PrevAssocSeqno);
+
 
 sendIndToSme:
 

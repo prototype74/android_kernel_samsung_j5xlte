@@ -208,16 +208,12 @@ struct hdd_cache_sta_info{
 
 /**
  * struct ecsa_info - structure to store ecsa info
- * @ecsa_lock: ecsa lock
  * @new_channel: new channel to which switch is requested
  * @channel_switch_in_progress: check if channel switch is in progress
- * @chan_switch_comp: channel switch comp var
  */
 struct ecsa_info {
-    spinlock_t ecsa_lock;
     uint8_t new_channel;
     bool channel_switch_in_progress;
-    struct completion chan_switch_comp;
 };
 
 typedef struct sSapContext {
