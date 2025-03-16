@@ -24,7 +24,8 @@
  * PN544_SET_PWR(1): power on
  * PN544_SET_PWR(>1): power on with firmware download enabled
  */
-#define PN547_SET_PWR	_IOW(PN547_MAGIC, 0x01, unsigned int)
+#define PN547_SET_PWR	_IOW(PN547_MAGIC, 0x01, long)
+#define PN547_SET_PWR_OLD	_IOW(PN547_MAGIC, 0x01, unsigned int)
 
 #ifdef CONFIG_NFC_PN547_ESE_SUPPORT
 /*
