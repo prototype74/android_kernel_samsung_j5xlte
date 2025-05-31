@@ -110,7 +110,7 @@
 
 		/* Dynamic FPS */
 		/* qcom,mdss-dsi-pan-enable-dynamic-fps= <1>; */
-		/* qcom,mdss-dsi-pan-fps-update = "dfps_immediate_porch_mode"; */
+		/* qcom,mdss-dsi-pan-fps-update = "dfps_immediate_porch_mode_vfp"; */
 
 		qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";
 		qcom,mdss-dsi-bl-min-level = <1>;
