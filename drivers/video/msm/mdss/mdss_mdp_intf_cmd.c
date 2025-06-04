@@ -1204,6 +1204,7 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl, int panel_power_state)
 				goto end;
 			}
 		}
+	}
 
 panel_events:
 	if ((ctl->num == 0) && send_panel_events) {
