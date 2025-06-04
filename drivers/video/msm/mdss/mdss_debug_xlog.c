@@ -364,6 +364,13 @@ static void mdss_xlog_dump_array(struct mdss_debug_base *blk_arr[],
 				mdss_dbg_xlog.enable_reg_dump);
 	}
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+		if (mdss_samsung_dsi_te_check()) {
+			pr_err("%s : recovery need..\n", __func__);
+			return;
+		}
+#endif
+
 	mdss_xlog_dump_all();
 
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)

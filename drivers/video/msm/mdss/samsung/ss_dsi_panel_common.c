@@ -395,6 +395,147 @@ static int mdss_samsung_dsi_panel_event_handler(
 	return 0;
 }
 
+/*
+ * Debugfs related functions
+ */
+static ssize_t mdss_samsung_dump_regs_debug(struct file *file,
+			char __user *buff, size_t count, loff_t *ppos)
+{
+	struct samsung_display_driver_data *vdd = file->private_data;
+
+	if (IS_ERR_OR_NULL(vdd))
+		return -EFAULT;
+
+	mdss_samsung_read_rddpm();
+	mdss_samsung_dump_regs();
+	mdss_samsung_dsi_dump_regs(0);
+	mdss_samsung_dsi_dump_regs(1);
+	mdss_samsung_dsi_te_check();
+	mdss_mdp_underrun_dump_info();
+
+	return 0;
+}
+
+static struct file_operations panel_dump_ops = {
+	.open = simple_open,
+	.read = mdss_samsung_dump_regs_debug,
+};
+
+static void mdss_sasmung_panel_debug_create(struct samsung_display_driver_data *vdd)
+{
+	struct samsung_display_debug_data *debug_data;
+
+	debug_data = vdd->debug_data;
+
+	/* Create file on debugfs of display_driver */
+
+
+	/* Create file on debugfs on dump */
+	debugfs_create_file("reg_dump", 0600, debug_data->dump,
+		vdd, &panel_dump_ops);
+	debugfs_create_bool("print_cmds", 0600, debug_data->dump,
+		(u32 *)&debug_data->print_cmds);
+	debugfs_create_bool("panic_on_pptimeout", 0600, debug_data->dump,
+		(u32 *)&debug_data->panic_on_pptimeout);
+
+	/* Create file on debugfs on display_status */
+	debugfs_create_u32("panel_attach_status", 0600, debug_data->display_status,
+		(u32 *)&vdd->panel_attach_status);
+
+	/* Create file on debugfs on hw_info */
+	/* TBD */
+}
+
+static int mdss_sasmung_panel_debug_init(struct samsung_display_driver_data *vdd)
+{
+	struct samsung_display_debug_data *debug_data;
+	static bool debugfs_init;
+	int ret = 0;
+
+	debug_data = kzalloc(sizeof(struct samsung_display_debug_data),
+			GFP_KERNEL);
+
+	if (IS_ERR_OR_NULL(vdd)) {
+		ret = -ENODEV;
+		goto end;
+	}
+
+	/*
+	 * The debugfs must be init one time
+	 * in case of dual dsi, this function will be called twice
+	 */
+	if (debugfs_init)
+		goto end;
+
+	debugfs_init = true;
+
+	vdd->debug_data = debug_data;
+
+	if (IS_ERR_OR_NULL(debug_data)) {
+		pr_err("%s: no memory to create display debug data\n", __func__);
+		ret = -ENOMEM;
+		goto end;
+	}
+
+	/* INIT debug data */
+
+	/*
+	 * panic_on_pptimeout default value is false
+	 * if you want to enable panic for specific project
+	 * please change the value on your panel file.
+	 * if you want to enable panic for all project
+	 * please change the value here.
+	 */
+	debug_data->panic_on_pptimeout = false;
+
+	/* Root directory for display driver */
+	debug_data->root = debugfs_create_dir("display_driver", NULL);
+	if (IS_ERR_OR_NULL(debug_data->root)) {
+		pr_err("%s: debugfs_create_dir failed, error %ld(line:%d)\n",
+				__func__, PTR_ERR(debug_data->root), __LINE__);
+		ret = -ENODEV;
+		goto end;
+	}
+
+	/* Directory for dump */
+	debug_data->dump = debugfs_create_dir("dump", debug_data->root);
+	if (IS_ERR_OR_NULL(debug_data->dump)) {
+		pr_err("%s: debugfs_create_dir failed, error %ld(line:%d)\n",
+				__func__, PTR_ERR(debug_data->dump), __LINE__);
+		ret = -ENODEV;
+		goto end;
+	}
+
+	/* Directory for hw_info */
+	debug_data->hw_info = debugfs_create_dir("hw_info", debug_data->root);
+	if (IS_ERR_OR_NULL(debug_data->root)) {
+		pr_err("%s: debugfs_create_dir failed, error %ld(line:%d)\n",
+				__func__, PTR_ERR(debug_data->root), __LINE__);
+		ret = -ENODEV;
+		goto end;
+	}
+
+	/* Directory for display_status */
+	debug_data->display_status = debugfs_create_dir("display_status", debug_data->root);
+	if (IS_ERR_OR_NULL(debug_data->display_status)) {
+		pr_err("%s: debugfs_create_dir failed, error %ld(line:%d)\n",
+				__func__, PTR_ERR(debug_data->root), __LINE__);
+		ret = -ENODEV;
+		goto end;
+	}
+
+	mdss_sasmung_panel_debug_create(vdd);
+
+	if (ret)
+		pr_err("%s: Fail to create files for debugfs\n", __func__);
+
+end:
+	if (ret && !IS_ERR_OR_NULL(debug_data->root))
+			debugfs_remove_recursive(debug_data->root);
+
+	return ret;
+}
+
 void mdss_samsung_panel_init(struct device_node *np,
 			struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
@@ -404,6 +545,9 @@ void mdss_samsung_panel_init(struct device_node *np,
 	int loop, loop2;
 
 	ctrl_pdata->panel_data.panel_private = &vdd_data;
+
+	if (mdss_sasmung_panel_debug_init(&vdd_data))
+		pr_err("%s: Fail to create debugfs\n", __func__);
 
 	mutex_init(&vdd_data.vdd_lock);
 	/* To guarantee BLANK & UNBLANK mode change operation*/
@@ -4914,19 +5058,41 @@ void mdss_samsung_dsi_dump_regs(int dsi_num)
 	}
 }
 
-void mdss_samsung_dsi_te_check(void)
+int mdss_samsung_read_rddpm(void)
 {
 	struct mdss_dsi_ctrl_pdata **dsi_ctrl = mdss_dsi_get_ctrl();
 	struct samsung_display_driver_data *vdd = samsung_get_vdd();
-	int rc, te_count = 0;
-	int te_max = 20000; /*sampling 200ms */
 	char rddpm_reg = 0;
 
+	MDSS_XLOG(dsi_ctrl[DISPLAY_1]->ndx, 0x0A);
+
+	if (!IS_ERR_OR_NULL(vdd->dtsi_data[DISPLAY_1].ldi_debug0_rx_cmds[vdd->panel_revision].cmds)) {
+		mdss_samsung_read_nv_mem(dsi_ctrl[DISPLAY_1], &vdd->dtsi_data[DISPLAY_1].ldi_debug0_rx_cmds[vdd->panel_revision], &rddpm_reg, 0);
+
+		pr_err("%s: rddpm 0x(%x)\n", __func__, rddpm_reg);
+
+		if (rddpm_reg == 0x08) {
+			pr_err("%s: ddi reset status (%x)", __func__, rddpm_reg);
+			schedule_work(&pstatus_data->check_status.work);
+			return 1;
+		}
+	} else
+		pr_err("%s: no rddpm read cmds..\n", __func__);
+
+	return 0;
+}
+
+int mdss_samsung_dsi_te_check(void)
+{
+	struct mdss_dsi_ctrl_pdata **dsi_ctrl = mdss_dsi_get_ctrl();
+	int rc, te_count = 0;
+	int te_max = 20000; /*sampling 200ms */
+
 	if (dsi_ctrl[DISPLAY_1]->panel_mode == DSI_VIDEO_MODE)
-		return;
+		return 0;
 
 	if (gpio_is_valid(dsi_ctrl[DISPLAY_1]->disp_te_gpio)) {
-		pr_err(" ============ start waiting for TE ============\n");
+		pr_err("============ start waiting for TE ============\n");
 
 		for (te_count = 0;  te_count < te_max; te_count++) {
 			rc = gpio_get_value(dsi_ctrl[DISPLAY_1]->disp_te_gpio);
@@ -4946,18 +5112,17 @@ void mdss_samsung_dsi_te_check(void)
 			udelay(10);
 		}
 
-		if(te_count == te_max) {
-			pr_err("LDI doesn't generate TE");
-			if (!IS_ERR_OR_NULL(vdd->dtsi_data[DISPLAY_2].ldi_debug0_rx_cmds[vdd->panel_revision].cmds))
-				mdss_samsung_read_nv_mem(dsi_ctrl[DISPLAY_2], &vdd->dtsi_data[DISPLAY_2].ldi_debug0_rx_cmds[vdd->panel_revision], &rddpm_reg, 0);
-			if (!IS_ERR_OR_NULL(vdd->dtsi_data[DISPLAY_1].ldi_debug0_rx_cmds[vdd->panel_revision].cmds))
-				mdss_samsung_read_nv_mem(dsi_ctrl[DISPLAY_1], &vdd->dtsi_data[DISPLAY_1].ldi_debug0_rx_cmds[vdd->panel_revision], &rddpm_reg, 0);
+		if (te_count == te_max) {
+			pr_err("LDI doesn't generate TE, ddi recovery start.\n");
+			return 1;
 		} else
 			pr_err("LDI generate TE\n");
 
-		pr_err(" ============ finish waiting for TE ============\n");
+		pr_err("============ finish waiting for TE ============\n");
 	} else
 		pr_err("disp_te_gpio is not valid\n");
+
+	return 0;
 }
 
 void mdss_mdp_underrun_dump_info(void)
