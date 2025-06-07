@@ -292,8 +292,16 @@ static phys_addr_t __get_phys_sg(void *cookie)
 	struct scatterlist *sg = cookie;
 	struct page *page = sg_page(sg);
 
-	BUG_ON(page == NULL);
-
+	if (page == NULL) {
+		/*
+		 * The scatterlist entry does not contain a
+		 * valid struct page, so we assume it holds
+		 * a DMA-mapped address.
+		 */
+		phys_addr_t pa = sg_dma_address(sg);
+		BUG_ON(pa == 0);
+		return pa;
+	}
 	return sg_phys(sg);
 }
 
