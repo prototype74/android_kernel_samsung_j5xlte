@@ -539,7 +539,6 @@ long pn547_dev_ioctl(struct file *filp,
 #else	/*CONFIG_NFC_PN547_ESE_SUPPORT*/
 	switch (cmd) {
 	case PN547_SET_PWR:
-	case PN547_SET_PWR_OLD:
 		if (arg == 2) {
 			/* power on with firmware download (requires hw reset)
 			 */
