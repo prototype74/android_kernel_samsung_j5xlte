@@ -559,8 +559,13 @@ static int cpu_power_select(struct cpuidle_device *dev,
 	if (!cpu)
 		return -EINVAL;
 
+#ifdef CONFIG_SAMSUNG_LPM_MODE
+	if (sleep_disabled || poweroff_charging)
+		return 0;
+#else
 	if (sleep_disabled)
 		return 0;
+#endif
 
 	idx_restrict = cpu->nlevels + 1;
 
