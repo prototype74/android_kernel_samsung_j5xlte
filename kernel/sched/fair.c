@@ -1480,24 +1480,6 @@ static inline u64 cpu_load(int cpu)
 	return scale_load_to_cpu(rq->cumulative_runnable_avg, cpu);
 }
 
-static inline u64 cpu_load_sync(int cpu, int sync)
-{
-	struct rq *rq = cpu_rq(cpu);
-	u64 load;
-
-	load = rq->cumulative_runnable_avg;
-
-	/*
-	 * If load is being checked in a sync wakeup environment,
-	 * we may want to discount the load of the currently running
-	 * task.
-	 */
-	if (sync && cpu == smp_processor_id())
-		load -= rq->curr->ravg.demand;
-
-	return scale_load_to_cpu(load, cpu);
-}
-
 static int
 spill_threshold_crossed(struct task_struct *p, struct rq *rq, int cpu)
 {
@@ -1519,27 +1501,6 @@ int mostly_idle_cpu(int cpu)
 				&& rq->nr_running <= rq->mostly_idle_nr_run);
 
 	return mostly_idle;
-}
-
-static int mostly_idle_cpu_sync(int cpu, int sync)
-{
-	struct rq *rq = cpu_rq(cpu);
-	u64 load = cpu_load(cpu);
-	int nr_running;
-
-	nr_running = rq->nr_running;
-
-	/*
-	 * Sync wakeups mean that the waker task will go to sleep
-	 * soon so we should discount its load from this test.
-	 */
-	if (sync && cpu == smp_processor_id()) {
-		nr_running--;
-		load -= rq->curr->ravg.demand;
-	}
-
-	return load <= rq->mostly_idle_load &&
-		nr_running <= rq->mostly_idle_nr_run;
 }
 
 static int boost_refcount;
@@ -1740,19 +1701,15 @@ static unsigned int power_cost(struct task_struct *p, int cpu)
 	return power_cost_at_freq(cpu, task_freq);
 }
 
-static int best_small_task_cpu(struct task_struct *p, int sync)
+static int best_small_task_cpu(struct task_struct *p)
 {
-	int best_mi_cpu = -1, best_mi_cpu_power = INT_MAX;
-	int best_idle_lowpower_cpu = -1,
-		best_idle_lowpower_cpu_cstate = INT_MAX;
-	int best_busy_lowpower_cpu = -1;
-	u64 best_busy_lowpower_cpu_load = ULLONG_MAX;
-	int best_busy_highpower_cpu = -1;
-	u64 best_busy_highpower_cpu_load = ULLONG_MAX;
-	int min_cost_cpu = -1;
+	int best_busy_cpu = -1, best_fallback_cpu = -1;
+	int min_cost_cpu = -1, min_cstate_cpu = -1;
+	int min_cstate = INT_MAX;
+	int min_fallback_cpu_cost = INT_MAX;
 	int min_cost = INT_MAX;
 	int i, cstate, cpu_cost;
-	u64 load;
+	u64 load, min_busy_load = ULLONG_MAX;
 	int cost_list[nr_cpu_ids];
 	struct cpumask search_cpus;
 
@@ -1766,7 +1723,7 @@ static int best_small_task_cpu(struct task_struct *p, int sync)
 	for_each_cpu(i, &search_cpus) {
 
 		trace_sched_cpu_load(cpu_rq(i), idle_cpu(i),
-				     mostly_idle_cpu_sync(i, sync), power_cost(p, i));
+				     mostly_idle_cpu(i), power_cost(p, i));
 
 		cpu_cost = power_cost(p, i);
 		if (cpu_cost < min_cost) {
@@ -1783,82 +1740,45 @@ static int best_small_task_cpu(struct task_struct *p, int sync)
 	if (!cpu_rq(min_cost_cpu)->cstate && mostly_idle_cpu(min_cost_cpu))
 		return min_cost_cpu;
 
-	/*
-	 * 1. Lowest power-cost mostly idle non-LPM CPU in system.
-	 * 2. Shallowest c-state idle CPU in little cluster.
-	 * 3. Least busy CPU in little cluster where adding the task
-	 *    won't cross spill.
-	 * 4. Least busy CPU outside little cluster.
-	 */
 	for_each_cpu(i, &search_cpus) {
 		struct rq *rq = cpu_rq(i);
 		cstate = rq->cstate;
 
-		/*
-		 * Is this the best mostly idle CPU (that's not in a low
-		 * power mode) that we've seen?
-		 */
-		if (!(cstate && idle_cpu(i)) && mostly_idle_cpu_sync(i, sync)) {
-			if (cost_list[i] < best_mi_cpu_power) {
-				best_mi_cpu = i;
-				best_mi_cpu_power = cost_list[i];
-			}
-			continue;
-		}
-
-		/*
-		 * CPU is either in a low power mode or not mostly idle.
-		 *
-		 * Is this the lowest-loaded CPU outside the lowest power
-		 * band that we've seen?
-		 */
-		load = cpu_load_sync(i, sync);
 		if (power_delta_exceeded(cost_list[i], min_cost)) {
-			if (load < best_busy_highpower_cpu_load) {
-				best_busy_highpower_cpu = i;
-				best_busy_highpower_cpu_load = load;
+			if (cost_list[i] < min_fallback_cpu_cost) {
+				best_fallback_cpu = i;
+				min_fallback_cpu_cost = cost_list[i];
 			}
 			continue;
 		}
 
-		/*
-		 * CPU is in lowest power band and either in a low
-		 * power mode or beyond mostly idle.
-		 *
-		 * Is this the shallowest idle CPU in the lowest power
-		 * band that we've seen?
-		 */
 		if (idle_cpu(i) && cstate) {
-			if (cstate < best_idle_lowpower_cpu_cstate) {
-				best_idle_lowpower_cpu = i;
-				best_idle_lowpower_cpu_cstate = cstate;
+			if (cstate < min_cstate) {
+				min_cstate_cpu = i;
+				min_cstate = cstate;
 			}
 			continue;
 		}
 
-		/*
-		 * CPU is in lowest power band and beyond mostly idle.
-		 *
-		 * Is this the least loaded non-mostly-idle CPU in the
-		 * lowest power band that we've seen?
-		 */
-		if (load < best_busy_lowpower_cpu_load &&
-		    !spill_threshold_crossed(p, rq, i)) {
-			best_busy_lowpower_cpu = i;
-			best_busy_lowpower_cpu_load = load;
+		if (mostly_idle_cpu(i))
+			return i;
+
+		load = cpu_load(i);
+		if (!spill_threshold_crossed(p, rq, i)) {
+			if (load < min_busy_load) {
+				min_busy_load = load;
+				best_busy_cpu = i;
+			}
 		}
 	}
 
-	if (best_mi_cpu != -1)
-		return best_mi_cpu;
-	if (best_idle_lowpower_cpu != -1)
-		return best_idle_lowpower_cpu;
-	if (best_busy_lowpower_cpu != -1)
-		return best_busy_lowpower_cpu;
-	if (best_busy_highpower_cpu != -1)
-		return best_busy_highpower_cpu;
+	if (min_cstate_cpu != -1)
+		return min_cstate_cpu;
 
-	return task_cpu(p);
+	if (best_busy_cpu != -1)
+		return best_busy_cpu;
+
+	return best_fallback_cpu;
 }
 
 #define MOVE_TO_BIG_CPU			1
@@ -1931,8 +1851,7 @@ static int select_packing_target(struct task_struct *p, int best_cpu)
 
 
 /* return cheapest cpu that can fit this task */
-static int select_best_cpu(struct task_struct *p, int target, int reason,
-			   int sync)
+static int select_best_cpu(struct task_struct *p, int target, int reason)
 {
 	int i, best_cpu = -1, fallback_idle_cpu = -1, min_cstate_cpu = -1;
 	int prev_cpu = task_cpu(p);
@@ -1946,7 +1865,7 @@ static int select_best_cpu(struct task_struct *p, int target, int reason,
 	trace_sched_task_load(p, small_task, boost, reason, sync);
 
 	if (small_task && !boost) {
-		best_cpu = best_small_task_cpu(p, sync);
+		best_cpu = best_small_task_cpu(p);
 		goto done;
 	}
 
@@ -2466,7 +2385,7 @@ void check_for_migration(struct rq *rq, struct task_struct *p)
 		return;
 
 	raw_spin_lock(&migration_lock);
-	new_cpu = select_best_cpu(p, cpu, reason, 0);
+	new_cpu = select_best_cpu(p, cpu, reason);
 
 	if (new_cpu != cpu) {
 		active_balance = kick_active_balance(rq, p, new_cpu);
@@ -2495,7 +2414,7 @@ static inline int task_will_fit(struct task_struct *p, int cpu)
 	return 1;
 }
 
-static inline int select_best_cpu(struct task_struct *p, int target, int reason, int sync)
+static inline int select_best_cpu(struct task_struct *p, int target, int reason)
 {
 	return 0;
 }
@@ -4859,11 +4778,11 @@ select_task_rq_fair(struct task_struct *p, int sd_flag, int wake_flags)
 				want_affine = 1;
 				new_cpu = prev_cpu;
 		} else if(sched_enable_hmp)
-			return select_best_cpu(p, prev_cpu, 0, sync);
+			return select_best_cpu(p, prev_cpu, 0);
 	} else {
 		//rest cases goes to QC load balancer
 		if (sched_enable_hmp)
-			return select_best_cpu(p, prev_cpu, 0, sync);
+			return select_best_cpu(p, prev_cpu, 0);
 
 		if (sd_flag & SD_BALANCE_WAKE) {
 			if (cpumask_test_cpu(cpu, tsk_cpus_allowed(p)))
