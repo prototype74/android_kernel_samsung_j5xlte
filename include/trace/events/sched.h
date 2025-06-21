@@ -116,10 +116,9 @@ TRACE_EVENT(sched_enq_deq_task,
 
 TRACE_EVENT(sched_task_load,
 
-	TP_PROTO(struct task_struct *p, int small_task, int boost, int reason,
-		 int sync),
+	TP_PROTO(struct task_struct *p, int small_task, int boost, int reason),
 
-	TP_ARGS(p, small_task, boost, reason, sync),
+	TP_ARGS(p, small_task, boost, reason),
 
 	TP_STRUCT__entry(
 		__array(	char,	comm,	TASK_COMM_LEN	)
@@ -131,7 +130,6 @@ TRACE_EVENT(sched_task_load,
 		__field(	int,	small_task		)
 		__field(	int,	boost			)
 		__field(	int,	reason			)
-		__field(	int,	sync			)
 	),
 
 	TP_fast_assign(
@@ -144,14 +142,12 @@ TRACE_EVENT(sched_task_load,
 		__entry->small_task	= small_task;
 		__entry->boost		= boost;
 		__entry->reason		= reason;
-		__entry->sync		= sync;
 	),
 
-	TP_printk("%d (%s): sum=%u, sum_scaled=%u, period=%u demand=%u small=%d boost=%d reason=%d sync=%d",
+	TP_printk("%d (%s): sum=%u, sum_scaled=%u, period=%u demand=%u small=%d boost=%d reason=%d",
 		__entry->pid, __entry->comm, __entry->sum,
 		__entry->sum_scaled, __entry->period, __entry->demand,
-		__entry->small_task, __entry->boost, __entry->reason,
-		__entry->sync)
+		__entry->small_task, __entry->boost, __entry->reason)
 );
 
 TRACE_EVENT(sched_cpu_load,
