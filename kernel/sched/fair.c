@@ -2356,9 +2356,9 @@ _inc_hmp_sched_stats_fair(struct rq *rq, struct task_struct *p, int change_cra)
 unsigned int nr_eligible_big_tasks(int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
-	int nr_big = rq->nr_big_tasks;
+	int nr_big = rq->hmp_stats.nr_big_tasks;
 	int nr = rq->nr_running;
-	int nr_small = rq->nr_small_tasks;
+	int nr_small = rq->hmp_stats.nr_small_tasks;
 
 	if (rq->capacity != max_capacity)
 		return nr_big;
