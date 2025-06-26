@@ -32,6 +32,9 @@
 #define CPUFREQ_MIN_NO_MITIGATION     0
 #define HOTPLUG_NO_MITIGATION(_mask)  cpumask_clear(_mask)
 
+#define IS_HI_THRESHOLD_SET(_val) (_val & 1)
+#define IS_LOW_THRESHOLD_SET(_val) (_val & 2)
+
 struct msm_thermal_data {
 	struct platform_device *pdev;
 	uint32_t sensor_id;
