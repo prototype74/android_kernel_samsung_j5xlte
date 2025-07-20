@@ -7545,12 +7545,6 @@ static int msm_thermal_dev_probe(struct platform_device *pdev)
 	ret = probe_ocr(node, &data, pdev);
 
 	update_cpu_topology(&pdev->dev);
-	ret = fetch_cpu_mitigaiton_info(&data, pdev);
-	if (ret) {
-		pr_err("Error fetching CPU mitigation information. err:%d\n",
-				ret);
-		goto probe_exit;
-	}
 
 	if (mitigation_profile_enabled) {
 		ret = fetch_cpu_mitigaiton_info(&data, pdev);
