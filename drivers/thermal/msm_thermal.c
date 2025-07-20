@@ -32,6 +32,7 @@
 #include <linux/of.h>
 #include <linux/sysfs.h>
 #include <linux/types.h>
+#include <linux/io.h>
 #include <linux/thermal.h>
 #include <linux/regulator/rpm-smd-regulator.h>
 #include <linux/regulator/consumer.h>
