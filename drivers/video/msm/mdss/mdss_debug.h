@@ -59,7 +59,7 @@ struct debug_bus {
  * This cannot be called from interrupt context.
  */
 #define MDSS_XLOG_TOUT_HANDLER(...)	\
-	mdss_xlog_tout_handler_default(false, false, __func__, ##__VA_ARGS__, \
+	mdss_xlog_tout_handler_default(true, false, __func__, ##__VA_ARGS__, \
 		XLOG_TOUT_DATA_LIMITER)
 
 /*

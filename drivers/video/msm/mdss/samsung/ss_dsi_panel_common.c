@@ -4945,12 +4945,7 @@ static void dump_reg(char *addr, int len)
 	if (IS_ERR_OR_NULL(addr))
 		return;
 
-// TODO: fix parameters after addr returns to mdss_dump_reg func
-// #if defined(CONFIG_ARCH_MSM8992) || defined(CONFIG_ARCH_MSM8994)
-// 	mdss_dump_reg(MDSS_REG_DUMP_IN_LOG, addr, len, NULL);
-// #else
-// 	mdss_dump_reg(addr, len);
-// #endif
+    mdss_dump_reg(MDSS_DBG_DUMP_IN_LOG, addr, len, NULL, false);
 }
 
 void mdss_samsung_dump_regs(void)

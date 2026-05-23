@@ -11,8 +11,6 @@
  *
  */
 
-#define __DLOG_IMPLEMENTAION_MODULE__
-
 #include <linux/delay.h>
 #include <linux/spinlock.h>
 #include <linux/ktime.h>
@@ -26,6 +24,7 @@
 
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 #include "samsung/ss_dsi_panel_common.h" /* UTIL HEADER */
+DEFINE_MUTEX(XLOG_DUMP_LOCK);
 #endif
 
 #ifdef CONFIG_FB_MSM_MDSS_XLOG_DEBUG
@@ -38,9 +37,13 @@
 #define XLOG_DEFAULT_REGDUMP 0x2 /* dump in RAM */
 #define XLOG_DEFAULT_DBGBUSDUMP 0x3 /* dump in LOG & RAM */
 
-#define MDSS_XLOG_ENTRY 512
-#define MDSS_XLOG_MAX_DATA 7
+#define MDSS_XLOG_ENTRY	1024
+#define MDSS_XLOG_MAX_DATA 6
+#if defined(CONFIG_ARM64)
+#define MDSS_XLOG_BUF_MAX 1024
+#else
 #define MDSS_XLOG_BUF_MAX 512
+#endif
 #define MDSS_XLOG_BUF_ALIGN 32
 
 DEFINE_SPINLOCK(xlock);
@@ -194,7 +197,7 @@ static void mdss_xlog_dump_all(void)
 
 	while (__mdss_xlog_dump_calc_range()) {
 		mdss_xlog_dump_entry(xlog_buf, MDSS_XLOG_BUF_MAX);
-		pr_info("%s", xlog_buf);
+		pr_err("%s", xlog_buf);
 	}
 }
 
@@ -283,7 +286,7 @@ static void mdss_dump_debug_bus(u32 bus_dump_flag,
 
 }
 
-static void mdss_dump_reg(u32 reg_dump_flag,
+void mdss_dump_reg(u32 reg_dump_flag,
 	char *addr, int len, u32 **dump_mem, bool atomic_context)
 {
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
@@ -296,7 +299,7 @@ static void mdss_dump_reg(u32 reg_dump_flag,
 	in_log = (reg_dump_flag & MDSS_DBG_DUMP_IN_LOG);
 	in_mem = (reg_dump_flag & MDSS_DBG_DUMP_IN_MEM);
 
-	pr_info("reg_dump_flag=%d in_log=%d in_mem=%d\n", reg_dump_flag, in_log,
+	pr_err("reg_dump_flag=%d in_log=%d in_mem=%d\n", reg_dump_flag, in_log,
 		in_mem);
 
 	if (len % 16)
@@ -330,9 +333,14 @@ static void mdss_dump_reg(u32 reg_dump_flag,
 		x8 = readl_relaxed(addr+0x8);
 		xc = readl_relaxed(addr+0xc);
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 		if (in_log)
-			pr_info("%pK : %08x %08x %08x %08x\n", addr, x0, x4, x8,
+			pr_err("%04x : %08x %08x %08x %08x\n", i * 16, x0, x4, x8, xc);
+#else
+		if (in_log)
+			pr_err("%pK : %08x %08x %08x %08x\n", addr, x0, x4, x8,
 				xc);
+#endif
 
 		if (dump_addr && in_mem) {
 			dump_addr[i*4] = x0;
@@ -360,7 +368,7 @@ static void mdss_dump_reg_by_ranges(struct mdss_debug_base *dbg,
 		return;
 	}
 
-	pr_info("%s:=========%s DUMP=========\n", __func__, dbg->name);
+	pr_err("%s:=========%s DUMP=========\n", __func__, dbg->name);
 
 	/* If there is a list to dump the registers by ranges, use the ranges */
 	if (!list_empty(&dbg->dump_list)) {
@@ -452,6 +460,7 @@ static void mdss_xlog_dump_array(struct mdss_debug_base *blk_arr[],
 	u32 len, bool dead, const char *name,
 	bool dump_dbgbus, bool atomic_context)
 {
+#if !defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 	int i;
 
 	for (i = 0; i < len; i++) {
@@ -459,6 +468,7 @@ static void mdss_xlog_dump_array(struct mdss_debug_base *blk_arr[],
 			mdss_dump_reg_by_ranges(blk_arr[i],
 				mdss_dbg_xlog.enable_reg_dump, atomic_context);
 	}
+#endif
 
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 		if (mdss_samsung_dsi_te_check()) {
@@ -506,11 +516,30 @@ void mdss_xlog_tout_handler_default(bool enforce_dump, bool queue,
 	struct mdss_debug_base **blk_arr;
 	u32 blk_len;
 
-	if (!mdss_xlog_is_enabled(MDSS_XLOG_DEFAULT) && !enforce_dump)
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	MDSS_XLOG(0xffff, 0xffff, 0xffff, 0xffff, 0xffff);
+
+	mutex_lock(&XLOG_DUMP_LOCK);
+	if (!mdss_xlog_is_enabled(MDSS_XLOG_DEFAULT) && !enforce_dump) {
+		mutex_unlock(&XLOG_DUMP_LOCK);
+		return;
+	}
+
+	mdss_dbg_xlog.xlog_enable = 0;
+
+	if (queue && work_pending(&mdss_dbg_xlog.xlog_dump_work)) {
+		mutex_unlock(&XLOG_DUMP_LOCK);
+		return;
+	}
+
+	dump_stack();
+#else
+	if (!mdss_xlog_is_enabled(MDSS_XLOG_DEFAULT))
 		return;
 
 	if (queue && work_pending(&mdss_dbg_xlog.xlog_dump_work))
 		return;
+#endif
 
 	blk_arr = &mdss_dbg_xlog.blk_arr[0];
 	blk_len = ARRAY_SIZE(mdss_dbg_xlog.blk_arr);
@@ -549,6 +578,9 @@ void mdss_xlog_tout_handler_default(bool enforce_dump, bool queue,
 		mdss_xlog_dump_array(blk_arr, blk_len, dead, name,
 					dump_dbgbus, atomic_context);
 	}
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	mutex_unlock(&XLOG_DUMP_LOCK);
+#endif
 }
 
 int mdss_xlog_tout_handler_iommu(struct iommu_domain *domain,
@@ -557,12 +589,17 @@ int mdss_xlog_tout_handler_iommu(struct iommu_domain *domain,
 	if (!mdss_xlog_is_enabled(MDSS_XLOG_IOMMU))
 		return 0;
 
+	MDSS_XLOG(0x9999);
+	pr_err("MDP IOMMU page fault: iova=0x%lx\n", iova);
+
 	mdss_dump_reg_by_blk("mdp");
-	mdss_dump_reg_by_blk("vbif");
+	//mdss_dump_reg_by_bilk("vbif");
+	mdss_dump_reg_by_blk("dsi0");
+	mdss_dump_reg_by_blk("dsi1");
 	mdss_xlog_dump_all();
 	panic("mdp iommu");
 
-	return 0;
+	return -ENOSYS;
 }
 
 static int mdss_xlog_dump_open(struct inode *inode, struct file *file)
@@ -640,12 +677,15 @@ int mdss_create_xlog_debug(struct mdss_debug_data *mdd)
 
 	mdss_dbg_xlog.xlog_enable = XLOG_DEFAULT_ENABLE;
 	mdss_dbg_xlog.panic_on_err = XLOG_DEFAULT_PANIC;
-	mdss_dbg_xlog.enable_reg_dump = XLOG_DEFAULT_REGDUMP;
+	mdss_dbg_xlog.enable_reg_dump = XLOG_DEFAULT_DBGBUSDUMP;
 	mdss_dbg_xlog.enable_dbgbus_dump = XLOG_DEFAULT_DBGBUSDUMP;
 
 	pr_info("xlog_status: enable:%d, panic:%d, dump:%d\n",
 		mdss_dbg_xlog.xlog_enable, mdss_dbg_xlog.panic_on_err,
 		mdss_dbg_xlog.enable_reg_dump);
-
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	mdss_dbg_xlog.xlog_enable = MDSS_XLOG_DEFAULT | MDSS_XLOG_IOMMU \
+			| MDSS_XLOG_DBG | MDSS_XLOG_ALL;
+#endif
 	return 0;
 }
