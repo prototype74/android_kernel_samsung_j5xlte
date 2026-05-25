@@ -37,12 +37,26 @@
 				compatible = "android,fstab";
 				system {
 					compatible = "android,system";
+#ifdef SYSTEM_ON_SDC2
+					dev = "/dev/block/platform/soc.0/7864900.sdhci/by-name/SYSTEM";
+#else
 					dev = "/dev/block/platform/soc.0/7824900.sdhci/by-name/system";
+#endif
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
 					fsmgr_flags = "wait";
 					status = "ok";
 				};
+#ifdef VENDOR_ON_SDC2
+				vendor {
+					compatible = "android,vendor";
+					dev = "/dev/block/platform/soc.0/7864900.sdhci/by-name/vendor";
+					type = "ext4";
+					mnt_flags = "ro,barrier=1,discard";
+					fsmgr_flags = "wait";
+					status = "ok";
+				};
+#endif
 			};
 		};
 	};
