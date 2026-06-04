@@ -282,6 +282,8 @@ struct mdss_data_type {
 	int iommu_attached;
 	struct mdss_iommu_map_type *iommu_map;
 
+	struct debug_bus *dbg_bus;
+	u32 dbg_bus_size;
 	struct mdss_debug_inf debug_inf;
 	bool mixer_switched;
 	struct mdss_panel_cfg pan_cfg;
@@ -394,5 +396,10 @@ static inline bool mdss_has_quirk(struct mdss_data_type *mdata,
 		dss_reg_w(&mdata->mdss_io, offset, value, 0)
 #define MDSS_REG_READ(mdata, offset) \
 		dss_reg_r(&mdata->mdss_io, offset, 0)
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+extern void mdss_dump_reg(u32 reg_dump_flag,
+	char *addr, int len, u32 **dump_mem, bool atomic_context);
+#endif
 
 #endif /* MDSS_H */

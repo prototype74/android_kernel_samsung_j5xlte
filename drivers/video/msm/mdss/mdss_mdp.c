@@ -814,7 +814,9 @@ void mdss_mdp_clk_ctrl(int enable)
 		}
 	}
 
-	MDSS_XLOG(mdp_clk_cnt, changed, enable, current->pid);
+	if (changed)
+		MDSS_XLOG(mdp_clk_cnt, enable, current->pid);
+
 	pr_debug("%s: clk_cnt=%d changed=%d enable=%d\n",
 			__func__, mdp_clk_cnt, changed, enable);
 
@@ -908,7 +910,8 @@ static int mdss_iommu_tlb_timeout_notify(struct notifier_block *self,
 	switch (action) {
 	case TLB_SYNC_TIMEOUT:
 		pr_err("cb for TLB SYNC timeout. Dumping XLOG's\n");
-		MDSS_XLOG_TOUT_HANDLER("vbif", "mdp");
+		MDSS_XLOG_TOUT_HANDLER_FATAL_DUMP("vbif", "mdp",
+					"mdp_dbg_bus", "atomic_context");
 		break;
 	}
 
@@ -1135,6 +1138,8 @@ static int mdss_mdp_debug_init(struct platform_device *pdev,
 
 static void mdss_mdp_hw_rev_caps_init(struct mdss_data_type *mdata)
 {
+	mdss_mdp_hw_rev_debug_caps_init(mdata);
+
 	switch (mdata->mdp_rev) {
 	case MDSS_MDP_HW_REV_105:
 	case MDSS_MDP_HW_REV_109:

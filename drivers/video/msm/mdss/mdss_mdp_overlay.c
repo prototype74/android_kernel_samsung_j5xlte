@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,6 +26,7 @@
 #include <linux/memblock.h>
 #include <linux/sort.h>
 #include <linux/sw_sync.h>
+#include <linux/kmemleak.h>
 
 #include <linux/msm_iommu_domains.h>
 #include <soc/qcom/event_timer.h>
@@ -1180,6 +1181,7 @@ struct mdss_mdp_data *mdss_mdp_overlay_buf_alloc(struct msm_fb_data_type *mfd,
 		}
 
 		list_add(&buf->chunk_list, &mdp5_data->bufs_chunks);
+		kmemleak_not_leak(buf);
 		for (i = 0; i < BUF_POOL_SIZE; i++)
 			list_add(&buf[i].buf_list, &mdp5_data->bufs_pool);
 	}
@@ -1193,7 +1195,7 @@ struct mdss_mdp_data *mdss_mdp_overlay_buf_alloc(struct msm_fb_data_type *mfd,
 	list_add_tail(&buf->pipe_list, &pipe->buf_queue);
 	buf->state = MDP_BUF_STATE_READY;
 
-	pr_debug("buffer alloc: %p\n", buf);
+	pr_debug("buffer alloc: %pK\n", buf);
 
 	return buf;
 }
@@ -1229,7 +1231,7 @@ void mdss_mdp_overlay_buf_free(struct msm_fb_data_type *mfd,
 	buf->last_freed = local_clock();
 	buf->state = MDP_BUF_STATE_UNUSED;
 
-	pr_debug("buffer freed: %p\n", buf);
+	pr_debug("buffer freed: %pK\n", buf);
 
 	list_move_tail(&buf->buf_list, &mdp5_data->bufs_pool);
 }
@@ -1532,7 +1534,7 @@ static int __overlay_queue_pipes(struct msm_fb_data_type *mfd)
 		if (buf) {
 			switch (buf->state) {
 			case MDP_BUF_STATE_READY:
-				pr_debug("pnum=%d buf=%p first buffer ready\n",
+				pr_debug("pnum=%d buf=%pK first buffer ready\n",
 						pipe->num, buf);
 				break;
 			case MDP_BUF_STATE_ACTIVE:
@@ -1552,7 +1554,7 @@ static int __overlay_queue_pipes(struct msm_fb_data_type *mfd)
 				}
 				break;
 			default:
-				pr_err("invalid state of buf %p=%d\n",
+				pr_err("invalid state of buf %pK=%d\n",
 						buf, buf->state);
 				BUG();
 				break;
@@ -2218,6 +2220,7 @@ static int mdss_mdp_overlay_free_fb_pipe(struct msm_fb_data_type *mfd)
 	struct mdss_mdp_pipe *pipe;
 	u32 fb_ndx = 0;
 	struct mdss_overlay_private *mdp5_data = mfd_to_mdp5_data(mfd);
+	int need_release;
 
 	pipe = mdss_mdp_get_staged_pipe(mdp5_data->ctl,
 		MDSS_MDP_MIXER_MUX_LEFT, MDSS_MDP_STAGE_BASE, false);
@@ -2229,7 +2232,9 @@ static int mdss_mdp_overlay_free_fb_pipe(struct msm_fb_data_type *mfd)
 	if (pipe)
 		fb_ndx |= pipe->ndx;
 
-	if (fb_ndx) {
+	need_release = !list_empty(&mdp5_data->pipes_used);
+
+	if (fb_ndx && need_release) {
 		pr_debug("unstaging framebuffer pipes %x\n", fb_ndx);
 		mdss_mdp_overlay_release(mfd, fb_ndx);
 	}
@@ -3399,7 +3404,8 @@ static int mdss_bl_scale_config(struct msm_fb_data_type *mfd,
 							mfd->bl_min_lvl);
 
 	/* update current backlight to use new scaling*/
-	mdss_fb_set_backlight(mfd, curr_bl);
+	if (mfd->allow_bl_update)
+		mdss_fb_set_backlight(mfd, curr_bl);
 	mutex_unlock(&mfd->bl_lock);
 	return ret;
 }

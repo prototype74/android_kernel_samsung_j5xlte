@@ -24,11 +24,9 @@
 
 #include "mdss_fb.h"
 #include "mdss_mdp.h"
-#include "mdss_debug.h"
 #include "mdss_mdp_trace.h"
 #include "mdss_debug.h"
 
-static void mdss_mdp_xlog_mixer_reg(struct mdss_mdp_ctl *ctl);
 static inline u64 fudge_factor(u64 val, u32 numer, u32 denom)
 {
 	u64 result = (val * (u64)numer);
@@ -1787,19 +1785,21 @@ static struct mdss_mdp_mixer *mdss_mdp_mixer_alloc(
 
 	for (i = 0; i < nmixers; i++) {
 		mixer = mixer_pool + i;
-		if (mixer->ref_cnt == 0) {
-			mixer->ref_cnt++;
-			mixer->params_changed++;
-			mixer->ctl = ctl;
-			pr_debug("alloc mixer num %d for ctl=%d\n",
-				 mixer->num, ctl->num);
+		if (mixer->ref_cnt == 0)
 			break;
-		}
 		mixer = NULL;
 	}
 
 	if (!mixer && alt_mixer && (alt_mixer->ref_cnt == 0))
 		mixer = alt_mixer;
+
+	if (mixer) {
+		mixer->ref_cnt++;
+		mixer->params_changed++;
+		mixer->ctl = ctl;
+		pr_debug("alloc mixer num %d for ctl=%d\n",
+				mixer->num, ctl->num);
+	}
 	mutex_unlock(&mdss_mdp_ctl_lock);
 
 	return mixer;
@@ -2076,8 +2076,7 @@ int mdss_mdp_ctl_setup(struct mdss_mdp_ctl *ctl)
 
 	max_mixer_width = ctl->mdata->max_mixer_width;
 
-	split_fb = (ctl->mfd->split_fb_left &&
-		    ctl->mfd->split_fb_right &&
+	split_fb = (ctl->mfd->split_mode == MDP_DUAL_LM_SINGLE_DISPLAY &&
 		    (ctl->mfd->split_fb_left <= max_mixer_width) &&
 		    (ctl->mfd->split_fb_right <= max_mixer_width)) ? 1 : 0;
 	pr_debug("max=%d xres=%d left=%d right=%d\n", max_mixer_width,
@@ -2412,12 +2411,15 @@ int mdss_mdp_ctl_split_display_setup(struct mdss_mdp_ctl *ctl,
 
 	sctl->roi = (struct mdss_rect){0, 0, sctl->width, sctl->height};
 
-	ctl->mixer_left = mdss_mdp_mixer_alloc(ctl, MDSS_MDP_MIXER_TYPE_INTF,
-			false, 0);
 	if (!ctl->mixer_left) {
-		pr_err("unable to allocate layer mixer\n");
-		mdss_mdp_ctl_destroy(sctl);
-		return -ENOMEM;
+		ctl->mixer_left = mdss_mdp_mixer_alloc(ctl,
+				MDSS_MDP_MIXER_TYPE_INTF,
+				false, 0);
+		if (!ctl->mixer_left) {
+			pr_err("unable to allocate layer mixer\n");
+			mdss_mdp_ctl_destroy(sctl);
+			return -ENOMEM;
+		}
 	}
 
 	mixer = mdss_mdp_mixer_alloc(sctl, MDSS_MDP_MIXER_TYPE_INTF, false, 0);
@@ -3144,6 +3146,7 @@ update_mixer:
 
 	pr_debug("mixer=%d mixer_cfg=0%x mixercfg_extn=0x%x\n",
 		mixer->num, mixercfg, mixercfg_extn);
+	MDSS_XLOG(mixer->num, mixercfg, mixercfg_extn);
 }
 
 int mdss_mdp_mixer_addr_setup(struct mdss_data_type *mdata,
@@ -3317,7 +3320,7 @@ int mdss_mdp_mixer_pipe_update(struct mdss_mdp_pipe *pipe,
 			 struct mdss_mdp_mixer *mixer, int params_changed)
 {
 	struct mdss_mdp_ctl *ctl;
-	int i, j;
+	int i, j, k;
 	u32 mpq_num;
 
 	if (!pipe)
@@ -3347,9 +3350,9 @@ int mdss_mdp_mixer_pipe_update(struct mdss_mdp_pipe *pipe,
 			/*
 			 * 1. If pipe is on the right side of the blending
 			 *    stage, on either left LM or right LM but it is not
-			 *    crossing LM boundry then left_blend index is used.
+			 *    crossing LM boundry then right_blend ndx is used.
 			 * 2. If pipe is on the right side of the blending
-			 *    stage, on left LM and it is crossing LM boundry
+			 *    stage on left LM and it is crossing LM boundry
 			 *    then for left LM it is placed into right_blend
 			 *    index but for right LM it still placed into
 			 *    left_blend index.
@@ -3358,10 +3361,17 @@ int mdss_mdp_mixer_pipe_update(struct mdss_mdp_pipe *pipe,
 			    (pipe->src_split_req && !mixer->is_right_mixer)))
 				j++;
 
+			/* First clear all blend containers for current stage */
+			for (k = 0; k < MAX_PIPES_PER_STAGE; k++) {
+				u32 ndx = (i * MAX_PIPES_PER_STAGE) + k;
+
+				if (mixer->stage_pipe[ndx] == pipe)
+					mixer->stage_pipe[ndx] = NULL;
+			}
+
+			/* then stage actual pipe on specific blend container */
 			if (i == pipe->mixer_stage)
 				mixer->stage_pipe[j] = pipe;
-			else if (mixer->stage_pipe[j] == pipe)
-				mixer->stage_pipe[j] = NULL;
 		}
 	}
 
@@ -3598,6 +3608,32 @@ int mdss_mdp_display_wait4pingpong(struct mdss_mdp_ctl *ctl, bool use_lock)
 	return ret;
 }
 
+static void mdss_mdp_force_border_color(struct mdss_mdp_ctl *ctl)
+{
+	struct mdss_mdp_ctl *sctl = mdss_mdp_get_split_ctl(ctl);
+
+	ctl->force_screen_state = MDSS_SCREEN_FORCE_BLANK;
+
+	if (sctl)
+		sctl->force_screen_state = MDSS_SCREEN_FORCE_BLANK;
+
+	mdss_mdp_mixer_setup(ctl, MDSS_MDP_MIXER_MUX_LEFT);
+	mdss_mdp_mixer_setup(ctl, MDSS_MDP_MIXER_MUX_RIGHT);
+
+	ctl->force_screen_state = MDSS_SCREEN_DEFAULT;
+	if (sctl)
+		sctl->force_screen_state = MDSS_SCREEN_DEFAULT;
+
+	/*
+	 * Update the params changed for mixer for the next frame to
+	 * configure the mixer setup properly.
+	 */
+	if (ctl->mixer_left)
+		ctl->mixer_left->params_changed++;
+	if (ctl->mixer_right)
+		ctl->mixer_right->params_changed++;
+}
+
 int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 	struct mdss_mdp_commit_cb *commit_cb)
 {
@@ -3695,15 +3731,25 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 	}
 	ATRACE_END("postproc_programming");
 
-	mdss_mdp_xlog_mixer_reg(ctl);
-
 	ATRACE_BEGIN("frame_ready");
 	mdss_mdp_ctl_notify(ctl, MDP_NOTIFY_FRAME_CFG_DONE);
 	if (commit_cb)
 		commit_cb->commit_cb_fnc(
 			MDP_COMMIT_STAGE_SETUP_DONE,
 			commit_cb->data);
-	mdss_mdp_ctl_notify(ctl, MDP_NOTIFY_FRAME_READY);
+	ret = mdss_mdp_ctl_notify(ctl, MDP_NOTIFY_FRAME_READY);
+
+	/*
+	 * When wait for fence timed out, driver ignores the fences
+	 * for signalling. Hardware needs to access only on the buffers
+	 * that are valid and driver needs to ensure it. This function
+	 * would set the mixer state to border when there is timeout.
+	 */
+	if (ret == NOTIFY_BAD) {
+		mdss_mdp_force_border_color(ctl);
+		ret = 0;
+	}
+
 	ATRACE_END("frame_ready");
 
 	if (ctl->ops.wait_pingpong && !mdata->serialize_wait4pp)
@@ -4041,19 +4087,4 @@ int mdss_mdp_mixer_handoff(struct mdss_mdp_ctl *ctl, u32 num,
 	}
 
 	return rc;
-}
-
-static void mdss_mdp_xlog_mixer_reg(struct mdss_mdp_ctl *ctl)
-{
-	int i, off;
-	u32 data[MDSS_MDP_INTF_MAX_LAYERMIXER];
-
-	for (i = 0; i < MDSS_MDP_INTF_MAX_LAYERMIXER; i++) {
-		off =  MDSS_MDP_REG_CTL_LAYER(i);
-		data[i] = mdss_mdp_ctl_read(ctl, off);
-	}
-	MDSS_XLOG(data[MDSS_MDP_INTF_LAYERMIXER0],
-		data[MDSS_MDP_INTF_LAYERMIXER1],
-		data[MDSS_MDP_INTF_LAYERMIXER2],
-		data[MDSS_MDP_INTF_LAYERMIXER3], off);
 }

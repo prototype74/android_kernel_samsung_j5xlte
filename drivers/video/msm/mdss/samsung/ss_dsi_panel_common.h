@@ -61,7 +61,9 @@ Copyright (C) 2012, Samsung Electronics. All rights reserved.
 #include "../../mdss/mdss_dsi.h"
 #include "../../mdss/mdss_debug.h"
 
-#define LCD_DEBUG(X, ...) pr_info("[MDSS]%s:"X, __func__, ## __VA_ARGS__);
+#define LCD_DEBUG(X, ...) pr_debug("[MDSS] %s : "X, __func__, ## __VA_ARGS__)
+#define LCD_INFO(X, ...) pr_info("[MDSS] %s : "X, __func__, ## __VA_ARGS__)
+#define LCD_ERR(X, ...) pr_err("[MDSS] %s : "X, __func__, ## __VA_ARGS__)
 
 #define MAX_PANEL_NAME_SIZE 100
 #define DEFAULT_BRIGHTNESS 255

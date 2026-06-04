@@ -2050,7 +2050,7 @@ int mdss_mdp_pp_resume(struct mdss_mdp_ctl *ctl, u32 dspp_num)
 	struct msm_fb_data_type *bl_mfd;
 
 	if (!ctl || !ctl->mdata || !ctl->mfd) {
-		pr_err("invalid input: ctl = 0x%p, mdata = 0x%p, mfd = 0x%p\n",
+		pr_err("invalid input: ctl = 0x%pK, mdata = 0x%pK, mfd = 0x%pK\n",
 			ctl, (!ctl) ? NULL : ctl->mdata,
 			(!ctl) ? NULL : ctl->mfd);
 		return -EPERM;
@@ -2159,7 +2159,7 @@ int mdss_mdp_pp_resume(struct mdss_mdp_ctl *ctl, u32 dspp_num)
 			(ad->sts & PP_STS_ENABLE)) {
 			ad->last_bl = bl;
 			linear_map(bl, &ad->bl_data,
-				ad->bl_mfd->panel_info->bl_max,
+				bl_mfd->panel_info->bl_max,
 				MDSS_MDP_AD_BL_SCALE);
 			pp_ad_input_write(&mdata->ad_off[dspp_num], ad);
 		}
@@ -5111,7 +5111,7 @@ static int mdss_mdp_ad_setup(struct msm_fb_data_type *mfd)
 			ad->calc_itr = ad->cfg.stab_itr;
 			ad->sts |= PP_AD_STS_DIRTY_VSYNC;
 			linear_map(bl, &ad->bl_data,
-				ad->bl_mfd->panel_info->bl_max,
+				bl_mfd->panel_info->bl_max,
 				MDSS_MDP_AD_BL_SCALE);
 		}
 		ad->reg_sts |= PP_AD_STS_DIRTY_DATA;
