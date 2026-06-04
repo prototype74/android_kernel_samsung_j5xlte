@@ -112,6 +112,9 @@
 static tANI_BOOLEAN bRoamScanOffloadStarted = VOS_FALSE;
 #endif
 
+#define MAX_PWR_FCC_CHAN_12 8
+#define MAX_PWR_FCC_CHAN_13 2
+
 /*-------------------------------------------------------------------------- 
   Static Type declarations
   ------------------------------------------------------------------------*/
@@ -601,6 +604,21 @@ eHalStatus csrUpdateChannelList(tpAniSirGlobal pMac)
         pChanList->chanParam[num_channel].pwr =
           cfgGetRegulatoryMaxTransmitPower(pMac,
                                            pScan->defaultPowerTable[i].chanId);
+        if (pMac->scan.fcc_constraint)
+        {
+            if (pChanList->chanParam[num_channel].chanId == 12)
+            {
+                pChanList->chanParam[num_channel].pwr = MAX_PWR_FCC_CHAN_12;
+                smsLog(pMac, LOG1,
+                      "fcc_constraint is set, txpower for channel 12 is 8db ");
+            }
+            if (pChanList->chanParam[num_channel].chanId == 13)
+            {
+                pChanList->chanParam[num_channel].pwr = MAX_PWR_FCC_CHAN_13;
+                smsLog(pMac, LOG1,
+                      "fcc_constraint is set, txpower for channel 13 is 2db ");
+            }
+        }
 
         if (!pChanList->chanParam[num_channel].pwr)
         {
@@ -746,7 +764,7 @@ eHalStatus csrStop(tpAniSirGlobal pMac, tHalStopType stopType)
     for( i = 0; i < CSR_ROAM_SESSION_MAX; i++ )
     {
        csrRoamStateChange( pMac, eCSR_ROAMING_STATE_STOP, i );
-       pMac->roam.curSubState[i] = eCSR_ROAM_SUBSTATE_NONE;
+       csrRoamSubstateChange(pMac, eCSR_ROAM_SUBSTATE_NONE, i);
     }
 
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
@@ -837,6 +855,7 @@ eHalStatus csrRoamOpen(tpAniSirGlobal pMac)
          smsLog(pMac, LOGE, FL("cannot allocate memory for summary Statistics timer"));
          return eHAL_STATUS_FAILURE;
       }
+      vos_spin_lock_init(&pMac->roam.roam_state_lock);
     }while (0);
     return (status);
 }
@@ -852,6 +871,7 @@ eHalStatus csrRoamClose(tpAniSirGlobal pMac)
     vos_timer_destroy(&pMac->roam.hTimerWaitForKey);
     vos_timer_stop(&pMac->roam.tlStatsReqInfo.hTlStatsTimer);
     vos_timer_destroy(&pMac->roam.tlStatsReqInfo.hTlStatsTimer);
+    vos_spin_lock_destroy(&pMac->roam.roam_state_lock);
     return (eHAL_STATUS_SUCCESS);
 }
 
@@ -1136,7 +1156,9 @@ void csrRoamSubstateChange( tpAniSirGlobal pMac, eCsrRoamSubState NewSubstate, t
     {
        return;
     }
+    vos_spin_lock_acquire(&pMac->roam.roam_state_lock);
     pMac->roam.curSubState[sessionId] = NewSubstate;
+    vos_spin_lock_release(&pMac->roam.roam_state_lock);
 }
 
 eCsrRoamState csrRoamStateChange( tpAniSirGlobal pMac, eCsrRoamState NewRoamState, tANI_U8 sessionId)
@@ -1265,6 +1287,9 @@ static void initConfigParam(tpAniSirGlobal pMac)
 
     pMac->roam.configParam.addTSWhenACMIsOff = 0;
     pMac->roam.configParam.fScanTwice = eANI_BOOLEAN_FALSE;
+    pMac->roam.configParam.agg_btc_sco_enabled = eANI_BOOLEAN_FALSE;
+    pMac->roam.configParam.num_ba_buff_btc_sco = DEFAULT_NUM_BUFF_BTC_SCO;
+    pMac->roam.configParam.num_ba_buff = WNI_CFG_NUM_BUFF_ADVERT_STADEF;
 
     //Remove this code once SLM_Sessionization is supported 
     //BMPS_WORKAROUND_NOT_NEEDED
@@ -1713,6 +1738,7 @@ v_U32_t csrConvertPhyCBStateToIniValue(ePhyChanBondState phyCbState)
 eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
 {
     eHalStatus status = eHAL_STATUS_SUCCESS;
+    tANI_U8 i;
 
     if(pParam)
     {
@@ -2061,6 +2087,13 @@ eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pPa
         pMac->roam.configParam.edca_be_aifs = pParam->edca_be_aifs;
         pMac->sta_sap_scc_on_dfs_chan = pParam->sta_sap_scc_on_dfs_chan;
         pMac->force_scc_with_ecsa = pParam->force_scc_with_ecsa;
+        for (i = 0; i < 3; i++) {
+             pMac->roam.configParam.agg_btc_sco_oui[i] =
+                                                     pParam->agg_btc_sco_oui[i];
+        }
+        pMac->roam.configParam.num_ba_buff_btc_sco =
+                                                    pParam->num_ba_buff_btc_sco;
+        pMac->roam.configParam.num_ba_buff = pParam->num_ba_buff;
     }
     
     return status;
@@ -2069,6 +2102,7 @@ eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pPa
 eHalStatus csrGetConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
 {
     eHalStatus status = eHAL_STATUS_INVALID_PARAMETER;
+    tANI_U8 i;
     if(pParam)
     {
         pParam->WMMSupportMode = pMac->roam.configParam.WMMSupportMode;
@@ -2261,6 +2295,15 @@ eHalStatus csrGetConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
         pParam->edca_be_aifs = pMac->roam.configParam.edca_be_aifs;
         pParam->sta_sap_scc_on_dfs_chan = pMac->sta_sap_scc_on_dfs_chan;
         pParam->force_scc_with_ecsa = pMac->force_scc_with_ecsa;
+
+        for (i = 0; i < 3; i++) {
+             pParam->agg_btc_sco_oui[i] =
+                                      pMac->roam.configParam.agg_btc_sco_oui[i];
+        }
+        pParam->num_ba_buff_btc_sco =
+                                     pMac->roam.configParam.num_ba_buff_btc_sco;
+        pParam->num_ba_buff = pMac->roam.configParam.num_ba_buff;
+
         status = eHAL_STATUS_SUCCESS;
     }
     return (status);
@@ -11209,8 +11252,15 @@ void csrRoamWaitForKeyTimeOutHandler(void *pv)
 
     if (pSession)
     {
+        vos_spin_lock_acquire(&pMac->roam.roam_state_lock);
         if( CSR_IS_WAIT_FOR_KEY( pMac, pInfo->sessionId ) )
         {
+           //Change the substate so command queue is unblocked.
+           if (CSR_ROAM_SESSION_MAX > pInfo->sessionId)
+               pMac->roam.curSubState[pInfo->sessionId] =
+                                           eCSR_ROAM_SUBSTATE_NONE;
+           vos_spin_lock_release(&pMac->roam.roam_state_lock);
+
 #ifdef FEATURE_WLAN_LFR
             if (csrNeighborRoamIsHandoffInProgress(pMac))
             {
@@ -11226,14 +11276,8 @@ void csrRoamWaitForKeyTimeOutHandler(void *pv)
                           NULL, eANI_BOOLEAN_FALSE);
             }
 #endif
-            smsLog(pMac, LOGE, " SME pre-auth state timeout. ");
 
-            //Change the substate so command queue is unblocked.
-            if (CSR_ROAM_SESSION_MAX > pInfo->sessionId)
-            {
-                csrRoamSubstateChange(pMac, eCSR_ROAM_SUBSTATE_NONE,
-                                      pInfo->sessionId);
-            }
+            smsLog(pMac, LOGE, " SME pre-auth state timeout. ");
 
             if( csrIsConnStateConnectedInfra(pMac, pInfo->sessionId) )
             {
@@ -11255,6 +11299,7 @@ void csrRoamWaitForKeyTimeOutHandler(void *pv)
         }
         else
         {
+            vos_spin_lock_release(&pMac->roam.roam_state_lock);
             smsLog(pMac, LOGW, "%s: session not found", __func__);
         }
     }

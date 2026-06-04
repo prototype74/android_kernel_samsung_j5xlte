@@ -171,6 +171,7 @@ static struct qpnp_vadc_scale_fn vadc_scale_fn[] = {
 	[SCALE_QRD_SKUG_BATT_THERM] = {qpnp_adc_scale_qrd_skug_batt_therm},
 	[SCALE_QRD_SKUH_BATT_THERM] = {qpnp_adc_scale_qrd_skuh_batt_therm},
 	[SCALE_NCP_03WF683_THERM] = {qpnp_adc_scale_therm_ncp03},
+	[SCALE_QRD_SKUT1_BATT_THERM] = {qpnp_adc_scale_qrd_skut1_batt_therm},
 	[SCALE_QRD_SKUC_BATT_THERM] = {qpnp_adc_scale_qrd_skuc_batt_therm},
 	[SCALE_QRD_SKUE_BATT_THERM] = {qpnp_adc_scale_qrd_skue_batt_therm},
 	[SCALE_QRD_SKUL_BATT_THERM] = {qpnp_adc_scale_qrd_skul_batt_therm},
@@ -269,6 +270,14 @@ static int32_t qpnp_vadc_enable(struct qpnp_vadc_chip *vadc, bool state)
 
 	data = QPNP_VADC_EN;
 	if (state) {
+		if (vadc->adc->hkadc_ldo && vadc->adc->hkadc_ldo_ok) {
+			rc = qpnp_adc_enable_voltage(vadc->adc);
+			if (rc) {
+				pr_err("failed enabling VADC LDO\n");
+				return rc;
+			}
+		}
+
 		rc = qpnp_vadc_write_reg(vadc, QPNP_VADC_EN_CTL1,
 					data);
 		if (rc < 0) {
@@ -282,6 +291,9 @@ static int32_t qpnp_vadc_enable(struct qpnp_vadc_chip *vadc, bool state)
 			pr_err("VADC disable failed\n");
 			return rc;
 		}
+
+		if (vadc->adc->hkadc_ldo && vadc->adc->hkadc_ldo_ok)
+			qpnp_adc_disable_voltage(vadc->adc);
 	}
 
 	return 0;
@@ -2401,6 +2413,8 @@ static int qpnp_vadc_remove(struct spmi_device *spmi)
 	}
 	hwmon_device_unregister(vadc->vadc_hwmon);
 	list_del(&vadc->list);
+	if (vadc->adc->hkadc_ldo && vadc->adc->hkadc_ldo_ok)
+		qpnp_adc_free_voltage_resource(vadc->adc);
 	dev_set_drvdata(&spmi->dev, NULL);
 
 	return 0;

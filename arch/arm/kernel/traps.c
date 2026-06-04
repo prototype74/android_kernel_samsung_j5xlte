@@ -28,6 +28,7 @@
 #include <linux/bug.h>
 
 #include <linux/atomic.h>
+#include <asm/arch_timer.h>
 #include <asm/cacheflush.h>
 #include <asm/exception.h>
 #include <asm/unistd.h>
@@ -751,6 +752,44 @@ static int __init arm_mrc_hook_init(void)
 late_initcall(arm_mrc_hook_init);
 
 #endif
+
+static int get_timer_count_trap(struct pt_regs *regs, unsigned int instr)
+{
+	u64 cval;
+	unsigned int res;
+	int rd = (instr >> 12) & 0xF;
+	int rn =  (instr >> 16) & 0xF;
+	int read_virtual = (instr >> 4) & 1;
+
+	res = arm_check_condition(instr, regs->ARM_cpsr);
+	if (res == ARM_OPCODE_CONDTEST_FAIL) {
+		regs->ARM_pc += 4;
+		return 0;
+	}
+
+	if (rd == 15 || rn == 15)
+		return 1;
+	cval = read_virtual ?
+		arch_counter_get_cntvct() : arch_counter_get_cntpct();
+	regs->uregs[rd] = cval;
+	regs->uregs[rn] = cval >> 32;
+	regs->ARM_pc += 4;
+	return 0;
+}
+
+static struct undef_hook get_timer_count_hook = {
+	.instr_mask	= 0x0ff00fef,
+	.instr_val	= 0x0c500f0e,
+	.cpsr_mask	= MODE_MASK,
+	.cpsr_val	= USR_MODE,
+	.fn		= get_timer_count_trap,
+};
+
+void get_timer_count_hook_init(void)
+{
+	register_undef_hook(&get_timer_count_hook);
+}
+EXPORT_SYMBOL(get_timer_count_hook_init);
 
 void __bad_xchg(volatile void *ptr, int size)
 {

@@ -52,7 +52,9 @@
 		qcom,mdss-dsi-mdp-trigger = "none";
 		qcom,esd-check-enabled;
 		qcom,mdss-dsi-panel-status-check-mode="reg_read_irq";
+		qcom,mdss-dsi-panel-status-value = <1>;
 		qcom,mdss-dsi-panel-status-irq-trigger="rising";
+		qcom,mdss-dsi-panel-status-read-length = <1>;
 		qcom,mdss-dsi-bl-min-level = <1>;
 		qcom,mdss-dsi-bl-max-level = <255>;
 		qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";

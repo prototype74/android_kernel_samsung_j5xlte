@@ -16,7 +16,6 @@
 
 #include <linux/list.h>
 #include <linux/mdss_io_util.h>
-#include <mach/scm-io.h>
 #include <linux/irqreturn.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/gpio.h>
@@ -270,10 +269,8 @@ struct dsi_kickoff_action {
 };
 
 struct dsi_drv_cm_data {
-	struct regulator *vdd_vreg;
-	struct regulator *vdd_io_vreg;
-	struct regulator *vdda_vreg;
-	int broadcast_enable;
+	struct dss_io_data phy_regulator_io;
+	int phy_disable_refcount;
 };
 
 struct dsi_pinctrl_res {
@@ -414,7 +411,7 @@ struct mdss_dsi_ctrl_pdata {
 
 	struct mdss_rect roi;
 	struct pwm_device *pwm_bl;
-	struct dsi_drv_cm_data shared_pdata;
+	struct dsi_drv_cm_data *shared_ctrl_data;
 	u32 pclk_rate;
 	u32 byte_clk_rate;
 	bool refresh_clk_rate; /* flag to recalculate clk_rate */
@@ -430,8 +427,9 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_panel_cmds status_cmds;
 	u32 status_cmds_rlen;
 	struct mdss_dsi_panel_cmd_list cmd_list;
-	u32 status_value;
+	u32 *status_value;
 	u32 status_error_count;
+	u32 max_status_error_count;
 
 	struct dsi_panel_cmds video2cmd;
 	struct dsi_panel_cmds cmd2video;
@@ -447,6 +445,8 @@ struct mdss_dsi_ctrl_pdata {
 	int mdp_busy;
 	struct mutex mutex;
 	struct mutex cmd_mutex;
+	struct regulator *lab; /* vreg handle */
+	struct regulator *ibb; /* vreg handle */
 	struct mutex clk_lane_mutex;
 
 	u32 ulps_clamp_ctrl_off;
@@ -494,6 +494,7 @@ int mdss_dsi_cmds_rx(struct mdss_dsi_ctrl_pdata *ctrl,
 void mdss_dsi_host_init(struct mdss_panel_data *pdata);
 void mdss_dsi_op_mode_config(int mode,
 				struct mdss_panel_data *pdata);
+void mdss_dsi_restore_intr_mask(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_cmd_mode_ctrl(int enable);
 void mdp4_dsi_cmd_trigger(void);
 void mdss_dsi_cmd_mdp_start(struct mdss_dsi_ctrl_pdata *ctrl);
@@ -679,6 +680,12 @@ static inline bool mdss_dsi_ulps_feature_enabled(
 	return pdata->panel_info.ulps_feature_enabled;
 }
 
+static inline bool mdss_dsi_cmp_panel_reg(struct dsi_buf status_buf,
+	u32 *status_val, int i)
+{
+	return status_buf.data[i] == status_val[i];
+}
+
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 int mdss_samsung_parse_dcs_cmds(struct device_node *np,
 		struct dsi_panel_cmds *pcmds, char *cmd_key, char *link_key);
@@ -688,4 +695,5 @@ void mdss_samsung_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 		struct dsi_panel_cmds *pcmds);
 struct mdss_dsi_ctrl_pdata **mdss_dsi_get_ctrl(void);
 #endif
+
 #endif /* MDSS_DSI_H */

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, 2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,6 +32,7 @@
 #include <asm/cacheflush.h>
 #include <asm/sizes.h>
 
+#include "msm_iommu_pagetable.h"
 #include "msm_iommu_perfmon.h"
 #include "msm_iommu_hw-v1.h"
 #include "msm_iommu_priv.h"
@@ -73,7 +74,7 @@ static const struct of_device_id msm_smmu_list[] = {
 };
 
 struct msm_scm_paddr_list {
-	unsigned int list;
+	phys_addr_t list;
 	unsigned int list_size;
 	unsigned int size;
 };
@@ -136,7 +137,9 @@ static int msm_iommu_dump_fault_regs(int smmu_id, int cb_num,
 
 	desc.args[0] = req_info.id = smmu_id;
 	desc.args[1] = req_info.cb_num = cb_num;
-	desc.args[2] = req_info.buff = virt_to_phys(regs);
+	/* virt_to_phys(regs) may be greater than 4GB */
+	req_info.buff = virt_to_phys(regs);
+	desc.args[2] =  virt_to_phys(regs);
 	desc.args[3] = req_info.len = sizeof(*regs);
 	desc.arginfo = SCM_ARGS(4, SCM_VAL, SCM_VAL, SCM_RW, SCM_VAL);
 
@@ -247,6 +250,25 @@ static int msm_iommu_reg_dump_to_regs(
 	return ret;
 }
 
+static void print_iova_to_phys(struct msm_iommu_ctx_drvdata *ctx_drvdata,
+		struct msm_iommu_context_reg ctx_regs[MAX_DUMP_REGS])
+{
+	phys_addr_t pagetable_phys;
+	u64 faulty_iova = 0;
+
+	if (ctx_drvdata->attached_domain &&
+			!ctx_drvdata->secure_context) {
+		faulty_iova = COMBINE_DUMP_REG(
+				ctx_regs[DUMP_REG_FAR1].val,
+				ctx_regs[DUMP_REG_FAR0].val);
+		pagetable_phys = msm_iommu_iova_to_phys_soft(
+					ctx_drvdata->attached_domain,
+					faulty_iova);
+		pr_err("Page table in DDR shows PA = %pa\n",
+					&pagetable_phys);
+	}
+}
+
 irqreturn_t msm_iommu_secure_fault_handler_v2(int irq, void *dev_id)
 {
 	struct platform_device *pdev = dev_id;
@@ -302,7 +324,7 @@ irqreturn_t msm_iommu_secure_fault_handler_v2(int irq, void *dev_id)
 			goto clock_off;
 		}
 
-		if (ctx_regs[DUMP_REG_FSR].val) {
+		if (ctx_regs[DUMP_REG_FSR].val & 0x1FF) {
 			if (tmp)
 				pr_err("Incomplete fault register dump. Printout will be incomplete.\n");
 			if (!ctx_drvdata->attached_domain) {
@@ -326,6 +348,7 @@ irqreturn_t msm_iommu_secure_fault_handler_v2(int irq, void *dev_id)
 					ctx_drvdata->num);
 				pr_err("Interesting registers:\n");
 				print_ctx_regs(ctx_regs);
+				print_iova_to_phys(ctx_drvdata, ctx_regs);
 			}
 		} else {
 			ret = IRQ_NONE;
@@ -428,7 +451,9 @@ static int msm_iommu_sec_ptbl_init(void)
 		goto fail;
 	}
 
-	desc.args[0] = pinit.paddr = (unsigned int)paddr;
+	pinit.paddr = (unsigned int)paddr;
+	/* paddr may be a physical address > 4GB */
+	desc.args[0] = paddr;
 	desc.args[1] = pinit.size = psize[0];
 	desc.args[2] = pinit.spare;
 	desc.arginfo = SCM_ARGS(3, SCM_RW, SCM_VAL, SCM_VAL);
@@ -475,6 +500,10 @@ int msm_iommu_sec_program_iommu(struct msm_iommu_drvdata *drvdata,
 		return ret ? ret : -EINVAL;
 	}
 
+	drvdata->sec_cfg_restored = true;
+
+	pr_info("sec cfg restored for %s\n", drvdata->name);
+
 	return ret;
 }
 
@@ -513,8 +542,7 @@ static int msm_iommu_sec_ptbl_map(struct msm_iommu_drvdata *iommu_drvdata,
 			unsigned long va, phys_addr_t pa, size_t len)
 {
 	struct msm_scm_map2_req map;
-	void *flush_va;
-	phys_addr_t flush_pa;
+	void *flush_va, *flush_va_end;
 	int ret = 0;
 
 	if (!IS_ALIGNED(va, SZ_1M) || !IS_ALIGNED(len, SZ_1M) ||
@@ -529,31 +557,29 @@ static int msm_iommu_sec_ptbl_map(struct msm_iommu_drvdata *iommu_drvdata,
 	map.info.size = len;
 
 	flush_va = &pa;
-	flush_pa = virt_to_phys(&pa);
+	flush_va_end = (void *)
+		(((unsigned long) flush_va) + sizeof(phys_addr_t));
 
 	/*
 	 * Ensure that the buffer is in RAM by the time it gets to TZ
 	 */
-	dmac_clean_range(flush_va, flush_va + len);
+	dmac_clean_range(flush_va, flush_va_end);
 
 	ret = msm_iommu_sec_map2(&map);
 	if (ret)
 		return -EINVAL;
 
-	/* Invalidate cache since TZ touched this address range */
-	dmac_inv_range(flush_va, flush_va + len);
-
 	return 0;
 }
 
-static unsigned int get_phys_addr(struct scatterlist *sg)
+static phys_addr_t get_phys_addr(struct scatterlist *sg)
 {
 	/*
 	 * Try sg_dma_address first so that we can
 	 * map carveout regions that do not have a
 	 * struct page associated with them.
 	 */
-	unsigned int pa = sg_dma_address(sg);
+	phys_addr_t pa = sg_dma_address(sg);
 	if (pa == 0)
 		pa = sg_phys(sg);
 	return pa;
@@ -565,9 +591,10 @@ static int msm_iommu_sec_ptbl_map_range(struct msm_iommu_drvdata *iommu_drvdata,
 {
 	struct scatterlist *sgiter;
 	struct msm_scm_map2_req map;
-	unsigned int *pa_list = 0;
-	unsigned int pa, cnt;
-	void *flush_va;
+	phys_addr_t *pa_list = 0;
+	unsigned int cnt;
+	phys_addr_t pa;
+	void *flush_va, *flush_va_end;
 	unsigned int offset = 0, chunk_offset = 0;
 	int ret;
 
@@ -614,8 +641,7 @@ static int msm_iommu_sec_ptbl_map_range(struct msm_iommu_drvdata *iommu_drvdata,
 			return -EINVAL;
 		}
 		while (offset < len) {
-			pa += chunk_offset;
-			pa_list[cnt] = pa;
+			pa_list[cnt] = pa + chunk_offset;
 			chunk_offset += SZ_1M;
 			offset += SZ_1M;
 			cnt++;
@@ -639,8 +665,9 @@ static int msm_iommu_sec_ptbl_map_range(struct msm_iommu_drvdata *iommu_drvdata,
 	/*
 	 * Ensure that the buffer is in RAM by the time it gets to TZ
 	 */
-	dmac_clean_range(flush_va,
-		flush_va + sizeof(unsigned long) * map.plist.list_size);
+	flush_va_end = (void *) (((unsigned long) flush_va) +
+			(map.plist.list_size * sizeof(*pa_list)));
+	dmac_clean_range(flush_va, flush_va_end);
 
 	ret = msm_iommu_sec_map2(&map);
 	kfree(pa_list);
@@ -678,7 +705,7 @@ static int msm_iommu_sec_ptbl_unmap(struct msm_iommu_drvdata *iommu_drvdata,
 	return ret;
 }
 
-static int msm_iommu_domain_init(struct iommu_domain *domain, int flags)
+static int msm_iommu_domain_init(struct iommu_domain *domain)
 {
 	struct msm_iommu_priv *priv;
 
@@ -742,7 +769,9 @@ static int msm_iommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 		goto fail;
 
 	/* We can only do this once */
-	if (!iommu_drvdata->ctx_attach_count) {
+	if (!iommu_drvdata->ctx_attach_count &&
+	    !((iommu_drvdata->model == MMU_500) &&
+	      (iommu_drvdata->sec_cfg_restored == true))) {
 		ret = iommu_access_ops->iommu_clk_on(iommu_drvdata);
 		if (ret) {
 			iommu_access_ops->iommu_power_off(iommu_drvdata);
@@ -871,8 +900,8 @@ fail:
 	return len;
 }
 
-static int msm_iommu_map_range(struct iommu_domain *domain, unsigned int va,
-			       struct scatterlist *sg, unsigned int len,
+static int msm_iommu_map_range(struct iommu_domain *domain, unsigned long va,
+			       struct scatterlist *sg, size_t len,
 			       int prot)
 {
 	int ret;
@@ -893,9 +922,30 @@ fail:
 	return ret;
 }
 
+static size_t msm_iommu_map_sg(struct iommu_domain *domain, unsigned long va,
+				struct scatterlist *sg, unsigned int nr_entries,
+				int prot)
+{
+	int ret, i;
+	struct scatterlist *tmp;
+	unsigned long len = 0;
 
-static int msm_iommu_unmap_range(struct iommu_domain *domain, unsigned int va,
-				 unsigned int len)
+	/*
+	 * Longer term work: convert over to generic page table management
+	 * which means we can work on scattergather lists and the whole range
+	 */
+	for_each_sg(sg, tmp, nr_entries, i)
+		len += tmp->length;
+
+	ret = msm_iommu_map_range(domain, va, sg, len, prot);
+	if (ret)
+		return 0;
+	else
+		return len;
+}
+
+static int msm_iommu_unmap_range(struct iommu_domain *domain, unsigned long va,
+				 size_t len)
 {
 	struct msm_iommu_drvdata *iommu_drvdata;
 	struct msm_iommu_ctx_drvdata *ctx_drvdata;
@@ -970,6 +1020,7 @@ static struct iommu_ops msm_iommu_ops = {
 	.map = msm_iommu_map,
 	.unmap = msm_iommu_unmap,
 	.map_range = msm_iommu_map_range,
+	.map_sg = msm_iommu_map_sg,
 	.unmap_range = msm_iommu_unmap_range,
 	.iova_to_phys = msm_iommu_iova_to_phys,
 	.domain_has_cap = msm_iommu_domain_has_cap,

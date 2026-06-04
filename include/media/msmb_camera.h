@@ -17,8 +17,11 @@
 #define MSM_CAM_V4L2_IOCTL_NOTIFY_ERROR \
 	_IOW('V', BASE_VIDIOC_PRIVATE + 33, struct msm_v4l2_event_data)
 
+#define MSM_CAM_V4L2_IOCTL_NOTIFY_FREEZE \
+	_IOW('V', BASE_VIDIOC_PRIVATE + 34, struct msm_v4l2_event_data)
+
 #define MSM_CAM_V4L2_IOCTL_NOTIFY_MODULE_STATUS \
-	_IOW('V', BASE_VIDIOC_PRIVATE + 34, struct v4l2_event)
+	_IOW('V', BASE_VIDIOC_PRIVATE + 34, struct msm_v4l2_dummy_event_data)
 
 #define QCAMERA_DEVICE_GROUP_ID	1
 #define QCAMERA_VNODE_GROUP_ID	2
@@ -135,6 +138,11 @@ struct msm_v4l2_event_data {
 	unsigned int nop8;
 	/*word 15*/
 	unsigned int nop9;
+};
+
+/* dummy event data to match size of v4l2_event */
+struct msm_v4l2_dummy_event_data {
+    __u8 dummy[128];
 };
 
 /* map to v4l2_format.fmt.raw_data */

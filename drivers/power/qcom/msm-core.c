@@ -40,6 +40,7 @@
 
 #define TEMP_BASE_POINT 35
 #define TEMP_MAX_POINT 95
+#define CPU_HOTPLUG_LIMIT 80
 #define CPU_BIT_MASK(cpu) BIT(cpu)
 #define DEFAULT_TEMP 40
 #define DEFAULT_LOW_HYST_TEMP 10
@@ -96,6 +97,7 @@ struct cpu_static_info {
 
 static DEFINE_MUTEX(policy_update_mutex);
 static DEFINE_MUTEX(kthread_update_mutex);
+static DEFINE_SPINLOCK(update_lock);
 static struct delayed_work sampling_work;
 static struct completion sampling_completion;
 static struct task_struct *sampling_task;
@@ -116,6 +118,7 @@ module_param_named(disabled, disabled, int,
 		S_IRUGO | S_IWUSR | S_IWGRP);
 static bool in_suspend;
 static bool activate_power_table;
+
 /*
  * Cannot be called from an interrupt context
  */
@@ -141,8 +144,14 @@ static void set_threshold(struct cpu_activity_info *cpu_node)
 	if (cpu_node->sensor_id < 0)
 		return;
 
-	set_and_activate_threshold(cpu_node->sensor_id,
-		&cpu_node->hi_threshold);
+	/*
+	 * Set the threshold only if we are below the hotplug limit
+	 * Adding more work at this high temperature range, seems to
+	 * fail hotplug notifications.
+	 */
+	if (cpu_node->hi_threshold.temp < CPU_HOTPLUG_LIMIT)
+		set_and_activate_threshold(cpu_node->sensor_id,
+			&cpu_node->hi_threshold);
 
 	set_and_activate_threshold(cpu_node->sensor_id,
 		&cpu_node->low_threshold);
@@ -194,7 +203,6 @@ void trigger_cpu_pwr_stats_calc(void)
 {
 	int cpu;
 	static long prev_temp[NR_CPUS];
-	static DEFINE_SPINLOCK(update_lock);
 	struct cpu_activity_info *cpu_node;
 
 	if (disabled)
@@ -217,6 +225,20 @@ void trigger_cpu_pwr_stats_calc(void)
 	spin_unlock(&update_lock);
 }
 EXPORT_SYMBOL(trigger_cpu_pwr_stats_calc);
+
+void set_cpu_throttled(cpumask_t *mask, bool throttling)
+{
+	int cpu;
+
+	if (!mask)
+		return;
+
+	spin_lock(&update_lock);
+	for_each_cpu(cpu, mask)
+		cpu_stats[cpu].throttling = throttling;
+	spin_unlock(&update_lock);
+}
+EXPORT_SYMBOL(set_cpu_throttled);
 
 static void update_related_freq_table(struct cpufreq_policy *policy)
 {
@@ -503,6 +525,7 @@ static int msm_core_stats_init(struct device *dev, int cpu)
 	cpu_node = &activity[cpu];
 	cpu_stats[cpu].cpu = cpu;
 	cpu_stats[cpu].temp = cpu_node->temp;
+	cpu_stats[cpu].throttling = false;
 
 	cpu_stats[cpu].len = cpu_node->sp->num_of_freqs;
 	pstate = devm_kzalloc(dev,
@@ -778,10 +801,10 @@ static int system_suspend_handler(struct notifier_block *nb,
 			if (activity[cpu].sensor_id < 0)
 				continue;
 
-			sensor_cancel_trip(activity[cpu].sensor_id,
-				&activity[cpu].hi_threshold);
-			sensor_cancel_trip(activity[cpu].sensor_id,
-				&activity[cpu].low_threshold);
+			sensor_activate_trip(activity[cpu].sensor_id,
+				&activity[cpu].hi_threshold, false);
+			sensor_activate_trip(activity[cpu].sensor_id,
+				&activity[cpu].low_threshold, false);
 		}
 		break;
 	default:
@@ -929,6 +952,7 @@ static int msm_core_dev_probe(struct platform_device *pdev)
 	ret = of_property_read_u32(node, key, &poll_ms);
 	if (ret)
 		pr_info("msm-core initialized without polling period\n");
+
 
 	ret = msm_core_freq_init();
 	if (ret)

@@ -26,6 +26,10 @@
  */
 #define PN547_SET_PWR	_IOW(PN547_MAGIC, 0x01, unsigned int)
 
+#ifdef CONFIG_ARM64
+#define PN547_SET_PWR_NEW	_IOW(PN547_MAGIC, 0x01, long)
+#endif
+
 #ifdef CONFIG_NFC_PN547_ESE_SUPPORT
 /*
  * SPI Request NFCC to enable p61 power, only in param

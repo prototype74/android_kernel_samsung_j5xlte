@@ -83,6 +83,10 @@
 		battery,charging_reset_time = <0>;
 		qcom,sec-battery-vadc = <&pm8916_vadc>;
 
+		battery,standard_curr = <1055>;
+		battery,expired_time = <15900>;  /* 185min + 80min */
+		battery,recharging_expired_time = <5400>;
+
 		battery,swelling_high_temp_block = <410>;
 		battery,swelling_high_temp_recov = <390>;
 		battery,swelling_low_temp_block_1st = <150>;
@@ -98,6 +102,7 @@
 		battery,swelling_drop_float_voltage = <4120>;
 		battery,swelling_high_rechg_voltage = <3970>;
 		battery,swelling_low_rechg_voltage = <3970>;
+		battery,chg_float_voltage = <4260>;
 
 		charger{
 			status = "disable";

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -327,47 +327,6 @@ int hdd_hostapd_change_mtu(struct net_device *dev, int new_mtu)
     return ret;
 }
 
-/**
- * hdd_set_auto_channel() - function used to set auto channel
- * @pAdapter: pointer to the adapter of the interface.
- * @command: pointer to the command buffer "AUTO_CHANNEL <value>".
- * Return: 0 on success -EINVAL on failure.
- */
-int hdd_set_auto_channel(hdd_adapter_t *pAdapter, tANI_U8 *command)
-{
-	tANI_U8 filterType = 0;
-	hdd_context_t *pHddCtx = NULL;
-	tANI_U8 *value;
-
-	pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
-
-	if (0 != wlan_hdd_validate_context(pHddCtx)) {
-		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-				FL("pHddCtx is not valid, Unable to set auto channel"));
-		return -EINVAL;
-	}
-
-	value = command + 13;
-
-	/* Convert the value from ascii to integer */
-	if (kstrtou8(value, 10, &filterType) < 0) {
-		/* If the input value is greater than max value of datatype,
-		 * then also kstrtou8 fails
-		 */
-		hddLog(VOS_TRACE_LEVEL_ERROR, "%s: kstrtou8 failed range", __func__);
-		return -EINVAL;
-	}
-
-	hddLog(VOS_TRACE_LEVEL_INFO, "%s: auto channel %hu", __func__, filterType);
-
-	if (filterType == 0 || filterType == 1)
-		pHddCtx->cfg_ini->apAutoChannelSelection = filterType;
-	else
-		return -EINVAL;
-
-	return 0;
-}
-
 static int hdd_hostapd_driver_command(hdd_adapter_t *pAdapter,
                                       hdd_priv_data_t *priv_data)
 {
@@ -417,16 +376,12 @@ static int hdd_hostapd_driver_command(hdd_adapter_t *pAdapter,
    /* Make sure the command is NUL-terminated */
    command[priv_data->total_len] = '\0';
 
-   hddLog(VOS_TRACE_LEVEL_ERROR,
+   hddLog(VOS_TRACE_LEVEL_INFO,
           "***HOSTAPD*** : Received %s cmd from Wi-Fi GUI***", command);
 
    if (strncmp(command, "P2P_SET_NOA", 11) == 0)
    {
       hdd_setP2pNoa(pAdapter->dev, command);
-   }
-   else if (strncmp(command, "AUTO_CHANNEL", 12) == 0)
-   {
-      hdd_set_auto_channel(pAdapter, command);
    }
    else if (strncmp(command, "P2P_SET_PS", 10) == 0)
    {
@@ -506,32 +461,6 @@ static int hdd_hostapd_driver_command(hdd_adapter_t *pAdapter,
 
        ret = hdd_enable_disable_ca_event(pHddCtx, command, 16);
    }
-
-   /*
-    * command should be a string having format
-    * DISABLE_CHANNEL_LIST <num of channels>
-    * <channels separated by spaces>
-    */
-   else if (strncmp(command, "DISABLE_CHANNEL_LIST", 20) == 0) {
-        tANI_U8 *ptr = command;
-
-        ret = hdd_drv_cmd_validate(command, 20);
-        if (ret)
-            goto exit;
-
-        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-                  " Received Command to disable Channels for in %s",
-                  __func__);
-       ret = hdd_parse_disable_chan_cmd(pAdapter, ptr);
-    }
-
-    else {
-        MTRACE(vos_trace(VOS_MODULE_ID_HDD,
-                         TRACE_CODE_HDD_UNSUPPORTED_IOCTL,
-                         pAdapter->sessionId, 0));
-        hddLog(VOS_TRACE_LEVEL_WARN, FL("Unsupported GUI command %s"),
-                command);
-    }
 
 exit:
    if (command)
@@ -1233,7 +1162,6 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
     pHddCtx = (hdd_context_t*)(pHostapdAdapter->pHddCtx);
     cfg_param = pHddCtx->cfg_ini;
 
-
     switch(sapEvent)
     {
         case eSAP_START_BSS_EVENT :
@@ -1744,11 +1672,6 @@ stopbss :
          * by another thread */
         if (eSAP_STOP_BSS_EVENT == sapEvent)
             vos_event_set(&pHostapdState->vosEvent);
-
-        if (hdd_is_any_session_connected(pHddCtx) == VOS_STATUS_E_FAILURE) {
-            hdd_enable_bmps_imps(pHddCtx);
-            sme_request_imps(pHddCtx->hHal);
-        }
 
         /* notify userspace that the BSS has stopped */
         memset(&we_custom_event, '\0', sizeof(we_custom_event));
@@ -2520,32 +2443,11 @@ static __iw_softap_setparam(struct net_device *dev,
                 break;
             }
         case QCSAP_PARAM_SET_CHANNEL_CHANGE:
-            if (WLAN_HDD_SOFTAP == pHostapdAdapter->device_mode) {
-                ptSapContext sap_ctx;
-
-                sap_ctx = VOS_GET_SAP_CB(pVosContext);
-                if (!sap_ctx) {
-                    hddLog(LOGE, FL("sap_ctx is NULL"));
-                    return -EINVAL;
-                }
-                vos_spin_lock_acquire(&sap_ctx->ecsa_info.ecsa_lock);
-                if (sap_ctx->ecsa_info.channel_switch_in_progress) {
-                    vos_spin_lock_release(&sap_ctx->ecsa_info.ecsa_lock);
-                    hddLog(LOGE, FL("channel switch already in progress"));
-                    return -EALREADY;
-                }
-                sap_ctx->ecsa_info.channel_switch_in_progress = true;
-                vos_spin_lock_release(&sap_ctx->ecsa_info.ecsa_lock);
-                INIT_COMPLETION(sap_ctx->ecsa_info.chan_switch_comp);
+            if ((WLAN_HDD_SOFTAP == pHostapdAdapter->device_mode) ||
+                (WLAN_HDD_P2P_GO == pHostapdAdapter->device_mode)) {
                 hddLog(LOG1, FL("ET Channel Change to new channel= %d"),
                        set_value);
                 ret = wlansap_set_channel_change(pVosContext, set_value, false);
-                if (ret) {
-                       vos_spin_lock_acquire(&sap_ctx->ecsa_info.ecsa_lock);
-                       sap_ctx->ecsa_info.channel_switch_in_progress = false;
-                       vos_spin_lock_release(&sap_ctx->ecsa_info.ecsa_lock);
-                       complete(&sap_ctx->ecsa_info.chan_switch_comp);
-                }
             } else {
                 hddLog(LOGE, FL("Channel %d Change Failed, Device in not in SAP/GO mode"),
                        set_value);
@@ -4195,7 +4097,7 @@ static int __iw_set_ap_encodeext(struct net_device *dev,
          /*Convert from 1-based to 0-based keying*/
         key_index--;
     }
-    if(!ext->key_len) {
+    if(!ext->key_len || ext->key_len > CSR_MAX_KEY_LEN) {
 #if 0
       /*Set the encrytion type to NONE*/
 #if 0
@@ -4241,7 +4143,7 @@ static int __iw_set_ap_encodeext(struct net_device *dev,
              retval = -EINVAL;
          }
 #endif
-         return retval;
+         return -EINVAL;
 
     }
     
@@ -4250,9 +4152,7 @@ static int __iw_set_ap_encodeext(struct net_device *dev,
     setKey.keyId = key_index;
     setKey.keyLength = ext->key_len;
    
-    if(ext->key_len <= CSR_MAX_KEY_LEN) {
-       vos_mem_copy(&setKey.Key[0],ext->key,ext->key_len);
-    }   
+    vos_mem_copy(&setKey.Key[0],ext->key,ext->key_len);
    
     if(ext->ext_flags & IW_ENCODE_EXT_GROUP_KEY) {
       /*Key direction for group is RX only*/

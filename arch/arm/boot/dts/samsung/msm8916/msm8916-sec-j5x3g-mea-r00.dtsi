@@ -31,13 +31,6 @@
 };
 
 &soc {
-	samsung,simslot {
-		compatible = "simslot";
-		samsung,sim-slot = <&msm_gpio 72 0x1>;
-		low-is-dual; // If the value of sim-slot gpio is 'low' in 'dual sim' device, you must set this boolean property.
-		status = "ok";
-	};
-
 	sm5703,vibrator {
 		compatible = "sm5703,vibrator";
 		vibrator,ldo_name = "VDD_MOTOR";
@@ -296,25 +289,23 @@
 			stm,negate_z = <1>;
 			stm,poll_interval = <100>;
 			stm,min_interval = <2>;
+			stm,reactive_alert_threshold = <32>;
 		};
-		cm36672p@60 {
-			compatible = "cm36672p";
+		cm36686@60 {
+			compatible = "cm36686";
 			reg = <0x60>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&prox_int_active &prox_enable_active>;
 			interrupt-parent = <&msm_gpio>;
 			interrupts = <20 0>;
-			cm36672p,vled_ldo = <&msm_gpio 92 0x1>;
-			cm36672p,irq_gpio = <&msm_gpio 20 0x1>;
-			cm36672p,vdd-supply = <&pm8916_l17>;
-			cm36672p,vio-supply = <&pm8916_l6>;
-			cm36672p,default_hi_thd = <17>;
-			cm36672p,default_low_thd = <12>;
-			cm36672p,cancel_hi_thd = <10>;
-			cm36672p,cancel_low_thd = <7>;
-			cm36672p,default_trim = <0>;
-			cm36672p,ps_it = <4>;
-			cm36672p,led_current = <2>;
+			cm36686,leden_gpio = <&msm_gpio 92 0x1>;
+			cm36686,irq_gpio = <&msm_gpio 20 0x1>;
+			reg_vdd-supply = <&pm8916_l17>;
+			cm36686,default_hi_thd = <17>;
+			cm36686,default_low_thd = <12>;
+			cm36686,cancel_hi_thd = <10>;
+			cm36686,cancel_low_thd = <7>;
+			cm36686,default_trim = <0>;
 		};
 	};
 

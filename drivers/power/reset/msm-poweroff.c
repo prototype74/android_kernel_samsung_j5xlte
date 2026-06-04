@@ -124,7 +124,7 @@ void set_dload_mode(int on)
 
 	dload_mode_enabled = on;
 #ifdef CONFIG_SEC_DEBUG
-	pr_err("set_dload_mode <%d> ( %x )\n", on,
+	pr_err("set_dload_mode <%d> ( 0x%x )\n", on,
 			(unsigned int) CALLER_ADDR0);
 #endif
 }
@@ -351,46 +351,45 @@ Hence Qualcomm's PMIC hard reboot implementation has been taken, but disabled. *
 					     restart_reason);
 #ifdef CONFIG_SEC_DEBUG
 		} else if (!strncmp(cmd, "sec_debug_hw_reset", 18)) {
-			__raw_writel(0x776655ee, restart_reason);
+			__raw_writel(SECDEBUG_MODE, restart_reason);
 			warm_reboot_set = 1;
 #endif
-        } else if (!strncmp(cmd, "download", 8)) {
-		    __raw_writel(0x12345671, restart_reason);
-                    warm_reboot_set = 1;
+		} else if (!strncmp(cmd, "download", 8)) {
+			__raw_writel(0x12345671, restart_reason);
+			warm_reboot_set = 1;
 		} else if (!strncmp(cmd, "nvbackup", 8)) {
-				__raw_writel(0x77665511, restart_reason);
-				warm_reboot_set = 1;
+			__raw_writel(0x77665511, restart_reason);
+			warm_reboot_set = 1;
 		} else if (!strncmp(cmd, "nvrestore", 9)) {
-				__raw_writel(0x77665512, restart_reason);
-				warm_reboot_set = 1;
+			__raw_writel(0x77665512, restart_reason);
+			warm_reboot_set = 1;
 		} else if (!strncmp(cmd, "nverase", 7)) {
-				__raw_writel(0x77665514, restart_reason);
-				warm_reboot_set = 1;
+			__raw_writel(0x77665514, restart_reason);
+			warm_reboot_set = 1;
 		} else if (!strncmp(cmd, "nvrecovery", 10)) {
-				__raw_writel(0x77665515, restart_reason);
-				warm_reboot_set = 1;
+			__raw_writel(0x77665515, restart_reason);
+			warm_reboot_set = 1;
 		} else if (!strncmp(cmd, "sud", 3)) {
-				__raw_writel(0xabcf0000 | (cmd[3] - '0'),
-								restart_reason);
+			__raw_writel(0xabcf0000 | (cmd[3] - '0'), restart_reason);
 		} else if (!strncmp(cmd, "debug", 5)
-						&& !kstrtoul(cmd + 5, 0, &value)) {
-				__raw_writel(0xabcd0000 | value, restart_reason);
+					&& !kstrtoul(cmd + 5, 0, &value)) {
+			__raw_writel(0xabcd0000 | value, restart_reason);
 		} else if (!strncmp(cmd, "cpdebug", 7) /*  set cp debug level */
-						&& !kstrtoul(cmd + 7, 0, &value)) {
-				__raw_writel(0xfedc0000 | value, restart_reason);
+					&& !kstrtoul(cmd + 7, 0, &value)) {
+			__raw_writel(0xfedc0000 | value, restart_reason);
 #if defined(CONFIG_MUIC_SUPPORT_RUSTPROOF)
 		} else if (!strncmp(cmd, "swsel", 5) /* set switch value */
-		&& !kstrtoul(cmd + 5, 0, &value)) {
-		__raw_writel(0xabce0000 | value, restart_reason);
+					&& !kstrtoul(cmd + 5, 0, &value)) {
+			__raw_writel(0xabce0000 | value, restart_reason);
 #endif
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
-				warm_reboot_set = 1;
+			warm_reboot_set = 1;
 #endif
 		} else if (strlen(cmd) == 0) {
 		    printk(KERN_NOTICE "%s : value of cmd is NULL.\n", __func__);
-		        __raw_writel(0x12345678, restart_reason);
+		    __raw_writel(0x12345678, restart_reason);
 #ifdef CONFIG_SEC_PERIPHERAL_SECURE_CHK
 		} else if (!strncmp(cmd, "peripheral_hw_reset", 19)) {
 			__raw_writel(0x77665507, restart_reason);
@@ -427,7 +426,7 @@ Hence Qualcomm's PMIC hard reboot implementation has been taken, but disabled. *
 		printk(KERN_NOTICE "Configure as HARD RESET\n");
 	}
 #else
-		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+	qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
 #endif
 #endif
 	flush_cache_all();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -2409,8 +2409,6 @@ VOS_STATUS WDA_prepareConfigTLV(v_PVOID_t pVosContext,
    tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
                            + sizeof(tHalCfg) + tlvStruct->length) ;
 
-   wdiStartParams->usConfigBufferLen = (tANI_U8 *)tlvStruct - tlvStructStart ;
-
    /* QWLAN_HAL_CFG_DISABLE_SCAN_DURING_SCO  */
    tlvStruct->type = QWLAN_HAL_CFG_DISABLE_SCAN_DURING_SCO ;
    tlvStruct->length = sizeof(tANI_U32);
@@ -2470,6 +2468,22 @@ VOS_STATUS WDA_prepareConfigTLV(v_PVOID_t pVosContext,
 
    tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
                             + sizeof(tHalCfg) + tlvStruct->length);
+
+   /*  QWLAN_HAL_CFG_ENABLE_POWERSAVE_OFFLOAD  */
+   tlvStruct->type = QWLAN_HAL_CFG_ENABLE_POWERSAVE_OFFLOAD;
+   tlvStruct->length = sizeof(tANI_U32);
+   configDataValue = (tANI_U32 *)(tlvStruct + 1);
+   if(wlan_cfgGetInt(pMac, WNI_CFG_ENABLE_POWERSAVE_OFFLOAD,
+                     configDataValue) != eSIR_SUCCESS)
+   {
+      VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+                 "Failed to get WNI_CFG_ENABLE_POWERSAVE_OFFLOAD");
+      goto handle_failure;
+   }
+
+   tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
+                            + sizeof(tHalCfg) + tlvStruct->length);
+   wdiStartParams->usConfigBufferLen = (tANI_U8 *)tlvStruct - tlvStructStart;
 #ifdef WLAN_DEBUG
    {
       int i;
@@ -8597,17 +8611,9 @@ VOS_STATUS WDA_ProcessSendBeacon(tWDA_CbContext *pWDA,
    WDI_Status status = WDI_STATUS_SUCCESS ;
    WDI_SendBeaconParamsType wdiSendBeaconReqParam; 
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-                        "------> %s beaconLength %d" ,
-                        __func__, pSendbeaconParams->beaconLength);
+                                          "------> %s " ,__func__);
    vos_mem_copy(wdiSendBeaconReqParam.wdiSendBeaconParamsInfo.macBSSID, 
                               pSendbeaconParams->bssId, sizeof(tSirMacAddr));
-
-   if (pSendbeaconParams->beaconLength > WDI_BEACON_TEMPLATE_SIZE) {
-         VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                      "length %d greater than WDI_BEACON_TEMPLATE_SIZE" , pSendbeaconParams->beaconLength);
-        VOS_ASSERT(0);
-        pSendbeaconParams->beaconLength = WDI_BEACON_TEMPLATE_SIZE;
-   }
    wdiSendBeaconReqParam.wdiSendBeaconParamsInfo.beaconLength = 
                               pSendbeaconParams->beaconLength;
    wdiSendBeaconReqParam.wdiSendBeaconParamsInfo.timIeOffset = 
@@ -8662,9 +8668,8 @@ VOS_STATUS WDA_ProcessUpdateProbeRspTemplate(tWDA_CbContext *pWDA,
    WDI_Status status = WDI_STATUS_SUCCESS;
    WDI_UpdateProbeRspTemplateParamsType *wdiSendProbeRspParam =
          vos_mem_malloc(sizeof(WDI_UpdateProbeRspTemplateParamsType));
-   VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-                "------> %s probeRespTemplateLen %d" ,__func__,
-                pSendProbeRspParams->probeRespTemplateLen);
+   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
+                                          "------> %s " ,__func__);
 
    if (!wdiSendProbeRspParam)
    {
@@ -14023,8 +14028,9 @@ void WDA_HALDumpCmdCallback(WDI_HALDumpCmdRspParamsType *wdiRspParams,
       return ;
    }
 
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "%s: WDA HAL DUMP Resp Received",__func__);
+   VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
+             "%s: WDA HALDUMP Rsp Received async: %d",
+             __func__, pWdaParams->wdaHALDumpAsync);
 
    pWDA = pWdaParams->pWdaContext;
    buffer = (tANI_U8 *)pWdaParams->wdaMsgParam;
@@ -14082,6 +14088,15 @@ VOS_STATUS WDA_HALDumpCmdReq(tpAniSirGlobal   pMac, tANI_U32  cmd,
                            "%s: WDA Context Null", __func__);
       return VOS_STATUS_E_RESOURCES;
    }
+
+   vStatus = vos_event_reset(&(pVosContext->wdaCompleteEvent));
+   if (VOS_STATUS_SUCCESS != vStatus)
+   {
+      VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+                "%s: Event reset failed - status %d", __func__, vStatus);
+      return VOS_STATUS_E_FAILURE;
+   }
+
    pWdaParams = (tWDA_HalDumpReqParams *)vos_mem_malloc(sizeof(tWDA_HalDumpReqParams)) ;
    if(NULL == pWdaParams)
    {
@@ -22864,8 +22879,8 @@ void WDA_MonModeRspCallback(void *pEventData, void* pUserData)
       return ;
    }
    pData = (tSirMonModeReq *)pWdaParams->wdaMsgParam;
-   if (pData != NULL && pData->callback != NULL) {
-        pData->callback(pData->context);
+   if (pData != NULL) {
+        pData->callback(pData->magic, pData->cmpVar);
         vos_mem_free(pWdaParams->wdaMsgParam);
    }
    vos_mem_free(pWdaParams) ;

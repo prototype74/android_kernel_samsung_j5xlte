@@ -1,7 +1,7 @@
 /* drivers/soc/qcom/smd.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2008-2015, The Linux Foundation. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -725,21 +725,10 @@ static void scan_alloc_table(struct smd_alloc_elm *shared,
 	}
 }
 
-/**
- * smd_channel_probe_worker() - Scan for newly created SMD channels and init
- *				local structures so the channels are visable to
- *				local clients
- *
- * @work: work_struct corresponding to an instance of this function running on
- *		a workqueue.
- */
-static void smd_channel_probe_worker(struct work_struct *work)
+static void smd_channel_probe_now(struct remote_proc_info *r_info)
 {
 	struct smd_alloc_elm *shared;
-	struct remote_proc_info *r_info;
 	unsigned tbl_size;
-
-	r_info = container_of(work, struct remote_proc_info, probe_work);
 
 	shared = smem_get_entry(ID_CH_ALLOC_TBL, &tbl_size,
 							r_info->remote_pid, 0);
@@ -765,6 +754,23 @@ static void smd_channel_probe_worker(struct work_struct *work)
 			r_info);
 
 	mutex_unlock(&smd_probe_lock);
+}
+
+/**
+ * smd_channel_probe_worker() - Scan for newly created SMD channels and init
+ *				local structures so the channels are visable to
+ *				local clients
+ *
+ * @work: work_struct corresponding to an instance of this function running on
+ *		a workqueue.
+ */
+static void smd_channel_probe_worker(struct work_struct *work)
+{
+	struct remote_proc_info *r_info;
+
+	r_info = container_of(work, struct remote_proc_info, probe_work);
+
+	smd_channel_probe_now(r_info);
 }
 
 /**
@@ -1326,6 +1332,13 @@ static void do_smd_probe(unsigned remote_pid)
 	}
 }
 
+static void remote_processed_close(struct smd_channel *ch)
+{
+	/* The remote side has observed our close, we can allow a reopen */
+	list_move(&ch->ch_list, &smd_ch_to_close_list);
+	queue_work(channel_close_wq, &finalize_channel_close_work);
+}
+
 static void smd_state_change(struct smd_channel *ch,
 			     unsigned last, unsigned next)
 {
@@ -1335,7 +1348,11 @@ static void smd_state_change(struct smd_channel *ch,
 
 	switch (next) {
 	case SMD_SS_OPENING:
-		if (ch->half_ch->get_state(ch->send) == SMD_SS_CLOSING ||
+		if (last == SMD_SS_OPENED &&
+		    ch->half_ch->get_state(ch->send) == SMD_SS_CLOSED) {
+			/* We missed the CLOSING and CLOSED states */
+			remote_processed_close(ch);
+		} else if (ch->half_ch->get_state(ch->send) == SMD_SS_CLOSING ||
 		    ch->half_ch->get_state(ch->send) == SMD_SS_CLOSED) {
 			ch->half_ch->set_tail(ch->recv, 0);
 			ch->half_ch->set_head(ch->send, 0);
@@ -1360,14 +1377,13 @@ static void smd_state_change(struct smd_channel *ch,
 			ch->pending_pkt_sz = 0;
 			ch->notify(ch->priv, SMD_EVENT_CLOSE);
 		}
+		/* We missed the CLOSING state */
+		if (ch->half_ch->get_state(ch->send) == SMD_SS_CLOSED)
+			remote_processed_close(ch);
 		break;
 	case SMD_SS_CLOSING:
-		if (ch->half_ch->get_state(ch->send) == SMD_SS_CLOSED) {
-			list_move(&ch->ch_list,
-					&smd_ch_to_close_list);
-			queue_work(channel_close_wq,
-						&finalize_channel_close_work);
-		}
+		if (ch->half_ch->get_state(ch->send) == SMD_SS_CLOSED)
+			remote_processed_close(ch);
 		break;
 	}
 }
@@ -2589,7 +2605,7 @@ static irqreturn_t smsm_irq_handler(int irq, void *data)
 
 		SMSM_DBG("<SM %08x %08x>\n", apps, modm);
 		if (modm & SMSM_RESET) {
-			pr_err("\nSMSM: Modem SMSM state changed to SMSM_RESET.");
+			pr_err("SMSM: Modem SMSM state changed to SMSM_RESET.\n");
 		} else if (modm & SMSM_INIT) {
 			if (!(apps & SMSM_INIT))
 				apps |= SMSM_INIT;
@@ -3058,7 +3074,7 @@ static int restart_notifier_cb(struct notifier_block *this,
  */
 void smd_post_init(unsigned remote_pid)
 {
-	schedule_work(&remote_info[remote_pid].probe_work);
+	smd_channel_probe_now(&remote_info[remote_pid]);
 }
 
 /**

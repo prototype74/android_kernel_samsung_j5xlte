@@ -34,6 +34,7 @@
 #include <asm/sizes.h>
 #include <asm/tlb.h>
 #include <asm/mmu_context.h>
+#include <asm/cacheflush.h>
 
 #include "mm.h"
 
@@ -597,13 +598,15 @@ void __init paging_init(void)
 	empty_zero_page = virt_to_page(zero_page);
 
 	/* Ensure the zero page is visible to the page table walker */
-	dsb();
+	dsb(ishst);
 
 	/*
 	 * TTBR0 is only used for the identity mapping at this stage. Make it
 	 * point to zero page to avoid speculatively fetching new entries.
 	 */
 	cpu_set_reserved_ttbr0();
+	flush_tlb_all();
+	set_kernel_text_ro();
 	flush_tlb_all();
 }
 

@@ -32,13 +32,6 @@
 };
 
 &soc {
-	samsung,simslot {
-		compatible = "simslot";
-		samsung,sim-slot = <&msm_gpio 72 0x1>;
-		low-is-dual; // If the value of sim-slot gpio is 'low' in 'dual sim' device, you must set this boolean property.
-		status = "ok";
-	};
-
 	sm5703,vibrator {
 		compatible = "sm5703,vibrator";
 		vibrator,ldo_name = "VDD_MOTOR";
@@ -289,6 +282,7 @@
 			stm,negate_z = <1>;
 			stm,poll_interval = <100>;
 			stm,min_interval = <2>;
+			stm,reactive_alert_threshold = <32>;
 		};
 		gp2a-i2c@44{
 			compatible = "gp2a-i2c";

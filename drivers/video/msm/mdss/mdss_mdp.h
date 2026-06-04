@@ -73,6 +73,17 @@
 #define CURSOR_PIPE_LEFT 0
 #define CURSOR_PIPE_RIGHT 1
 
+#define MASTER_CTX 0
+#define SLAVE_CTX 1
+
+/*
+ * Recommendation is to have different ot depending on the fps
+ * and resolution, but since current SW doesn't support different
+ * fps for non-real time, we are hard-coding the ot limit to 2 for now
+ */
+#define MDSS_OT_LIMIT 2
+#define XIN_HALT_TIMEOUT_US	0x4000
+
 enum mdss_mdp_perf_state_type {
 	PERF_SW_COMMIT_STATE = 0,
 	PERF_HW_MDP_STATE,
@@ -86,6 +97,7 @@ enum mdss_mdp_block_power_state {
 enum mdss_mdp_mixer_type {
 	MDSS_MDP_MIXER_TYPE_UNUSED,
 	MDSS_MDP_MIXER_TYPE_INTF,
+	MDSS_MDP_MIXER_TYPE_INTF_NO_DSPP,
 	MDSS_MDP_MIXER_TYPE_WRITEBACK,
 };
 
@@ -172,7 +184,27 @@ enum mdss_mdp_wb_ctl_type {
 
 enum mdss_mdp_bw_vote_mode {
 	MDSS_MDP_BW_MODE_SINGLE_LAYER,
+	MDSS_MDP_BW_MODE_SINGLE_IF,
 	MDSS_MDP_BW_MODE_MAX
+};
+
+/**
+ * enum perf_calc_vote_mode - enum to describe the kind of object that the
+ *		mdss_mdp_get_bw_vote_mode function needs to analyze in order to
+ *		decide if an extra efficiency factor is needed.
+ *		Depending in the properties of each specific object (determined
+ *		by this enum), driver decides if the mode to vote needs an
+ *		extra factor.
+ *
+ * @PERF_CALC_VOTE_MODE_PER_PIPE: used to check if efficiency factor is needed
+ *		based in the pipe properties.
+ * @PERF_CALC_VOTE_MODE_CTL: used to check if efficiency factor is needed based
+ *		in the controller properties.
+ */
+enum perf_calc_vote_mode {
+	PERF_CALC_VOTE_MODE_PER_PIPE,
+	PERF_CALC_VOTE_MODE_CTL,
+	PERF_CALC_VOTE_MODE_MAX,
 };
 
 struct mdss_mdp_perf_params {
@@ -182,6 +214,24 @@ struct mdss_mdp_perf_params {
 	u64 bw_ctl;
 	u32 mdp_clk_rate;
 	DECLARE_BITMAP(bw_vote_mode, MDSS_MDP_BW_MODE_MAX);
+};
+
+struct mdss_mdp_ctl_intfs_ops {
+	int (*start_fnc)(struct mdss_mdp_ctl *ctl);
+	int (*stop_fnc)(struct mdss_mdp_ctl *ctl, int panel_power_state);
+	int (*prepare_fnc)(struct mdss_mdp_ctl *ctl, void *arg);
+	int (*display_fnc)(struct mdss_mdp_ctl *ctl, void *arg);
+	int (*wait_fnc)(struct mdss_mdp_ctl *ctl, void *arg);
+	int (*wait_pingpong)(struct mdss_mdp_ctl *ctl, void *arg);
+	int (*wait_video_pingpong) (struct mdss_mdp_ctl *ctl, void *arg);
+	u32 (*read_line_cnt_fnc)(struct mdss_mdp_ctl *);
+	int (*add_vsync_handler)(struct mdss_mdp_ctl *,
+					struct mdss_mdp_vsync_handler *);
+	int (*remove_vsync_handler)(struct mdss_mdp_ctl *,
+					struct mdss_mdp_vsync_handler *);
+	int (*config_fps_fnc)(struct mdss_mdp_ctl *ctl,
+				struct mdss_mdp_ctl *sctl, int new_fps);
+	int (*restore_fnc)(struct mdss_mdp_ctl *ctl);
 };
 
 struct mdss_mdp_ctl {
@@ -195,6 +245,7 @@ struct mdss_mdp_ctl {
 	int power_state;
 
 	u32 intf_num;
+	u32 slave_intf_num; /* ping-pong split */
 	u32 intf_type;
 
 	u32 opmode;
@@ -220,6 +271,7 @@ struct mdss_mdp_ctl {
 	struct mdss_mdp_perf_params new_perf;
 	u32 perf_transaction_status;
 	bool perf_release_ctl_bw;
+	u64 bw_pending;
 
 	bool traffic_shaper_enabled;
 	u32  traffic_shaper_mdp_clk;
@@ -244,27 +296,18 @@ struct mdss_mdp_ctl {
 	u8 roi_changed;
 	u8 valid_roi;
 
-	int (*start_fnc) (struct mdss_mdp_ctl *ctl);
-	int (*stop_fnc) (struct mdss_mdp_ctl *ctl, int panel_power_state);
-	int (*prepare_fnc) (struct mdss_mdp_ctl *ctl, void *arg);
-	int (*display_fnc) (struct mdss_mdp_ctl *ctl, void *arg);
-	int (*wait_fnc) (struct mdss_mdp_ctl *ctl, void *arg);
-	int (*wait_pingpong) (struct mdss_mdp_ctl *ctl, void *arg);
-	int (*wait_video_pingpong) (struct mdss_mdp_ctl *ctl, void *arg);
-	u32 (*read_line_cnt_fnc) (struct mdss_mdp_ctl *);
-	int (*add_vsync_handler) (struct mdss_mdp_ctl *,
-					struct mdss_mdp_vsync_handler *);
-	int (*remove_vsync_handler) (struct mdss_mdp_ctl *,
-					struct mdss_mdp_vsync_handler *);
-	int (*config_fps_fnc) (struct mdss_mdp_ctl *ctl,
-				struct mdss_mdp_ctl *sctl, int new_fps);
-	int (*restore_fnc) (struct mdss_mdp_ctl *ctl);
+	bool cmd_autorefresh_en;
+	int autorefresh_frame_cnt;
+
+	struct mdss_mdp_ctl_intfs_ops ops;
 
 	struct blocking_notifier_head notifier_head;
 
 	void *priv_data;
+	void *intf_ctx[2];
 	u32 wb_type;
 	u32 prg_fet;
+	bool force_ctl_start;
 };
 
 struct mdss_mdp_mixer {
@@ -326,10 +369,23 @@ struct mdss_mdp_img_data {
 	struct ion_handle *srcp_ihdl;
 };
 
+enum mdss_mdp_data_state {
+	MDP_BUF_STATE_UNUSED,
+	MDP_BUF_STATE_READY,
+	MDP_BUF_STATE_ACTIVE,
+	MDP_BUF_STATE_CLEANUP,
+};
+
 struct mdss_mdp_data {
+	enum mdss_mdp_data_state state;
 	u8 num_planes;
-	u8 bwc_enabled;
 	struct mdss_mdp_img_data p[MAX_PLANES];
+	struct list_head buf_list;
+	struct list_head pipe_list;
+	struct list_head chunk_list;
+	u64 last_alloc;
+	u64 last_freed;
+	struct mdss_mdp_pipe *last_pipe;
 };
 
 struct pp_hist_col_info {
@@ -464,9 +520,7 @@ struct mdss_mdp_pipe {
 
 	struct mdss_mdp_pipe_smp_map smp_map[MAX_PLANES];
 
-	struct mdss_mdp_data back_buf;
-	struct mdss_mdp_data front_buf;
-
+	struct list_head buf_queue;
 	struct list_head list;
 
 	struct mdp_overlay_pp_params pp_cfg;
@@ -499,15 +553,19 @@ struct mdss_overlay_private {
 	struct mdss_mdp_wb *wb;
 
 	struct mutex list_lock;
-	struct list_head overlay_list;
 	struct list_head pipes_used;
 	struct list_head pipes_cleanup;
 	struct list_head pipes_destroy;
 	struct list_head rot_proc_list;
 	bool mixer_swap;
 
-	struct mdss_mdp_data free_list[MAX_FREE_LIST_SIZE];
-	int free_list_size;
+	/* list of buffers that can be reused */
+	struct list_head bufs_chunks;
+	struct list_head bufs_pool;
+	struct list_head bufs_used;
+	/* list of buffers which should be freed during cleanup stage */
+	struct list_head bufs_freelist;
+
 	int ad_state;
 	int dyn_pu_state;
 
@@ -522,6 +580,17 @@ struct mdss_overlay_private {
 	int retire_cnt;
 	bool kickoff_released;
 	u32 cursor_ndx[2];
+	bool dyn_mode_switch; /* Used in prepare, bw calc for new mode */
+};
+
+struct mdss_mdp_set_ot_params {
+	u32 xin_id;
+	u32 num;
+	u32 width;
+	u32 height;
+	u32 reg_off_vbif_lim_conf;
+	u32 reg_off_mdp_clk_ctrl;
+	u32 bit_off_mdp_clk_ctrl;
 };
 
 struct mdss_mdp_commit_cb {
@@ -529,34 +598,6 @@ struct mdss_mdp_commit_cb {
 	int (*commit_cb_fnc) (enum mdp_commit_stage_type commit_state,
 		void *data);
 };
-
-#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
-struct mdss_mdp_cmd_ctx {
-	struct mdss_mdp_ctl *ctl;
-	u32 pp_num;
-	u8 ref_cnt;
-	struct completion stop_comp;
-	wait_queue_head_t pp_waitq;
-	struct list_head vsync_handlers;
-	int panel_power_state;
-	atomic_t koff_cnt;
-	u32 intf_stopped;
-	int clk_enabled;
-	int vsync_enabled;
-	int rdptr_enabled;
-	struct mutex clk_mtx;
-	spinlock_t clk_lock;
-	spinlock_t koff_lock;
-	struct work_struct clk_work;
-	struct work_struct pp_done_work;
-	atomic_t pp_done_cnt;
-	struct mdss_intf_recovery intf_recovery;
-	struct mdss_mdp_cmd_ctx *sync_ctx; /* for partial update */
-	u32 pp_timeout_report_cnt;
-};
-#endif
-
-
 
 /**
  * enum mdss_screen_state - Screen states that MDP can be forced into
@@ -656,6 +697,19 @@ static inline int mdss_mdp_pipe_is_sw_reset_available(
 	}
 }
 
+static inline bool mdss_mdp_is_vbif_nrt(u32 mdp_rev)
+{
+	return IS_MDSS_MAJOR_MINOR_SAME(mdp_rev,
+		MDSS_MDP_HW_REV_107);
+}
+
+static inline bool mdss_mdp_apply_ot_limit(u32 mdp_rev)
+{
+	return mdp_rev == MDSS_MDP_HW_REV_105 ||
+		mdp_rev == MDSS_MDP_HW_REV_109 ||
+		mdp_rev == MDSS_MDP_HW_REV_110;
+}
+
 static inline int mdss_mdp_iommu_dyn_attach_supported(
 	struct mdss_data_type *mdata)
 {
@@ -688,7 +742,9 @@ static inline int mdss_mdp_panic_signal_support_mode(
 		    IS_MDSS_MAJOR_MINOR_SAME(mdata->mdp_rev,
 					MDSS_MDP_HW_REV_108) ||
 		    IS_MDSS_MAJOR_MINOR_SAME(mdata->mdp_rev,
-					MDSS_MDP_HW_REV_109))
+					MDSS_MDP_HW_REV_109) ||
+		    IS_MDSS_MAJOR_MINOR_SAME(mdata->mdp_rev,
+					MDSS_MDP_HW_REV_110))
 			signal_mode = MDSS_MDP_PANIC_COMMON_REG_CFG;
 		else if (IS_MDSS_MAJOR_MINOR_SAME(mdata->mdp_rev,
 					MDSS_MDP_HW_REV_107))
@@ -831,13 +887,21 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd);
 int mdss_mdp_video_addr_setup(struct mdss_data_type *mdata,
 		u32 *offsets,  u32 count);
 int mdss_mdp_video_start(struct mdss_mdp_ctl *ctl);
+void mdss_mdp_switch_to_cmd_mode(struct mdss_mdp_ctl *ctl, int prep);
+void mdss_mdp_switch_to_vid_mode(struct mdss_mdp_ctl *ctl, int prep);
 void *mdss_mdp_get_intf_base_addr(struct mdss_data_type *mdata,
 		u32 interface_id);
 int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl);
 int mdss_mdp_writeback_start(struct mdss_mdp_ctl *ctl);
 int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 		struct mdp_display_commit *data);
+struct mdss_mdp_data *mdss_mdp_overlay_buf_alloc(struct msm_fb_data_type *mfd,
+		struct mdss_mdp_pipe *pipe);
+void mdss_mdp_overlay_buf_free(struct msm_fb_data_type *mfd,
+		struct mdss_mdp_data *buf);
 
+int mdss_mdp_ctl_reconfig(struct mdss_mdp_ctl *ctl,
+		struct mdss_panel_data *pdata);
 struct mdss_mdp_ctl *mdss_mdp_ctl_init(struct mdss_panel_data *pdata,
 					struct msm_fb_data_type *mfd);
 int mdss_mdp_video_reconfigure_splash_done(struct mdss_mdp_ctl *ctl,
@@ -854,7 +918,8 @@ int mdss_mdp_ctl_stop(struct mdss_mdp_ctl *ctl, int panel_power_mode);
 int mdss_mdp_ctl_intf_event(struct mdss_mdp_ctl *ctl, int event, void *arg);
 int mdss_mdp_perf_bw_check(struct mdss_mdp_ctl *ctl,
 		struct mdss_mdp_pipe **left_plist, int left_cnt,
-		struct mdss_mdp_pipe **right_plist, int right_cnt);
+		struct mdss_mdp_pipe **right_plist, int right_cnt,
+		bool mode_switch);
 int mdss_mdp_perf_bw_check_pipe(struct mdss_mdp_perf_params *perf,
 		struct mdss_mdp_pipe *pipe);
 int mdss_mdp_perf_calc_pipe(struct mdss_mdp_pipe *pipe,
@@ -869,6 +934,7 @@ void mdss_mdp_ctl_notifier_register(struct mdss_mdp_ctl *ctl,
 	struct notifier_block *notifier);
 void mdss_mdp_ctl_notifier_unregister(struct mdss_mdp_ctl *ctl,
 	struct notifier_block *notifier);
+u32 mdss_mdp_ctl_perf_get_transaction_status(struct mdss_mdp_ctl *ctl);
 
 int mdss_mdp_scan_pipes(void);
 
@@ -878,7 +944,8 @@ int mdss_mdp_mixer_handoff(struct mdss_mdp_ctl *ctl, u32 num,
 void mdss_mdp_ctl_perf_set_transaction_status(struct mdss_mdp_ctl *ctl,
 	enum mdss_mdp_perf_state_type component, bool new_status);
 void mdss_mdp_ctl_perf_release_bw(struct mdss_mdp_ctl *ctl);
-
+void mdss_mdp_get_interface_type(struct mdss_mdp_ctl *ctl, int *intf_type,
+		int *split_needed);
 struct mdss_mdp_mixer *mdss_mdp_wb_mixer_alloc(int rotator);
 int mdss_mdp_wb_mixer_destroy(struct mdss_mdp_mixer *mixer);
 struct mdss_mdp_mixer *mdss_mdp_mixer_get(struct mdss_mdp_ctl *ctl, int mux);
@@ -892,7 +959,7 @@ void mdss_mdp_mixer_unstage_all(struct mdss_mdp_mixer *mixer);
 int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 	struct mdss_mdp_commit_cb *commit_cb);
 int mdss_mdp_display_wait4comp(struct mdss_mdp_ctl *ctl);
-int mdss_mdp_display_wait4pingpong(struct mdss_mdp_ctl *ctl);
+int mdss_mdp_display_wait4pingpong(struct mdss_mdp_ctl *ctl, bool use_lock);
 int mdss_mdp_display_wakeup_time(struct mdss_mdp_ctl *ctl,
 				 ktime_t *wakeup_time);
 
@@ -913,7 +980,7 @@ int mdss_mdp_pipe_sspp_setup(struct mdss_mdp_pipe *pipe, u32 *op);
 void mdss_mdp_pipe_sspp_term(struct mdss_mdp_pipe *pipe);
 int mdss_mdp_smp_setup(struct mdss_data_type *mdata, u32 cnt, u32 size);
 
-int mdss_hw_init(struct mdss_data_type *mdata);
+void mdss_hw_init(struct mdss_data_type *mdata);
 
 int mdss_mdp_pa_config(struct mdp_pa_cfg_data *config, u32 *copyback);
 int mdss_mdp_pa_v2_config(struct mdp_pa_v2_cfg_data *config, u32 *copyback);
@@ -971,6 +1038,7 @@ int mdss_mdp_ctl_addr_setup(struct mdss_data_type *mdata, u32 *ctl_offsets,
 
 int mdss_mdp_pipe_fetch_halt(struct mdss_mdp_pipe *pipe);
 int mdss_mdp_pipe_panic_signal_ctrl(struct mdss_mdp_pipe *pipe, bool enable);
+void mdss_mdp_bwcpanic_ctrl(struct mdss_data_type *mdata, bool enable);
 int mdss_mdp_pipe_destroy(struct mdss_mdp_pipe *pipe);
 int mdss_mdp_pipe_queue_data(struct mdss_mdp_pipe *pipe,
 			     struct mdss_mdp_data *src_data);
@@ -1009,7 +1077,6 @@ u32 mdss_mdp_get_mixercfg(struct mdss_mdp_mixer *mixer);
 u32 mdss_mdp_fb_stride(u32 fb_index, u32 xres, int bpp);
 void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval);
 
-int mdss_panel_register_done(struct mdss_panel_data *pdata);
 int mdss_mdp_limited_lut_igc_config(struct mdss_mdp_ctl *ctl);
 int mdss_mdp_calib_config(struct mdp_calib_config_data *cfg, u32 *copyback);
 int mdss_mdp_calib_config_buffer(struct mdp_calib_config_buffer *cfg,
@@ -1031,6 +1098,14 @@ int mdss_mdp_wb_set_secure(struct msm_fb_data_type *mfd, int enable);
 int mdss_mdp_wb_get_secure(struct msm_fb_data_type *mfd, uint8_t *enable);
 void mdss_mdp_ctl_restore(void);
 int  mdss_mdp_ctl_reset(struct mdss_mdp_ctl *ctl);
+int mdss_mdp_wait_for_xin_halt(u32 xin_id, bool is_vbif_nrt);
+void mdss_mdp_set_ot_limit(struct mdss_mdp_set_ot_params *params,
+	bool is_rot, bool is_wb, bool is_yuv);
+int mdss_mdp_cmd_set_autorefresh_mode(struct mdss_mdp_ctl *ctl,
+		int frame_cnt);
+int mdss_mdp_ctl_cmd_autorefresh_enable(struct mdss_mdp_ctl *ctl,
+		int frame_cnt);
+
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 void mdss_dsi_check_te(void);
 void mdss_mdp_underrun_clk_info(void);

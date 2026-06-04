@@ -1215,6 +1215,7 @@ static VOS_STATUS sap_roam_process_ch_change_resp(ptSapContext sap_ctx,
              FL("sapdfs: from state eSAP_DISCONNECTING => eSAP_STARTING on sapctx[%pK]"),
              sap_ctx);
    sap_ctx->sapsMachine = eSAP_STARTING;
+   sap_ctx->ecsa_info.channel_switch_in_progress = false;
    sap_event.event = eSAP_MAC_START_BSS_SUCCESS;
    sap_event.params = csr_roam_info;
    sap_event.u1 = eCSR_ROAM_INFRA_IND;
@@ -1222,12 +1223,6 @@ static VOS_STATUS sap_roam_process_ch_change_resp(ptSapContext sap_ctx,
 
    /* Handle the event */
    status = sapFsm(sap_ctx, &sap_event);
-
-   vos_spin_lock_acquire(&sap_ctx->ecsa_info.ecsa_lock);
-   sap_ctx->ecsa_info.channel_switch_in_progress = false;
-   vos_spin_lock_release(&sap_ctx->ecsa_info.ecsa_lock);
-   complete(&sap_ctx->ecsa_info.chan_switch_comp);
-
    return status;
 }
 

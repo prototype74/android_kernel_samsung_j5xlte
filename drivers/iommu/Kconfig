@@ -22,6 +22,8 @@ config OF_IOMMU
 # MSM_IOMMU always gets selected by whoever wants it.
 config MSM_IOMMU
 	bool
+	select ARM_DMA_USE_IOMMU if ARM
+	select ARM64_DMA_USE_IOMMU if ARM64
 
 # MSM IOMMUv0 support
 config MSM_IOMMU_V0
@@ -100,6 +102,26 @@ config IOMMU_LPAE
 	  32 bits.
 
 	  If unsure, say N here.
+
+config IOMMU_AARCH64
+	bool "Enable support for AARCH64 in IOMMU"
+	depends on (MSM_IOMMU && (!IOMMU_LPAE))
+	help
+	  Enables AARCH64 format page tables for IOMMU. This allows clients of
+	  IOMMUs to use Virtual and physical addresses up-to 48 bits. This will
+	  also support the clients who can't generate addresses of more than 32
+	  bits. Presently, this config assumes that if SMMU global space is
+	  programmed by some secure environment, they configure all the CBs of
+	  all the SMMUs as AARCH64 formatted.
+
+	  If unsure, say N here.
+
+config IOMMU_MAX_VA
+	int "Max Supported VA in AARCH64 IOMMU"
+	depends on (IOMMU_AARCH64)
+	default 39
+	help
+	    Sets the max VA size in bits for AARCH64.Supported values 48 and 39.
 
 config MSM_IOMMU_VBIF_CHECK
 	bool "Enable support for VBIF check when IOMMU gets stuck"

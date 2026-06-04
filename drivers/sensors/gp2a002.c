@@ -367,8 +367,8 @@ static ssize_t prox_cal_write(struct device *dev,
 
 static DEVICE_ATTR(adc, 0440, adc_read, NULL);
 static DEVICE_ATTR(state, 0440, state_read, NULL);
-static DEVICE_ATTR(name, 0440, name_read, NULL);
-static DEVICE_ATTR(vendor, 0440, vendor_read, NULL);
+static DEVICE_ATTR(name, 0444, name_read, NULL);
+static DEVICE_ATTR(vendor, 0444, vendor_read, NULL);
 static DEVICE_ATTR(prox_cal, 0664, prox_cal_read, prox_cal_write);
 
 static struct device_attribute *proxi_attrs[] = {

@@ -1486,7 +1486,7 @@ static int rt5033_charger_probe(struct platform_device *pdev)
 	struct rt5033_charger_data *charger;
 	int ret = 0;
 
-	pr_info("%s:[BATT] RT5033 Charger driver probe..0x%x\n", __func__, (unsigned int)mfd_pdata);
+	pr_info("%s:[BATT] RT5033 Charger driver probe..\n", __func__);
 
 	charger = kzalloc(sizeof(*charger), GFP_KERNEL);
 	if (!charger)

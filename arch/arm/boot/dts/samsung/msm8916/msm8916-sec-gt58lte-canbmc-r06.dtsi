@@ -108,6 +108,7 @@
 			stm,negate_z = <1>;
 			stm,poll_interval = <100>;
 			stm,min_interval = <2>;
+			stm,reactive_alert_threshold = <32>;
 		};
 		cm3323-i2c@10 {
 			compatible = "cm3323-i2c";

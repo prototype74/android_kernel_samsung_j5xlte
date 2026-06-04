@@ -307,6 +307,49 @@
 };
 
 &soc {
+
+	i2c_1: i2c@f9923000 { /* BLSP2 QUP1 */
+		compatible = "qcom,i2c-msm-v2";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg-names = "qup_phys_addr", "bam_phys_addr";
+		reg = <0xf9923000 0x1000>,
+			<0xf9904000 0x19000>;
+		interrupt-names = "qup_irq", "bam_irq";
+		interrupts = <0 95 0>, <0 238 0>;
+		qcom,clk-freq-out = <100000>;
+		qcom,clk-freq-in  = <19200000>;
+		clock-names = "iface_clk", "core_clk";
+		clocks = <&clock_gcc clk_gcc_blsp1_ahb_clk>,
+		<&clock_gcc clk_gcc_blsp1_qup1_i2c_apps_clk>;
+
+		pinctrl-names = "i2c_active", "i2c_sleep";
+		pinctrl-0 = <&i2c_1_active>;
+		pinctrl-1 = <&i2c_1_sleep>;
+		qcom,noise-rjct-scl = <0>;
+		qcom,noise-rjct-sda = <0>;
+		qcom,bam-pipe-idx-cons = <12>;
+		qcom,bam-pipe-idx-prod = <13>;
+		qcom,master-id = <86>;
+		status = "ok";
+
+		sil,sii-8620@72 {
+			status = "disabled";
+			compatible = "sil,sii-8620";
+			reg = <0x72>;
+			ldo25-supply = <&pm8994_l25>;
+			sil,pwr-gpio = <&pm8994_gpios 2 0>;
+			sil,pmi9 = <&pmi8994_gpios 9 0>;
+			sil,pmi10 = <&pmi8994_gpios 10 0>;
+			sil,fw-wake = <&msm_gpio 38 0>;
+			sil,reset-gpio = <&msm_gpio 58 0>;
+			sil,irq-gpio = <&msm_gpio 57 0>;
+			sil,i2c-port = <1>;
+			pinctrl-names = "mhl_active";
+			pinctrl-0 = <&mhl_intr_active &mhl_reset_active>;
+		};
+	};
+
 	i2c@f9924000 {
 		synaptics@20 {
 			compatible = "synaptics,dsx";

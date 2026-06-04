@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2015, 2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -101,6 +101,7 @@ struct msm_iommu_bfb_settings {
  * @clk_reg_virt: Optional clock register virtual address.
  * @halt_enabled: Set to 1 if IOMMU halt is supported in the IOMMU, 0 otherwise.
  * @ctx_attach_count: Count of how many context are attached.
+ * @sec_cfg_restored: status of restore sec cfg.
  * @bus_client  : Bus client needed to vote for bus bandwidth.
  * @needs_rem_spinlock  : 1 if remote spinlock is needed, 0 otherwise
  * @powered_on: Powered status of the IOMMU. 0 means powered off.
@@ -131,6 +132,7 @@ struct msm_iommu_drvdata {
 	void __iomem *clk_reg_virt;
 	int halt_enabled;
 	unsigned int ctx_attach_count;
+	bool sec_cfg_restored;
 	unsigned int bus_client;
 	int needs_rem_spinlock;
 	int powered_on;
@@ -395,5 +397,16 @@ u32 msm_iommu_get_mair0(void);
 u32 msm_iommu_get_mair1(void);
 u32 msm_iommu_get_prrr(void);
 u32 msm_iommu_get_nmrr(void);
+
+/* events for notifiers passed to msm_iommu_register_notify */
+#define TLB_SYNC_TIMEOUT 1
+
+#ifdef CONFIG_MSM_IOMMU_V1
+void msm_iommu_register_notify(struct notifier_block *nb);
+#else
+static inline void msm_iommu_register_notify(struct notifier_block *nb)
+{
+}
+#endif
 
 #endif

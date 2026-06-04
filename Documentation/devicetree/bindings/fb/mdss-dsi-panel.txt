@@ -147,12 +147,15 @@ Optional properties:
 - qcom,mdss-dsi-pan-enable-dynamic-fps:	Boolean used to enable change in frame rate dynamically.
 - qcom,mdss-dsi-pan-fps-update:		A string that specifies when to change the frame rate.
 					"dfps_suspend_resume_mode"= FPS change request is
-						implemented during suspend/resume.
+					implemented during suspend/resume.
 					"dfps_immediate_clk_mode" = FPS change request is
-						implemented immediately using DSI clocks.
-					"dfps_immediate_porch_mode" = FPS change request is
-						implemented immediately by changing panel porch
-						values.
+					implemented immediately using DSI clocks.
+					"dfps_immediate_porch_mode_hfp" = FPS change request is
+					implemented immediately by changing panel horizontal
+					front porch values.
+					"dfps_immediate_porch_mode_vfp" = FPS change request is
+					implemented immediately by changing panel vertical
+					front porch values.
 - qcom,min-refresh-rate:		Minimum refresh rate supported by the panel.
 - qcom,max-refresh-rate:		Maximum refresh rate supported by the panel. If max refresh
 					rate is not specified, then the frame rate of the panel in
@@ -278,6 +281,9 @@ Optional properties:
 - qcom,mdss-dsi-off-command-state:	String that specifies the ctrl state for sending OFF commands.
 					"dsi_lp_mode" = DSI low power mode (default)
 					"dsi_hs_mode" = DSI high speed mode
+- qcom,mdss-dsi-post-mode-switch-on-command-state:	String that specifies the ctrl state for sending ON commands post mode switch.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
 - qcom,mdss-pan-physical-width-dimension:	Specifies panel physical width in mm which corresponds
 					to the physical width in the framebuffer information.
 - qcom,mdss-pan-physical-height-dimension:	Specifies panel physical height in mm which corresponds
@@ -366,12 +372,29 @@ Optional properties:
 - qcom,mdss-dsi-panel-status-check-mode:Specifies the panel status check method for ESD recovery.
 					"bta_check" = Uses BTA to check the panel status
 					"reg_read" = Reads panel status register to check the panel status
+					"reg_read_nt35596" = Reads panel status register to check the panel
+							     status for NT35596 panel.
 					"te_signal_check" = Uses TE signal behaviour to check the panel status
-- qcom,mdss-dsi-panel-status-value:	Specifies the value of the panel status register when the panel is
-					in good state.
+- qcom,mdss-dsi-panel-status-read-length: Integer value that specifies the expected read-back length of the
+					  panel register.
+- qcom,mdss-dsi-panel-status-value:	An integer array that specifies the values of the panel status register
+					which is used to check the panel status. The size of this array
+					is specified by	qcom,mdss-dsi-panel-status-read-length.
+- qcom,mdss-dsi-panel-max-error-count:  Integer value that specifies the maximum number of errors from register
+					read that can be ignored before treating that the panel has gone bad.
 - qcom,dynamic-mode-switch-enabled:		Boolean used to mention whether panel supports
 					dynamic switching from video mode to command mode
 					and vice versa.
+- qcom,dynamic-mode-switch-type:		A string specifies how to perform dynamic mode switch.
+						If qcom,dynamic-mode-switch-enabled is set and no string specified, default value is
+						dynamic-switch-suspend-resume.
+					"dynamic-switch-suspend-resume"= Switch using suspend/resume. Panel will
+						go blank during transition.
+					"dynamic-switch-immediate"= Switch on next frame update. Panel will
+						not go blank for this transition.
+- qcom,mdss-dsi-post-mode-switch-on-command:		Multiple dcs packets used for turning on DSI panel
+					after panel has switch modes.
+					Refer to "qcom,mdss-dsi-on-command" section for adding commands.
 - qcom,video-to-cmd-mode-switch-commands:	List of commands that need to be sent
 					to panel in order to switch from video mode to command mode dynamically.
 					Refer to "qcom,mdss-dsi-on-command" section for adding commands.
@@ -509,8 +532,13 @@ Example:
 		qcom,mdss-dsi-panel-status-command = [06 01 00 01 05 00 02 0A 08];
 		qcom,mdss-dsi-panel-status-command-state = "dsi_lp_mode";
 		qcom,mdss-dsi-panel-status-check-mode = "reg_read";
-		qcom,mdss-dsi-panel-status-value = <0x9c>;
+		qcom,mdss-dsi-panel-status-read-length = <8>;
+		qcom,mdss-dsi-panel-max-error-count = <3>;
+		qcom,mdss-dsi-panel-status-value = <0x1c 0x00 0x05 0x02 0x40 0x84 0x06 0x01>;
 		qcom,dynamic-mode-switch-enabled;
+		qcom,dynamic-mode-switch-type = "dynamic-switch-immediate";
+		qcom,mdss-dsi-post-mode-switch-on-command = [32 01 00 00 00 00 02 00 00
+					29 01 00 00 10 00 02 B0 03];
 		qcom,video-to-cmd-mode-switch-commands = [15 01 00 00 00 00 02 C2 0B
 						15 01 00 00 00 00 02 C2 08];
 		qcom,cmd-to-video-mode-switch-commands = [15 01 00 00 00 00 02 C2 03];

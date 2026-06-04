@@ -157,13 +157,13 @@ enum key_event {
 #define RAWDATA_DELAY_FOR_HOST		100
 
 struct raw_ioctl {
-	int sz;
-	u8 *buf;
+	u32 sz;
+	u32 buf;
 };
 
 struct reg_ioctl {
-	int addr;
-	int *val;
+	u32 addr;
+	u32 val;
 };
 
 #define TOUCH_SEC_MODE			48
@@ -748,6 +748,9 @@ static const struct file_operations ts_misc_fops = {
 	.open = ts_misc_fops_open,
 	.release = ts_misc_fops_close,
 	.unlocked_ioctl = ts_misc_fops_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = ts_misc_fops_ioctl,
+#endif
 };
 
 static struct miscdevice touch_misc_device = {
@@ -3006,8 +3009,7 @@ static void fw_update(void *device_data)
 		snprintf(fw_path, MAX_FW_PATH, "/sdcard/%s", TSP_FW_FILENAME);
 		fp = filp_open(fw_path, O_RDONLY, 0);
 		if (IS_ERR(fp)) {
-			dev_err(&client->dev,
-				"file %s open error:%d\n", fw_path, (s32)fp);
+			dev_err(&client->dev, "file %s open error\n", fw_path);
 			info->factory_info->cmd_state = 3;
 			goto err_open;
 		}
@@ -3097,8 +3099,7 @@ static void get_fw_ver_bin(void *device_data)
 			strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3124,8 +3125,7 @@ static void get_fw_ver_ic(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3144,8 +3144,7 @@ static void get_threshold(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3220,8 +3219,7 @@ static void get_chip_vendor(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3239,8 +3237,7 @@ static void get_config_ver(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3260,8 +3257,7 @@ static void get_chip_name(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3280,8 +3276,7 @@ static void get_x_num(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3300,8 +3295,7 @@ static void get_y_num(void *device_data)
 			strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3323,8 +3317,7 @@ static void not_support_cmd(void *device_data)
 	mutex_unlock(&finfo->cmd_lock);
 	info->factory_info->cmd_state = WAITING;
 
-	dev_info(&client->dev, "%s: \"%s(%d)\"\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3361,8 +3354,7 @@ static void get_reference(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3408,8 +3400,7 @@ static void run_preference_read(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: \"%s\"(%d)\n", __func__, finfo->cmd_buff,
-		strlen(finfo->cmd_buff));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3447,8 +3438,7 @@ static void get_preference(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3494,9 +3484,7 @@ static void run_delta_read(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	finfo->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: \"%s\"(%d)\n", __func__, finfo->cmd_buff,
-		strlen(finfo->cmd_buff));
-
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 	return;
 }
 
@@ -3533,8 +3521,7 @@ static void get_delta(void *device_data)
 		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
 	info->factory_info->cmd_state = OK;
 
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -3752,8 +3739,7 @@ static void glove_mode(void *device_data)
 	mutex_unlock(&finfo->cmd_lock);
 
 	finfo->cmd_state = WAITING;
-	dev_info(&client->dev, "%s: %s(%d)\n", __func__, finfo->cmd_buff,
-		strnlen(finfo->cmd_buff, sizeof(finfo->cmd_buff)));
+	dev_info(&client->dev, "%s: %s\n", __func__, finfo->cmd_buff);
 
 	return;
 }
@@ -4195,17 +4181,21 @@ static int ts_misc_fops_close(struct inode *inode, struct file *filp)
 static long ts_misc_fops_ioctl(struct file *filp,
 	unsigned int cmd, unsigned long arg)
 {
-	void __user *argp = (void __user *)arg;
 	struct raw_ioctl raw_ioctl;
 	u8 *u8Data;
 	int ret = 0;
 	size_t sz = 0;
-	u16 version;
+	//u16 version;
 	u16 mode;
 
 	struct reg_ioctl reg_ioctl;
 	u16 val;
 	int nval = 0;
+#ifdef CONFIG_COMPAT
+	void __user *argp = compat_ptr(arg);
+#else
+	void __user *argp = (void __user *)arg;
+#endif
 
 	if (misc_info == NULL)
 	{
@@ -4257,13 +4247,13 @@ static long ts_misc_fops_ioctl(struct file *filp,
 		if (copy_from_user(&sz, argp, sizeof(size_t)))
 			return -1;
 
-		printk(KERN_INFO "[zinitix_touch]: firmware size = %d\r\n", sz);
+		//printk(KERN_INFO "[zinitix_touch]: firmware size = %d\r\n", sz);
 		if (misc_info->cap_info.ic_fw_size != sz) {
 			pr_info("[zinitix_touch]: firmware size error\r\n");
 			return -1;
 		}
 		break;
-
+/*
 	case TOUCH_IOCTL_VARIFY_UPGRADE_DATA:
 		ts_select_type_hw(misc_info);
 		if (copy_from_user(m_pFirmware[m_FirmwareIdx],
@@ -4281,7 +4271,7 @@ static long ts_misc_fops_ioctl(struct file *filp,
 	case TOUCH_IOCTL_START_UPGRADE:
 		ts_select_type_hw(misc_info);
 		return ts_upgrade_sequence((u8*)m_pFirmware[m_FirmwareIdx]);
-
+*/
 	case TOUCH_IOCTL_GET_X_RESOLUTION:
 		ret = misc_info->pdata->x_resolution;
 		if (copy_to_user(argp, &ret, sizeof(ret)))
@@ -4394,7 +4384,11 @@ fail_hw_cal:
 
 		nval = (int)val;
 
-		if (copy_to_user(reg_ioctl.val, (u8 *)&nval, 4)) {
+#ifdef CONFIG_COMPAT
+		if (copy_to_user(compat_ptr(reg_ioctl.val), (u8 *)&nval, 4)) {
+#else
+		if (copy_to_user((void __user *)(reg_ioctl.val), (u8 *)&nval, 4)) {
+#endif
 			misc_info->work_state = NOTHING;
 			up(&misc_info->work_lock);
 			pr_info("[zinitix_touch] error : copy_to_user\n");
@@ -4427,7 +4421,11 @@ fail_hw_cal:
 			return -1;
 		}
 
-		if (copy_from_user(&val, reg_ioctl.val, 4)) {
+#ifdef CONFIG_COMPAT
+		if (copy_from_user(&val, compat_ptr(reg_ioctl.val), 4)) {
+#else
+		if (copy_from_user(&val, (void __user *)(reg_ioctl.val), 4)) {
+#endif
 			misc_info->work_state = NOTHING;
 			up(&misc_info->work_lock);
 			pr_info("[zinitix_touch] error : copy_from_user\n");
@@ -4524,8 +4522,13 @@ fail_hw_cal:
 		u8Data = (u8 *)&misc_info->cur_data[0];
 		if (raw_ioctl.sz > MAX_TRAW_DATA_SZ*2)
 			raw_ioctl.sz = MAX_TRAW_DATA_SZ*2;
-		if (copy_to_user(raw_ioctl.buf, (u8 *)u8Data,
+#ifdef CONFIG_COMPAT
+		if (copy_to_user(compat_ptr(raw_ioctl.buf), (u8 *)u8Data,
 			raw_ioctl.sz)) {
+#else
+		if (copy_to_user((void __user *)(raw_ioctl.buf), (u8 *)u8Data,
+			raw_ioctl.sz)) {
+#endif
 			up(&misc_info->raw_data_lock);
 			return -1;
 		}

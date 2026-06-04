@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -81,6 +81,13 @@ enum msm_vfe_frame_skip_pattern {
 	EVERY_6FRAME,
 	EVERY_7FRAME,
 	EVERY_8FRAME,
+	EVERY_9FRAME,
+	EVERY_10FRAME,
+	EVERY_11FRAME,
+	EVERY_12FRAME,
+	EVERY_13FRAME,
+	EVERY_14FRAME,
+	EVERY_15FRAME,
 	EVERY_16FRAME,
 	EVERY_32FRAME,
 	SKIP_ALL,
@@ -219,7 +226,7 @@ struct msm_vfe_axi_halt_cmd {
 
 struct msm_vfe_axi_reset_cmd {
 	uint32_t blocking; //Boolean whether stop camif is to be done
-	unsigned long frame_id;
+	uint32_t frame_id;
 };
 
 struct msm_vfe_axi_restart_cmd {
@@ -285,6 +292,7 @@ enum msm_vfe_reg_cfg_type {
 	VFE_HW_UPDATE_LOCK,
 	VFE_HW_UPDATE_UNLOCK,
 	SET_WM_UB_SIZE,
+	SET_UB_POLICY,
 };
 
 struct msm_vfe_cfg_cmd2 {
@@ -355,6 +363,7 @@ struct msm_isp_qbuf_info {
 struct msm_vfe_axi_src_state {
 	enum msm_vfe_input_src input_src;
 	uint32_t src_active;
+	uint32_t src_frame_id;
 };
 
 enum msm_isp_event_idx {
@@ -376,10 +385,9 @@ enum msm_isp_event_idx {
 #define ISP_EVENT_BASE            (V4L2_EVENT_PRIVATE_START)
 #define ISP_BUF_EVENT_BASE        (ISP_EVENT_BASE + (1 << ISP_EVENT_OFFSET))
 #define ISP_STATS_EVENT_BASE      (ISP_EVENT_BASE + (2 << ISP_EVENT_OFFSET))
-#define ISP_CAMIF_EVENT_BASE        (ISP_EVENT_BASE + (3 << ISP_EVENT_OFFSET))
-#define ISP_STREAM_EVENT_BASE        (ISP_EVENT_BASE + (4 << ISP_EVENT_OFFSET))
+#define ISP_CAMIF_EVENT_BASE      (ISP_EVENT_BASE + (3 << ISP_EVENT_OFFSET))
+#define ISP_STREAM_EVENT_BASE     (ISP_EVENT_BASE + (4 << ISP_EVENT_OFFSET))
 #define ISP_EVENT_REG_UPDATE      (ISP_EVENT_BASE + ISP_REG_UPDATE)
-
 #define ISP_EVENT_EPOCH_0         (ISP_EVENT_BASE + ISP_EPOCH_0)
 #define ISP_EVENT_EPOCH_1         (ISP_EVENT_BASE + ISP_EPOCH_1)
 #define ISP_EVENT_START_ACK       (ISP_EVENT_BASE + ISP_START_ACK)
@@ -444,8 +452,51 @@ struct msm_isp_event_data32 {
 	union {
 		struct msm_isp_stats_event stats;
 		struct msm_isp_buf_event buf_done;
-		struct msm_isp_error_info error_info;
 	} u;
+	uint32_t is_skip_pproc;
+};
+
+// v4l2_plane32 and v4l2_buffer32 are copied from v4l2-compat-ioctl32.c
+struct v4l2_plane32 {
+	__u32			bytesused;
+	__u32			length;
+	union {
+		__u32		mem_offset;
+		compat_long_t	userptr;
+		__s32		fd;
+	} m;
+	__u32			data_offset;
+	__u32			reserved[11];
+};
+
+struct v4l2_buffer32 {
+	__u32			index;
+	__u32			type;	/* enum v4l2_buf_type */
+	__u32			bytesused;
+	__u32			flags;
+	__u32			field;	/* enum v4l2_field */
+	struct compat_timeval	timestamp;
+	struct v4l2_timecode	timecode;
+	__u32			sequence;
+
+	/* memory location */
+	__u32			memory;	/* enum v4l2_memory */
+	union {
+		__u32           offset;
+		compat_long_t   userptr;
+		compat_caddr_t  planes;
+		__s32		fd;
+	} m;
+	__u32			length;
+	__u32			reserved2;
+	__u32			reserved;
+};
+
+struct msm_isp_qbuf_info32 {
+	uint32_t handle;
+	int32_t buf_idx;
+	struct v4l2_buffer32 buffer;
+	uint32_t dirty_buf;
 };
 #endif
 #define V4L2_PIX_FMT_QBGGR8  v4l2_fourcc('Q', 'B', 'G', '8')
@@ -512,6 +563,9 @@ struct msm_isp_event_data32 {
 	_IOWR('V', BASE_VIDIOC_PRIVATE+14, struct msm_vfe_cfg_cmd_list)
 
 #ifdef CONFIG_COMPAT
+#define VIDIOC_MSM_ISP_ENQUEUE_BUF_COMPAT \
+	_IOWR('V', BASE_VIDIOC_PRIVATE+2, struct msm_isp_qbuf_info32)
+
 #define VIDIOC_MSM_ISP_BUF_DONE \
 	_IOWR('V', BASE_VIDIOC_PRIVATE+21, struct msm_isp_event_data32)
 #else

@@ -596,7 +596,7 @@ static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 		printk(KERN_CRIT "CPU%u: stopping\n", cpu);
 		dump_stack();
 #ifdef CONFIG_SEC_DEBUG
-		sec_debug_dump_stack();
+		sec_debug_save_context();
 #endif
 		raw_spin_unlock(&stop_lock);
 	}

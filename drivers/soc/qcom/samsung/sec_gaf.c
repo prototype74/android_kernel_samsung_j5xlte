@@ -234,7 +234,6 @@ void sec_gaf_supply_rqinfo(unsigned short curr_offset, unsigned short rq_offset)
 	unsigned short *checksum = &(GAFINFO.GAFINFOCheckSum);
 	unsigned char *memory = (unsigned char *)&GAFINFO;
 	unsigned char address;
-	GAFINFO.phys_offset = PHYS_OFFSET,
 	/*
 	 *  Add GAForensic init for preventing symbol removal for optimization.
 	 */
@@ -261,15 +260,12 @@ void dump_one_task_info(struct task_struct *tsk, bool isMain)
 {
 	char stat_array[3] = {'R', 'S', 'D'};
 	char stat_ch;
-	char *ptr_thread_info = tsk->stack;
-	GAFINFO.phys_offset = PHYS_OFFSET,
 	stat_ch = tsk->state <= TASK_UNINTERRUPTIBLE ?
 	stat_array[tsk->state] : '?';
-	printk(KERN_INFO "%8d  %8d  %8d  %16lld  %c (%d)  %3d  %08x  %c %s\n",
+	printk(KERN_INFO "%8d  %8d  %8d  %16llu  %c (%d)  %lx  %c %s\n",
 		tsk->pid, (int)(tsk->utime), (int)(tsk->stime),
 		tsk->se.exec_start, stat_ch, (int)(tsk->state),
-		*(int *)(ptr_thread_info + GAFINFO.thread_info_struct_cpu),
-		(int)tsk, isMain ? '*' : ' ', tsk->comm);
+		(unsigned long)tsk, isMain ? '*' : ' ', tsk->comm);
 	if (tsk->state == TASK_RUNNING || tsk->state == TASK_UNINTERRUPTIBLE)
 		show_stack(tsk, NULL);
 }

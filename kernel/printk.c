@@ -423,10 +423,12 @@ static u32 log_next(u32 idx, bool logbuf)
 #if defined(CONFIG_OOPS_LOG_BUFFER)
 void oops_printk_start(void)
 {
-	raw_spin_lock_irq(&logbuf_lock);
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&logbuf_lock, flags);
 	if (log_oops_first_seq == ULLONG_MAX)
 		log_oops_first_seq = log_next_seq;
-	raw_spin_unlock_irq(&logbuf_lock);
+	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
 }
 
 static void log_oops_store(struct log *msg)
@@ -2157,9 +2159,8 @@ static void sec_log_add_on_bootup(void)
 }
 
 #ifdef CONFIG_SEC_DEBUG_SUBSYS
-void sec_debug_subsys_set_kloginfo(unsigned int *first_idx_paddr,
-	unsigned int *next_idx_paddr, unsigned int *log_paddr,
-	unsigned int *size)
+void sec_debug_subsys_set_kloginfo(uint64_t *first_idx_paddr,
+	uint64_t *next_idx_paddr, uint64_t *log_paddr, uint64_t *size)
 {
 	*first_idx_paddr = (unsigned int)__pa(&log_first_idx);
 	*next_idx_paddr = (unsigned int)__pa(&log_next_idx);
@@ -2250,8 +2251,8 @@ static int __init printk_remap_nocache(void)
 	pr_err("%s: nocache_base printk virtual addrs 0x%x phy=0x%llx\n",
 		__func__, (unsigned int)(nocache_base), sec_log_save_base);
 #else
-	pr_err("%s: nocache_base printk virtual addrs 0x%x phy=0x%lx\n",
-		__func__, (unsigned int)(nocache_base),
+	pr_err("%s: nocache_base printk virtual addrs 0x%lx phy=0x%lx\n",
+		__func__, (unsigned long)(nocache_base),
 		(unsigned long) sec_log_save_base);
 #endif
 
@@ -2659,8 +2660,10 @@ static int __cpuinit console_cpu_notify(struct notifier_block *self,
 	case CPU_DEAD:
 	case CPU_DOWN_FAILED:
 	case CPU_UP_CANCELED:
+#ifdef CONFIG_CONSOLE_FLUSH_ON_HOTPLUG
 		console_lock();
 		console_unlock();
+#endif
 		break;
 	case CPU_ONLINE:
 	case CPU_DYING:

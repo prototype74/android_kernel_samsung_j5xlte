@@ -92,7 +92,6 @@ typedef struct sAniSirGlobal *tpAniSirGlobal;
 #define SIR_MAX_24G_5G_CHANNEL_RANGE      166
 #define SIR_BCN_REPORT_MAX_BSS_DESC       4
 
-#define SIR_ADJACENT_CHANNEL_RSSI_DIFF_THRESHOLD 15
 
 #ifdef FEATURE_WLAN_BATCH_SCAN
 #define SIR_MAX_SSID_SIZE (32)
@@ -1131,7 +1130,11 @@ typedef struct sSirSmeJoinReq
     tSirSupChnl         supportedChannels;
     bool force_24ghz_in_ht20;
     tSirBssDescription  bssDescription;
-
+    /*
+     * WARNING: Pls make bssDescription as last variable in struct
+     * tSirSmeJoinReq as it has ieFields followed after this bss
+     * description. Adding a variable after this corrupts the ieFields
+     */
 } tSirSmeJoinReq, *tpSirSmeJoinReq;
 
 /// Definition for reponse message to previously issued join request
@@ -6103,11 +6106,12 @@ typedef struct
     tSirMacAddr bssid;
 }tSirDelAllTdlsPeers, *ptSirDelAllTdlsPeers;
 
-typedef void (*tSirMonModeCb)(void *context);
+typedef void (*tSirMonModeCb)(tANI_U32 *magic, struct completion *cmpVar);
 typedef struct
 {
+    tANI_U32 *magic;
+    struct completion *cmpVar;
     void *data;
-    void *context;
     tSirMonModeCb callback;
 }tSirMonModeReq, *ptSirMonModeReq;
 

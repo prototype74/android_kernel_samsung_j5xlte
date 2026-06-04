@@ -61,7 +61,9 @@ Copyright (C) 2012, Samsung Electronics. All rights reserved.
 #include "../../mdss/mdss_dsi.h"
 #include "../../mdss/mdss_debug.h"
 
-#define LCD_DEBUG(X, ...) pr_info("[MDSS]%s:"X, __func__, ## __VA_ARGS__);
+#define LCD_DEBUG(X, ...) pr_debug("[MDSS] %s : "X, __func__, ## __VA_ARGS__)
+#define LCD_INFO(X, ...) pr_info("[MDSS] %s : "X, __func__, ## __VA_ARGS__)
+#define LCD_ERR(X, ...) pr_err("[MDSS] %s : "X, __func__, ## __VA_ARGS__)
 
 #define MAX_PANEL_NAME_SIZE 100
 #define DEFAULT_BRIGHTNESS 255
@@ -489,6 +491,16 @@ struct samsung_register_dump_info {
 	struct samsung_register_info dsi_phy;
 };
 
+struct samsung_display_debug_data {
+	struct dentry *root;
+	struct dentry *dump;
+	struct dentry *hw_info;
+	struct dentry *display_status;
+
+	bool print_cmds;
+	bool panic_on_pptimeout;
+};
+
 struct samsung_display_driver_data {
 	/*
 	*	PANEL COMMON DATA
@@ -496,6 +508,7 @@ struct samsung_display_driver_data {
 	struct mutex vdd_lock;
 	struct mutex vdd_blank_unblank_lock;
 	struct mutex vdd_hall_ic_lock;
+	struct samsung_display_debug_data *debug_data;
 
 	int vdd_blank_mode[SUPPORT_PANEL_COUNT];
 
@@ -643,7 +656,8 @@ int mdss_panel_attach_set(struct mdss_dsi_ctrl_pdata *ctrl, int status);
 void mdss_samsung_dump_regs(void);
 void mdss_samsung_dsi_dump_regs(int dsi_num);
 void mdss_mdp_underrun_dump_info(void);
-void mdss_samsung_dsi_te_check(void);
+int mdss_samsung_read_rddpm(void);
+int mdss_samsung_dsi_te_check(void);
 void mdss_samsung_fence_dump(struct sync_fence *fence);
 
 /* BRIGHTNESS RELATED FUNCTION */

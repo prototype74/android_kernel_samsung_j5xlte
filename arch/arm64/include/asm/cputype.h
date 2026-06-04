@@ -32,9 +32,6 @@
 #define MPIDR_AFFINITY_LEVEL(mpidr, level) \
 	((mpidr >> MPIDR_LEVEL_SHIFT(level)) & MPIDR_LEVEL_MASK)
 
-#define MPIDR_AFF_MASK(level) \
-	((u64)MPIDR_LEVEL_MASK << MPIDR_LEVEL_SHIFT(level))
-
 #define read_cpuid(reg) ({						\
 	u64 __val;							\
 	asm("mrs	%0, " #reg : "=r" (__val));			\
@@ -82,6 +79,8 @@ static inline u32 __attribute_const__ read_cpuid_cachetype(void)
 {
 	return read_cpuid(CTR_EL0);
 }
+
+void cpuinfo_store_cpu(void);
 
 #endif /* __ASSEMBLY__ */
 

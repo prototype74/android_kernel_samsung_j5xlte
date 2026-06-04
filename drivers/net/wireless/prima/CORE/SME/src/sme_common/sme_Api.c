@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -2671,6 +2671,7 @@ eHalStatus sme_ProcessMsg(tHalHandle hHal, vos_msg_t* pMsg)
                 if(pMsg->bodyptr)
                 {
                    tSirSmeCoexInd *pSmeCoexInd = (tSirSmeCoexInd *)pMsg->bodyptr;
+                   vos_msg_t vosMessage = {0};
 
                    if (pSmeCoexInd->coexIndType == SIR_COEX_IND_TYPE_DISABLE_AGGREGATION_IN_2p4)
                    {
@@ -2679,6 +2680,9 @@ eHalStatus sme_ProcessMsg(tHalHandle hHal, vos_msg_t* pMsg)
                        pMac->isCoexScoIndSet = 1;
                        pMac->scan.fRestartIdleScan = eANI_BOOLEAN_FALSE;
                        pMac->scan.fCancelIdleScan = eANI_BOOLEAN_TRUE;
+
+                       vosMessage.type = eWNI_SME_STA_DEL_BA_REQ;
+                       vos_mq_post_message(VOS_MQ_ID_PE, &vosMessage);
                    }
                    else if (pSmeCoexInd->coexIndType == SIR_COEX_IND_TYPE_ENABLE_AGGREGATION_IN_2p4)
                    {
@@ -2687,6 +2691,18 @@ eHalStatus sme_ProcessMsg(tHalHandle hHal, vos_msg_t* pMsg)
                        sme_RequestBmps(hHal, NULL, NULL);
                        pMac->scan.fRestartIdleScan = eANI_BOOLEAN_TRUE;
                        pMac->scan.fCancelIdleScan = eANI_BOOLEAN_FALSE;
+
+                       /*
+                        * If aggregation during SCO is enabled, there is a
+                        * possibility for an active BA session. This session
+                        * should be deleted on receiving enable aggregation
+                        * indication and block ack buffer size should be reset
+                        * to default.
+                        */
+                       if (pMac->roam.configParam.agg_btc_sco_enabled) {
+                           vosMessage.type = eWNI_SME_STA_DEL_BA_REQ;
+                           vos_mq_post_message(VOS_MQ_ID_PE, &vosMessage);
+                       }
                    }
 
                    status = btcHandleCoexInd((void *)pMac, pMsg->bodyptr);
@@ -14212,7 +14228,7 @@ tANI_BOOLEAN sme_handleSetFccChannel(tHalHandle hHal, tANI_U8 fcc_constraint,
             pMac->scan.defer_update_channel_list = true;
         } else {
             /* update the channel list to the firmware */
-            csrUpdateFCCChannelList(pMac);
+            csrUpdateChannelList(pMac);
         }
     }
 
@@ -15225,11 +15241,4 @@ sme_get_connect_strt_time(tHalHandle hal, uint8_t session_id)
    }
    session = CSR_GET_SESSION(mac_ctx, session_id);
    return session->connect_req_start_time;
-}
-
-void sme_request_imps(tHalHandle hal)
-{
-   tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
-
-   csrScanStartIdleScan(mac_ctx);
 }

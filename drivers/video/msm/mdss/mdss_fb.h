@@ -19,6 +19,7 @@
 #include <linux/msm_mdp.h>
 #include <linux/types.h>
 #include <linux/notifier.h>
+#include <linux/leds.h>
 
 #include "mdss_panel.h"
 #include "mdss_mdp_splash_logo.h"
@@ -33,11 +34,17 @@
 #define MSM_FB_ENABLE_DBGFS
 #define WAIT_FENCE_FIRST_TIMEOUT (3 * MSEC_PER_SEC)
 #define WAIT_FENCE_FINAL_TIMEOUT (7 * MSEC_PER_SEC)
-/* Display op timeout should be greater than the total timeout but not
- * unreasonably large. Set to 1s more than first wait + final wait which
- * are already quite long and proceed without any further waits. */
+#define WAIT_MAX_FENCE_TIMEOUT (WAIT_FENCE_FIRST_TIMEOUT + \
+					WAIT_FENCE_FINAL_TIMEOUT)
+#define WAIT_MIN_FENCE_TIMEOUT  (1)
+/*
+ * Display op timeout should be greater than total time it can take for
+ * a display thread to commit one frame. One of the largest time consuming
+ * activity performed by display thread is waiting for fences. So keeping
+ * that as a reference and add additional 20s to sustain system holdups.
+ */
 #define WAIT_DISP_OP_TIMEOUT (WAIT_FENCE_FIRST_TIMEOUT + \
-		WAIT_FENCE_FINAL_TIMEOUT + 1)
+		WAIT_FENCE_FINAL_TIMEOUT + (20 * MSEC_PER_SEC))
 
 #ifndef MAX
 #define  MAX(x, y) (((x) > (y)) ? (x) : (y))
@@ -84,15 +91,41 @@ enum mdp_notify_event {
 /**
  * enum mdp_split_mode - Lists the possible split modes in the device
  *
- * @MDP_SPLIT_MODE_NONE: Not a Dual display, no panel split.
- * @MDP_SPLIT_MODE_LM:   Dual Display is true, Split across layer mixers
- * @MDP_SPLIT_MODE_DST:  Dual Display is true, Split is in the Destination
- *                      i.e ping pong split.
+ * @MDP_SPLIT_MODE_NONE: Single physical display with single ctl path
+ *                       and single layer mixer.
+ *                       i.e. 1080p single DSI with single LM.
+ * #MDP_DUAL_LM_SINGLE_DISPLAY: Single physical display with signle ctl
+ *                              path but two layer mixers.
+ *                              i.e. WQXGA eDP or 4K HDMI primary or 1080p
+ *                                   single DSI with split LM to reduce power.
+ * @MDP_DUAL_LM_DUAL_DISPLAY: Two physically separate displays with two
+ *                            separate but synchronized ctl paths. Each ctl
+ *                            path with its own layer mixer.
+ *                            i.e. 1440x2560 with two DSI interfaces.
+ * @MDP_PINGPONG_SPLIT: Two physically separate display but single ctl path with
+ *                      single layer mixer. Data is split at pingpong module.
+ *                      i.e. 1440x2560 on chipsets with single DSI interface.
  */
 enum mdp_split_mode {
 	MDP_SPLIT_MODE_NONE,
-	MDP_SPLIT_MODE_LM,
-	MDP_SPLIT_MODE_DST,
+	MDP_DUAL_LM_SINGLE_DISPLAY,
+	MDP_DUAL_LM_DUAL_DISPLAY,
+	MDP_PINGPONG_SPLIT,
+};
+
+/**
+ * enum dyn_mode_switch_state - Lists next stage for dynamic mode switch work
+ *
+ * @MDSS_MDP_NO_UPDATE_REQUESTED: incoming frame is processed normally
+ * @MDSS_MDP_WAIT_FOR_PREP: Waiting for OVERLAY_PREPARE to be called
+ * @MDSS_MDP_WAIT_FOR_SYNC: Waiting for BUFFER_SYNC to be called
+ * @MDSS_MDP_WAIT_FOR_COMMIT: Waiting for COMMIT to be called
+ */
+enum dyn_mode_switch_state {
+	MDSS_MDP_NO_UPDATE_REQUESTED,
+	MDSS_MDP_WAIT_FOR_PREP,
+	MDSS_MDP_WAIT_FOR_SYNC,
+	MDSS_MDP_WAIT_FOR_COMMIT,
 };
 
 /**
@@ -157,6 +190,12 @@ struct msm_mdp_interface {
 	/* called to release resources associated to the process */
 	int (*release_fnc)(struct msm_fb_data_type *mfd, bool release_all,
 				uint32_t pid);
+	void (*pend_mode_switch)(struct msm_fb_data_type *mfd,
+					bool pend_switch);
+	int (*mode_switch)(struct msm_fb_data_type *mfd,
+					u32 mode);
+	int (*mode_switch_post)(struct msm_fb_data_type *mfd,
+					u32 mode);
 	int (*kickoff_fnc)(struct msm_fb_data_type *mfd,
 					struct mdp_display_commit *data);
 	int (*ioctl_handler)(struct msm_fb_data_type *mfd, u32 cmd, void *arg);
@@ -175,7 +214,8 @@ struct msm_mdp_interface {
 	struct msm_sync_pt_data *(*get_sync_fnc)(struct msm_fb_data_type *mfd,
 				const struct mdp_buf_sync *buf_sync);
 	void (*check_dsi_status)(struct work_struct *work, uint32_t interval);
-	int (*configure_panel)(struct msm_fb_data_type *mfd, int mode);
+	int (*configure_panel)(struct msm_fb_data_type *mfd, int mode,
+				int dest_ctrl);
 	void *private1;
 };
 
@@ -289,10 +329,14 @@ struct msm_fb_data_type {
 
 	u32 wait_for_kickoff;
 	u32 thermal_level;
-	int doze_mode;
+	struct led_trigger *boot_notification_led;
 
 	int fb_mmap_type;
-	struct led_trigger *boot_notification_led;
+
+	/* Following is used for dynamic mode switch */
+	enum dyn_mode_switch_state switch_state;
+	u32 switch_new_mode;
+	struct mutex switch_lock;
 };
 
 static inline void mdss_fb_update_notify_update(struct msm_fb_data_type *mfd)
@@ -314,20 +358,24 @@ static inline void mdss_fb_update_notify_update(struct msm_fb_data_type *mfd)
 	}
 }
 
-/* Function returns true for either Layer Mixer split or Ping pong split */
+/* Function returns true for either any kind of dual display */
 static inline bool is_panel_split(struct msm_fb_data_type *mfd)
 {
-	return (mfd && (!(mfd->split_mode == MDP_SPLIT_MODE_NONE)));
+	return mfd &&
+	       (mfd->split_mode == MDP_DUAL_LM_DUAL_DISPLAY ||
+		mfd->split_mode == MDP_PINGPONG_SPLIT);
 }
-/* Function returns true, if Layer Mixer split is Set*/
+/* Function returns true, if Layer Mixer split is Set */
 static inline bool is_split_lm(struct msm_fb_data_type *mfd)
 {
-	return (mfd && (mfd->split_mode == MDP_SPLIT_MODE_LM));
+	return mfd &&
+	       (mfd->split_mode == MDP_DUAL_LM_DUAL_DISPLAY ||
+		mfd->split_mode == MDP_DUAL_LM_SINGLE_DISPLAY);
 }
 /* Function returns true, if Ping pong split is Set*/
-static inline bool is_split_dst(struct msm_fb_data_type *mfd)
+static inline bool is_pingpong_split(struct msm_fb_data_type *mfd)
 {
-	return (mfd && (mfd->split_mode == MDP_SPLIT_MODE_DST));
+	return mfd && (mfd->split_mode == MDP_PINGPONG_SPLIT);
 }
 
 static inline bool mdss_fb_is_power_off(struct msm_fb_data_type *mfd)

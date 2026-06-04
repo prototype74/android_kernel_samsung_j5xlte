@@ -231,6 +231,16 @@ void print_cfs_rq(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
 			cfs_rq->throttled);
 	SEQ_printf(m, "  .%-30s: %d\n", "throttle_count",
 			cfs_rq->throttle_count);
+	SEQ_printf(m, "  .%-30s: %d\n", "runtime_enabled",
+			cfs_rq->runtime_enabled);
+#ifdef CONFIG_SCHED_HMP
+	SEQ_printf(m, "  .%-30s: %d\n", "nr_big_tasks",
+			cfs_rq->hmp_stats.nr_big_tasks);
+	SEQ_printf(m, "  .%-30s: %d\n", "nr_small_tasks",
+			cfs_rq->hmp_stats.nr_small_tasks);
+	SEQ_printf(m, "  .%-30s: %llu\n", "cumulative_runnable_avg",
+			cfs_rq->hmp_stats.cumulative_runnable_avg);
+#endif
 #endif
 
 	print_cfs_group_stats(m, cpu, cfs_rq->tg);
@@ -306,16 +316,20 @@ do {									\
 	P(cpu_power);
 #endif
 #ifdef CONFIG_SCHED_HMP
-	P(load_scale_factor);
-	P(capacity);
-	P(max_possible_capacity);
-	P(efficiency);
-	P(cur_freq);
-	P(max_freq);
+	P(mostly_idle_load);
+	P(mostly_idle_nr_run);
+	P(cluster->load_scale_factor);
+	P(cluster->capacity);
+	P(cluster->max_possible_capacity);
+	P(cluster->efficiency);
+	P(cluster->cur_freq);
+	P(cluster->max_freq);
 #endif
 #ifdef CONFIG_SCHED_HMP
-	P(nr_big_tasks);
-	P(nr_small_tasks);
+	P(hmp_stats.nr_big_tasks);
+	P(hmp_stats.nr_small_tasks);
+	SEQ_printf(m, "  .%-30s: %llu\n", "hmp_stats.cumulative_runnable_avg",
+			rq->hmp_stats.cumulative_runnable_avg);
 #endif
 #undef P
 #undef PN
@@ -398,7 +412,6 @@ static void sched_debug_header(struct seq_file *m)
 	P(sysctl_sched_child_runs_first);
 	P(sysctl_sched_features);
 #ifdef CONFIG_SCHED_HMP
-	P(sched_mostly_idle_load);
 	P(sched_small_task);
 	P(sched_upmigrate);
 	P(sched_downmigrate);

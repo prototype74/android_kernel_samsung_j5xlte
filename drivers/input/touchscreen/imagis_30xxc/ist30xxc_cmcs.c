@@ -1024,7 +1024,7 @@ ssize_t ist30xx_cmcs_sdcard_show(struct device *dev,
 		 IST30XX_CMCS_NAME);
 	fp = filp_open(fw_path, O_RDONLY, 0);
 	if (IS_ERR(fp)) {
-		tsp_info("file %s open error:%d\n", fw_path, (s32)fp);
+		tsp_info("file %s open error:%d\n", fw_path, PTR_ERR(fp));
 		ret = -ENOENT;
 		goto err_file_open;
 	}

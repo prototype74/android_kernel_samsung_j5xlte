@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,6 +35,10 @@
 /* Max ADC code represents full-scale range of 1.8V */
 #define QPNP_VADC_MAX_ADC_CODE			0xA800
 #define KELVINMIL_DEGMIL	273160
+#define QPNP_VADC_LDO_VOLTAGE_MIN	1800000
+#define QPNP_VADC_LDO_VOLTAGE_MAX	1800000
+#define QPNP_VADC_OK_VOLTAGE_MIN	1000000
+#define QPNP_VADC_OK_VOLTAGE_MAX	1000000
 
 /* Units for temperature below (on x axis) is in 0.1DegC as
    required by the battery driver. Note the resolution used
@@ -348,6 +352,38 @@ static const struct qpnp_vadc_map_pt adcmap_qrd_skuh_btm_threshold[] = {
 	{840,	530},
 	{860,	524},
 	{880,	520},
+};
+
+static const struct qpnp_vadc_map_pt adcmap_qrd_skut1_btm_threshold[] = {
+	{-400,	1759},
+	{-350,	1742},
+	{-300,	1720},
+	{-250,	1691},
+	{-200,	1654},
+	{-150,	1619},
+	{-100,	1556},
+	{-50,	1493},
+	{0,	1422},
+	{50,	1345},
+	{100,	1264},
+	{150,	1180},
+	{200,	1097},
+	{250,	1017},
+	{300,	942},
+	{350,	873},
+	{400,	810},
+	{450,	754},
+	{500,	706},
+	{550,	664},
+	{600,	627},
+	{650,	596},
+	{700,	570},
+	{750,	547},
+	{800,	528},
+	{850,	512},
+	{900,	499},
+	{950,	487},
+	{1000,	477},
 };
 
 static const struct qpnp_vadc_map_pt adcmap_qrd_skuc_btm_threshold[] = {
@@ -1057,6 +1093,25 @@ int32_t qpnp_adc_scale_qrd_skuh_batt_therm(struct qpnp_vadc_chip *chip,
 }
 EXPORT_SYMBOL(qpnp_adc_scale_qrd_skuh_batt_therm);
 
+int32_t qpnp_adc_scale_qrd_skut1_batt_therm(struct qpnp_vadc_chip *chip,
+		int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{
+	int64_t bat_voltage = 0;
+
+	bat_voltage = qpnp_adc_scale_ratiometric_calib(adc_code,
+			adc_properties, chan_properties);
+
+	return qpnp_adc_map_temp_voltage(
+			adcmap_qrd_skut1_btm_threshold,
+			ARRAY_SIZE(adcmap_qrd_skut1_btm_threshold),
+			bat_voltage,
+			&adc_chan_result->physical);
+}
+EXPORT_SYMBOL(qpnp_adc_scale_qrd_skut1_batt_therm);
+
 int32_t qpnp_adc_scale_qrd_skuc_batt_therm(struct qpnp_vadc_chip *chip,
 			int32_t adc_code,
 			const struct qpnp_adc_properties *adc_properties,
@@ -1591,6 +1646,59 @@ int32_t qpnp_adc_qrd_skuh_btm_scaler(struct qpnp_vadc_chip *chip,
 }
 EXPORT_SYMBOL(qpnp_adc_qrd_skuh_btm_scaler);
 
+int32_t qpnp_adc_qrd_skut1_btm_scaler(struct qpnp_vadc_chip *chip,
+		struct qpnp_adc_tm_btm_param *param,
+		uint32_t *low_threshold, uint32_t *high_threshold)
+{
+	struct qpnp_vadc_linear_graph btm_param;
+	int64_t low_output = 0, high_output = 0;
+	int rc = 0;
+
+	qpnp_get_vadc_gain_and_offset(chip, &btm_param, CALIB_RATIOMETRIC);
+
+	pr_debug("warm_temp:%d and cool_temp:%d\n", param->high_temp,
+				param->low_temp);
+	rc = qpnp_adc_map_voltage_temp(
+		adcmap_qrd_skut1_btm_threshold,
+		ARRAY_SIZE(adcmap_qrd_skut1_btm_threshold),
+		(param->low_temp),
+		&low_output);
+	if (rc) {
+		pr_debug("low_temp mapping failed with %d\n", rc);
+		return rc;
+	}
+
+	pr_debug("low_output:%lld\n", low_output);
+	low_output *= btm_param.dy;
+	do_div(low_output, btm_param.adc_vref);
+	low_output += btm_param.adc_gnd;
+
+	rc = qpnp_adc_map_voltage_temp(
+		adcmap_qrd_skut1_btm_threshold,
+		ARRAY_SIZE(adcmap_qrd_skut1_btm_threshold),
+		(param->high_temp),
+		&high_output);
+	if (rc) {
+		pr_debug("high temp mapping failed with %d\n", rc);
+		return rc;
+	}
+
+	pr_debug("high_output:%lld\n", high_output);
+	high_output *= btm_param.dy;
+	do_div(high_output, btm_param.adc_vref);
+	high_output += btm_param.adc_gnd;
+
+	/* btm low temperature correspondes to high voltage threshold */
+	*low_threshold = high_output;
+	/* btm high temperature correspondes to low voltage threshold */
+	*high_threshold = low_output;
+
+	pr_debug("high_volt:%d, low_volt:%d\n", *high_threshold,
+				*low_threshold);
+	return 0;
+}
+EXPORT_SYMBOL(qpnp_adc_qrd_skut1_btm_scaler);
+
 int32_t qpnp_adc_qrd_skue_btm_scaler(struct qpnp_vadc_chip *chip,
 		struct qpnp_adc_tm_btm_param *param,
 		uint32_t *low_threshold, uint32_t *high_threshold)
@@ -1710,6 +1818,51 @@ int32_t qpnp_vadc_check_result(int32_t *data, bool recalib_check)
 	return 0;
 }
 EXPORT_SYMBOL(qpnp_vadc_check_result);
+
+int32_t qpnp_adc_enable_voltage(struct qpnp_adc_drv *adc)
+{
+	int rc = 0;
+
+	if (adc->hkadc_ldo) {
+		rc = regulator_enable(adc->hkadc_ldo);
+		if (rc < 0) {
+			pr_err("Failed to enable hkadc ldo\n");
+			return rc;
+		}
+	}
+
+	if (adc->hkadc_ldo_ok) {
+		rc = regulator_enable(adc->hkadc_ldo_ok);
+		if (rc < 0) {
+			pr_err("Failed to enable hkadc ok signal\n");
+			return rc;
+		}
+	}
+
+	return rc;
+}
+EXPORT_SYMBOL(qpnp_adc_enable_voltage);
+
+void qpnp_adc_disable_voltage(struct qpnp_adc_drv *adc)
+{
+	if (adc->hkadc_ldo)
+		regulator_disable(adc->hkadc_ldo);
+
+	if (adc->hkadc_ldo_ok)
+		regulator_disable(adc->hkadc_ldo_ok);
+
+}
+EXPORT_SYMBOL(qpnp_adc_disable_voltage);
+
+void qpnp_adc_free_voltage_resource(struct qpnp_adc_drv *adc)
+{
+	if (adc->hkadc_ldo)
+		regulator_put(adc->hkadc_ldo);
+
+	if (adc->hkadc_ldo_ok)
+		regulator_put(adc->hkadc_ldo_ok);
+}
+EXPORT_SYMBOL(qpnp_adc_free_voltage_resource);
 
 int qpnp_adc_get_revid_version(struct device *dev)
 {
@@ -1993,6 +2146,47 @@ int32_t qpnp_adc_get_devicetree_data(struct spmi_device *spmi,
 	}
 
 	init_completion(&adc_qpnp->adc_rslt_completion);
+
+	if (of_get_property(node, "hkadc_ldo-supply", NULL)) {
+		adc_qpnp->hkadc_ldo = regulator_get(&spmi->dev,
+				"hkadc_ldo");
+		if (IS_ERR(adc_qpnp->hkadc_ldo)) {
+			pr_err("hkadc_ldo-supply node not found\n");
+			return -EINVAL;
+		}
+
+		rc = regulator_set_voltage(adc_qpnp->hkadc_ldo,
+				QPNP_VADC_LDO_VOLTAGE_MIN,
+				QPNP_VADC_LDO_VOLTAGE_MAX);
+		if (rc < 0) {
+			pr_err("setting voltage for hkadc_ldo failed\n");
+			return rc;
+		}
+
+		rc = regulator_set_optimum_mode(adc_qpnp->hkadc_ldo,
+				100000);
+		if (rc < 0) {
+			pr_err("hkadc_ldo optimum mode failed%d\n", rc);
+			return rc;
+		}
+	}
+
+	if (of_get_property(node, "hkadc_ok-supply", NULL)) {
+		adc_qpnp->hkadc_ldo_ok = regulator_get(&spmi->dev,
+				"hkadc_ok");
+		if (IS_ERR(adc_qpnp->hkadc_ldo_ok)) {
+			pr_err("hkadc_ok node not found\n");
+			return -EINVAL;
+		}
+
+		rc = regulator_set_voltage(adc_qpnp->hkadc_ldo_ok,
+				QPNP_VADC_OK_VOLTAGE_MIN,
+				QPNP_VADC_OK_VOLTAGE_MAX);
+		if (rc < 0) {
+			pr_err("setting voltage for hkadc-ldo-ok failed\n");
+			return rc;
+		}
+	}
 
 	return 0;
 }

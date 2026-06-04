@@ -40,9 +40,14 @@ extern unsigned int sysctl_sched_wakeup_load_threshold;
 extern unsigned int sysctl_sched_window_stats_policy;
 extern unsigned int sysctl_sched_account_wait_time;
 extern unsigned int sysctl_sched_ravg_hist_size;
+extern unsigned int sysctl_sched_cpu_high_irqload;
 extern unsigned int sysctl_sched_freq_account_wait_time;
 extern unsigned int sysctl_sched_migration_fixup;
 extern unsigned int sysctl_sched_heavy_task_pct;
+extern unsigned int sysctl_sched_min_runtime;
+extern unsigned int sysctl_sched_enable_power_aware;
+extern unsigned int sysctl_sched_enable_colocation;
+extern unsigned int sysctl_sched_enable_thread_grouping;
 
 #if defined(CONFIG_SCHED_FREQ_INPUT) || defined(CONFIG_SCHED_HMP)
 extern unsigned int sysctl_sched_init_task_load_pct;
@@ -55,16 +60,17 @@ extern int sysctl_sched_freq_dec_notify;
 
 #ifdef CONFIG_SCHED_HMP
 extern unsigned int sysctl_sched_spill_nr_run;
-extern unsigned int sysctl_sched_mostly_idle_nr_run;
 extern unsigned int sysctl_sched_spill_load_pct;
-extern unsigned int sysctl_sched_mostly_idle_load_pct;
 extern unsigned int sysctl_sched_small_task_pct;
 extern unsigned int sysctl_sched_upmigrate_pct;
 extern unsigned int sysctl_sched_downmigrate_pct;
 extern int sysctl_sched_upmigrate_min_nice;
-extern unsigned int sysctl_sched_prefer_idle;
+extern unsigned int sysctl_sched_grp_upmigrate_pct;
+extern unsigned int sysctl_sched_grp_downmigrate_pct;
+extern unsigned int sysctl_sched_grp_task_active_windows;
 extern unsigned int sysctl_sched_powerband_limit_pct;
 extern unsigned int sysctl_sched_boost;
+extern unsigned int sysctl_power_aware_timer_migration;
 
 #else /* CONFIG_SCHED_HMP */
 
@@ -138,6 +144,15 @@ extern unsigned int sysctl_sched_cfs_bandwidth_slice;
 
 #ifdef CONFIG_SCHED_AUTOGROUP
 extern unsigned int sysctl_sched_autogroup_enabled;
+#endif
+
+#ifdef CONFIG_SCHEDSTATS
+extern unsigned int sysctl_sched_latency_panic_threshold;
+extern unsigned int sysctl_sched_latency_warn_threshold;
+
+extern int sched_max_latency_sysctl(struct ctl_table *table, int write,
+				    void __user *buffer, size_t *lenp,
+				    loff_t *ppos);
 #endif
 
 extern int sched_rr_timeslice;

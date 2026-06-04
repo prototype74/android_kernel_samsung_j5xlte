@@ -11,6 +11,14 @@ enum aspect_ratio {
 	HDMI_RES_AR_MAX,
 };
 
+enum msm_hdmi_s3d_mode {
+	HDMI_S3D_NONE,
+	HDMI_S3D_SIDE_BY_SIDE,
+	HDMI_S3D_TOP_AND_BOTTOM,
+	HDMI_S3D_FRAME_PACKING,
+	HDMI_S3D_MAX,
+};
+
 struct msm_hdmi_mode_timing_info {
 	uint32_t	video_format;
 	uint32_t	active_h;
@@ -31,6 +39,8 @@ struct msm_hdmi_mode_timing_info {
 	uint32_t	supported;
 	enum aspect_ratio ar;
 };
+
+#define MSM_HDMI_INIT_RES_PAGE          1
 
 #define MSM_HDMI_MODES_CEA		(1 << 0)
 #define MSM_HDMI_MODES_XTND		(1 << 1)
@@ -172,7 +182,19 @@ struct msm_hdmi_mode_timing_info {
 #define HDMI_VFRMT_1920x1200p60_16_10	ETIII_OFF(8)
 #define ETIII_VFRMT_END			HDMI_VFRMT_1920x1200p60_16_10
 
-#define HDMI_VFRMT_MAX			(ETIII_VFRMT_END + 1)
+#define RESERVE_OFF(x)			(ETIII_VFRMT_END + x)
+
+#define HDMI_VFRMT_RESERVE1		RESERVE_OFF(1)
+#define HDMI_VFRMT_RESERVE2		RESERVE_OFF(2)
+#define HDMI_VFRMT_RESERVE3		RESERVE_OFF(3)
+#define HDMI_VFRMT_RESERVE4		RESERVE_OFF(4)
+#define HDMI_VFRMT_RESERVE5		RESERVE_OFF(5)
+#define HDMI_VFRMT_RESERVE6		RESERVE_OFF(6)
+#define HDMI_VFRMT_RESERVE7		RESERVE_OFF(7)
+#define HDMI_VFRMT_RESERVE8		RESERVE_OFF(8)
+#define RESERVE_VFRMT_END		HDMI_VFRMT_RESERVE8
+
+#define HDMI_VFRMT_MAX			(RESERVE_VFRMT_END + 1)
 #define HDMI_VFRMT_FORCE_32BIT		0x7FFFFFFF
 
 /* Timing information for supported modes */
@@ -382,82 +404,9 @@ do {	\
 	}	\
 } while (0)
 
-static inline const char *msm_hdmi_mode_2string(uint32_t mode)
-{
-	switch (mode) {
-	case HDMI_VFRMT_UNKNOWN:		return "Unknown";
-	case HDMI_VFRMT_640x480p60_4_3:		return "640x480 p60 4/3";
-	case HDMI_VFRMT_720x480p60_4_3:		return "720x480 p60 4/3";
-	case HDMI_VFRMT_720x480p60_16_9:	return "720x480 p60 16/9";
-	case HDMI_VFRMT_1280x720p60_16_9:	return "1280x 720 p60 16/9";
-	case HDMI_VFRMT_1920x1080i60_16_9:	return "1920x1080 i60 16/9";
-	case HDMI_VFRMT_1440x480i60_4_3:	return "1440x480 i60 4/3";
-	case HDMI_VFRMT_1440x480i60_16_9:	return "1440x480 i60 16/9";
-	case HDMI_VFRMT_1440x240p60_4_3:	return "1440x240 p60 4/3";
-	case HDMI_VFRMT_1440x240p60_16_9:	return "1440x240 p60 16/9";
-	case HDMI_VFRMT_2880x480i60_4_3:	return "2880x480 i60 4/3";
-	case HDMI_VFRMT_2880x480i60_16_9:	return "2880x480 i60 16/9";
-	case HDMI_VFRMT_2880x240p60_4_3:	return "2880x240 p60 4/3";
-	case HDMI_VFRMT_2880x240p60_16_9:	return "2880x240 p60 16/9";
-	case HDMI_VFRMT_1440x480p60_4_3:	return "1440x480 p60 4/3";
-	case HDMI_VFRMT_1440x480p60_16_9:	return "1440x480 p60 16/9";
-	case HDMI_VFRMT_1920x1080p60_16_9:	return "1920x1080 p60 16/9";
-	case HDMI_VFRMT_720x576p50_4_3:		return "720x576 p50 4/3";
-	case HDMI_VFRMT_720x576p50_16_9:	return "720x576 p50 16/9";
-	case HDMI_VFRMT_1280x720p50_16_9:	return "1280x720 p50 16/9";
-	case HDMI_VFRMT_1920x1080i50_16_9:	return "1920x1080 i50 16/9";
-	case HDMI_VFRMT_1440x576i50_4_3:	return "1440x576 i50 4/3";
-	case HDMI_VFRMT_1440x576i50_16_9:	return "1440x576 i50 16/9";
-	case HDMI_VFRMT_1440x288p50_4_3:	return "1440x288 p50 4/3";
-	case HDMI_VFRMT_1440x288p50_16_9:	return "1440x288 p50 16/9";
-	case HDMI_VFRMT_2880x576i50_4_3:	return "2880x576 i50 4/3";
-	case HDMI_VFRMT_2880x576i50_16_9:	return "2880x576 i50 16/9";
-	case HDMI_VFRMT_2880x288p50_4_3:	return "2880x288 p50 4/3";
-	case HDMI_VFRMT_2880x288p50_16_9:	return "2880x288 p50 16/9";
-	case HDMI_VFRMT_1440x576p50_4_3:	return "1440x576 p50 4/3";
-	case HDMI_VFRMT_1440x576p50_16_9:	return "1440x576 p50 16/9";
-	case HDMI_VFRMT_1920x1080p50_16_9:	return "1920x1080 p50 16/9";
-	case HDMI_VFRMT_1920x1080p24_16_9:	return "1920x1080 p24 16/9";
-	case HDMI_VFRMT_1920x1080p25_16_9:	return "1920x1080 p25 16/9";
-	case HDMI_VFRMT_1920x1080p30_16_9:	return "1920x1080 p30 16/9";
-	case HDMI_VFRMT_2880x480p60_4_3:	return "2880x480 p60 4/3";
-	case HDMI_VFRMT_2880x480p60_16_9:	return "2880x480 p60 16/9";
-	case HDMI_VFRMT_2880x576p50_4_3:	return "2880x576 p50 4/3";
-	case HDMI_VFRMT_2880x576p50_16_9:	return "2880x576 p50 16/9";
-	case HDMI_VFRMT_1920x1250i50_16_9:	return "1920x1250 i50 16/9";
-	case HDMI_VFRMT_1920x1080i100_16_9:	return "1920x1080 i100 16/9";
-	case HDMI_VFRMT_1280x720p100_16_9:	return "1280x720 p100 16/9";
-	case HDMI_VFRMT_720x576p100_4_3:	return "720x576 p100 4/3";
-	case HDMI_VFRMT_720x576p100_16_9:	return "720x576 p100 16/9";
-	case HDMI_VFRMT_1440x576i100_4_3:	return "1440x576 i100 4/3";
-	case HDMI_VFRMT_1440x576i100_16_9:	return "1440x576 i100 16/9";
-	case HDMI_VFRMT_1920x1080i120_16_9:	return "1920x1080 i120 16/9";
-	case HDMI_VFRMT_1280x720p120_16_9:	return "1280x720 p120 16/9";
-	case HDMI_VFRMT_720x480p120_4_3:	return "720x480 p120 4/3";
-	case HDMI_VFRMT_720x480p120_16_9:	return "720x480 p120 16/9";
-	case HDMI_VFRMT_1440x480i120_4_3:	return "1440x480 i120 4/3";
-	case HDMI_VFRMT_1440x480i120_16_9:	return "1440x480 i120 16/9";
-	case HDMI_VFRMT_720x576p200_4_3:	return "720x576 p200 4/3";
-	case HDMI_VFRMT_720x576p200_16_9:	return "720x576 p200 16/9";
-	case HDMI_VFRMT_1440x576i200_4_3:	return "1440x576 i200 4/3";
-	case HDMI_VFRMT_1440x576i200_16_9:	return "1440x576 i200 16/9";
-	case HDMI_VFRMT_720x480p240_4_3:	return "720x480 p240 4/3";
-	case HDMI_VFRMT_720x480p240_16_9:	return "720x480 p240 16/9";
-	case HDMI_VFRMT_1440x480i240_4_3:	return "1440x480 i240 4/3";
-	case HDMI_VFRMT_1440x480i240_16_9:	return "1440x480 i240 16/9";
-	case HDMI_VFRMT_1280x720p24_16_9:	return "1280x720 p24 16/9";
-	case HDMI_VFRMT_1280x720p25_16_9:	return "1280x720 p25 16/9";
-	case HDMI_VFRMT_1280x720p30_16_9:	return "1280x720 p30 16/9";
-	case HDMI_VFRMT_1920x1080p120_16_9:	return "1920x1080 p120 16/9";
-	case HDMI_VFRMT_1920x1080p100_16_9:	return "1920x1080 p100 16/9";
-	case HDMI_VFRMT_3840x2160p30_16_9:	return "3840x2160 p30 16/9";
-	case HDMI_VFRMT_3840x2160p25_16_9:	return "3840x2160 p25 16/9";
-	case HDMI_VFRMT_3840x2160p24_16_9:	return "3840x2160 p24 16/9";
-	case HDMI_EVFRMT_4096x2160p24_16_9:	return "4096x2160 p24 16/9";
-	case HDMI_VFRMT_1024x768p60_4_3:	return "1024x768 p60 4/3";
-	case HDMI_VFRMT_1280x1024p60_5_4:	return "1280x1024 p60 5/4";
-	case HDMI_VFRMT_2560x1600p60_16_9:	return "2560x1600 p60 16/9";
-	default:				return "???";
-	}
-}
+#define MSM_HDMI_MODES_GET_DETAILS(mode, MODE) do {		\
+	struct msm_hdmi_mode_timing_info info = MODE##_TIMING;	\
+	*mode = info;						\
+	} while (0)
+
 #endif /* _UAPI_MSM_HDMI_MODES_H__ */

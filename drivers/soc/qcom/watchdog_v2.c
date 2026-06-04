@@ -89,8 +89,8 @@ static int enable = 1;
 module_param(enable, int, 0);
 
 #ifdef CONFIG_SEC_DEBUG
-static unsigned int cpu_buf_vaddr;
-static unsigned int cpu_buf_paddr;
+static unsigned long cpu_buf_vaddr;
+static unsigned long cpu_buf_paddr;
 static unsigned long long last_pet;
 static void __iomem * wdog_base_addr;
 extern void sec_debug_save_last_pet(unsigned long long last_pet);
@@ -459,7 +459,7 @@ static irqreturn_t wdog_ppi_bark(int irq, void *dev_id)
 	return wdog_bark_handler(irq, wdog_dd);
 }
 #ifdef CONFIG_SEC_DEBUG
-unsigned int get_wdog_regsave_paddr(void)
+unsigned long get_wdog_regsave_paddr(void)
 {
 	return __pa(&cpu_buf_paddr);
 }
@@ -541,16 +541,16 @@ static void configure_bark_dump(struct msm_watchdog_data *wdog_dd)
 
 		kmemleak_not_leak(cpu_buf);
 #ifdef CONFIG_SEC_DEBUG
-		cpu_buf_vaddr=(unsigned int)cpu_buf;
-		cpu_buf_paddr=(unsigned int)virt_to_phys(cpu_buf);
+		cpu_buf_vaddr=(unsigned long)cpu_buf;
+		cpu_buf_paddr=(unsigned long)virt_to_phys(cpu_buf);
 #endif
 		for_each_cpu(cpu, cpu_present_mask) {
 			cpu_data[cpu].addr = virt_to_phys(cpu_buf +
 							cpu * MAX_CPU_CTX_SIZE);
 #ifdef CONFIG_SEC_DEBUG
-			pr_info("WDOG_V2 handled by TZ: for cpu[%d] @0x%08x PA:%08x\n",
-				 cpu,(unsigned int) cpu_data[cpu].addr,
-				(unsigned int)(cpu_buf + cpu * MAX_CPU_CTX_SIZE));
+			pr_info("WDOG_V2 handled by TZ: for cpu[%d] @0x%llx PA:0x%lx\n",
+				 cpu, cpu_data[cpu].addr,
+				(unsigned long)(cpu_buf + cpu * MAX_CPU_CTX_SIZE));
 #endif
 			cpu_data[cpu].len = MAX_CPU_CTX_SIZE;
 			dump_entry.id = MSM_DUMP_DATA_CPU_CTX + cpu;
@@ -790,7 +790,6 @@ static int init_watchdog(void)
 	return platform_driver_register(&msm_watchdog_driver);
 }
 
-EXPORT_COMPAT("qcom,msm-watchdog");
 pure_initcall(init_watchdog);
 MODULE_DESCRIPTION("MSM Watchdog Driver");
 MODULE_LICENSE("GPL v2");

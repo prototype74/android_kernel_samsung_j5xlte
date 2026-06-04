@@ -37,12 +37,26 @@
 				compatible = "android,fstab";
 				system {
 					compatible = "android,system";
+#ifdef SYSTEM_ON_SDC2
+					dev = "/dev/block/platform/soc.0/7864900.sdhci/by-name/SYSTEM";
+#else
 					dev = "/dev/block/platform/soc.0/7824900.sdhci/by-name/system";
+#endif
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
 					fsmgr_flags = "wait";
 					status = "ok";
 				};
+#ifdef VENDOR_ON_SDC2
+				vendor {
+					compatible = "android,vendor";
+					dev = "/dev/block/platform/soc.0/7864900.sdhci/by-name/vendor";
+					type = "ext4";
+					mnt_flags = "ro,barrier=1,discard";
+					fsmgr_flags = "wait";
+					status = "ok";
+				};
+#endif
 			};
 		};
 	};
@@ -441,11 +455,6 @@
 		interrupts = <1 7 0xff00>;
 	};
 
-	qcom,msm-thermal {
-		qcom,core-control-mask = <0xFF>;
-		qcom,freq-mitigation-control-mask = <0xFF>;
-	};
-
 	jtag_fuse: jtagfuse@5e01c {
 		compatible = "qcom,jtag-fuse";
 		reg = <0x5e01c 0x8>;
@@ -554,6 +563,15 @@
 		clock-names = "core_clk", "core_a_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU7>;
+	};
+
+	qcom,msm-thermal {
+		qcom,freq-control-list = <&CPU0 &CPU1 &CPU2 &CPU3
+					&CPU4 &CPU5 &CPU6 &CPU7>;
+		qcom,core-control-list = <&CPU0 &CPU1 &CPU2 &CPU3
+					&CPU4 &CPU5 &CPU6 &CPU7>;
+		qcom,freq-mitigation-control-list = <&CPU0 &CPU1 &CPU2 &CPU3
+						&CPU4 &CPU5 &CPU6 &CPU7>;
 	};
 };
 
