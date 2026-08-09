@@ -106,7 +106,7 @@ struct msm_vidc_s3d_frame_packing_payload {
 	unsigned int cancel_flag;
 	unsigned int fpa_type;
 	unsigned int quin_cunx_flag;
-	unsigned int content_interprtation_type;
+	unsigned int content_interpretation_type;
 	unsigned int spatial_flipping_flag;
 	unsigned int frame0_flipped_flag;
 	unsigned int field_views_flag;

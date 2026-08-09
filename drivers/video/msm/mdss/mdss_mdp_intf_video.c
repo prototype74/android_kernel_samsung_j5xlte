@@ -471,7 +471,7 @@ static int mdss_mdp_video_ctx_stop(struct mdss_mdp_ctl *ctl,
 		ctx->intf_num, NULL, NULL);
 	if(ctl->intf_type == MDSS_INTF_DSI)
 		mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_COMP,
-			ctl->mixer_left->num, NULL, NULL);
+			0, NULL, NULL);
 
 	ctx->ref_cnt--;
 end:
@@ -484,7 +484,7 @@ static int mdss_mdp_video_intfs_stop(struct mdss_mdp_ctl *ctl,
 {
 	struct mdss_data_type *mdata;
 	struct mdss_panel_info *pinfo;
-	struct mdss_mdp_video_ctx *ctx;
+	struct mdss_mdp_video_ctx *ctx, *sctx = NULL;
 	struct mdss_mdp_vsync_handler *tmp, *handle;
 	int ret = 0;
 
@@ -512,18 +512,18 @@ static int mdss_mdp_video_intfs_stop(struct mdss_mdp_ctl *ctl,
 	if (is_pingpong_split(ctl->mfd)) {
 		pinfo = &pdata->next->panel_info;
 
-		ctx = (struct mdss_mdp_video_ctx *) ctl->intf_ctx[SLAVE_CTX];
-		if (!ctx->ref_cnt) {
+		sctx = (struct mdss_mdp_video_ctx *) ctl->intf_ctx[SLAVE_CTX];
+		if (!sctx->ref_cnt) {
 			pr_err("Intf %d not in use\n", (inum + MDSS_MDP_INTF0));
 			return -ENODEV;
 		}
 		pr_debug("stop ctl=%d video Intf #%d base=%pK", ctl->num,
-				ctx->intf_num, ctx->base);
+				sctx->intf_num, sctx->base);
 
-		ret = mdss_mdp_video_ctx_stop(ctl, pinfo, ctx);
+		ret = mdss_mdp_video_ctx_stop(ctl, pinfo, sctx);
 		if (ret) {
 			pr_err("mdss_mdp_video_ctx_stop failed for intf: %d",
-					ctx->intf_num);
+					sctx->intf_num);
 			return -EPERM;
 		}
 	}
@@ -1239,34 +1239,41 @@ static void mdss_mdp_fetch_start_config(struct mdss_mdp_video_ctx *ctx,
 	mdp_video_write(ctx, MDSS_MDP_REG_INTF_PROG_FETCH_START, fetch_start);
 	mdp_video_write(ctx, MDSS_MDP_REG_INTF_CONFIG, fetch_enable);
 }
+
 static void mdss_mdp_video_pingpong_done(void *arg)
 {
 	struct mdss_mdp_ctl *ctl = arg;
 	struct mdss_mdp_video_ctx *ctx;
-	ctx = (struct mdss_mdp_video_ctx *) ctl->priv_data;
-	pr_info("%s:mdss_mdp_isr ctl->mixer_left->num = %d\n", __func__, ctl->mixer_left->num);
 
-	if (!ctx) {
+	ctx = (struct mdss_mdp_video_ctx *) ctl->intf_ctx[MASTER_CTX];
+
+	if (IS_ERR_OR_NULL(ctx)) {
 		pr_err("invalid ctx\n");
 		return;
 	}
-	if(ctl->intf_type == MDSS_INTF_DSI)
-		mdss_mdp_irq_disable_nosync(MDSS_MDP_IRQ_PING_PONG_COMP, ctl->mixer_left->num);
-	complete_all(&ctx->pp_comp);
 
+	pr_info("intf_num %d\n", ctx->intf_num);
+
+	mdss_mdp_irq_disable_nosync(MDSS_MDP_IRQ_PING_PONG_COMP, 0);
 }
+
 static int mdss_mdp_video_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 {
 	struct mdss_mdp_video_ctx *ctx;
 	int rc = 0;
-	ctx = (struct mdss_mdp_video_ctx *) ctl->priv_data;
-	pr_info("%s: mdss_mdp_isr ctl->mixer_left->num = %d\n", __func__, ctl->mixer_left->num);
 
-	if (!ctx) {
+	ctx = (struct mdss_mdp_video_ctx *) ctl->intf_ctx[MASTER_CTX];
+
+	if (IS_ERR_OR_NULL(ctx)) {
 		pr_err("invalid ctx\n");
 		return -ENODEV;
 	}
-	INIT_COMPLETION(ctx->pp_comp);
+
+	pr_info("intf_num %d\n", ctx->intf_num);
+
+	init_completion(&ctx->pp_comp);
+
+	mdss_mdp_irq_enable(MDSS_MDP_IRQ_PING_PONG_COMP, 0);
 
 	rc = wait_for_completion_timeout(
 		&ctx->pp_comp, msecs_to_jiffies(20));
@@ -1329,7 +1336,7 @@ static int mdss_mdp_video_ctx_setup(struct mdss_mdp_ctl *ctl,
 				mdss_mdp_video_underrun_intr_done, ctl);
 	if(ctl->intf_type == MDSS_INTF_DSI)
 		mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_COMP,
-					ctl->mixer_left->num,  mdss_mdp_video_pingpong_done, ctl);
+					0, mdss_mdp_video_pingpong_done, ctl);
 	dst_bpp = pinfo->fbc.enabled ? (pinfo->fbc.target_bpp) : (pinfo->bpp);
 
 	itp.width = mult_frac((pinfo->xres + pinfo->lcdc.border_left +

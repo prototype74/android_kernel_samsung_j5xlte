@@ -58,6 +58,7 @@ REAR_FRONT_TUNING
 struct msm_video_device {
 	struct video_device *vdev;
 	atomic_t opened;
+	struct mutex video_drvdata_mutex;
 };
 
 struct msm_queue_head {
@@ -121,9 +122,8 @@ struct msm_session {
 	 * session struct msm_stream */
 	struct msm_queue_head stream_q;
 	struct mutex lock;
-	struct mutex lock_q;
+	struct mutex close_lock;
 	rwlock_t stream_rwlock;
-
 };
 
 #if !defined(CONFIG_ARCH_MSM8939) && !defined(CONFIG_ARCH_MSM8929)

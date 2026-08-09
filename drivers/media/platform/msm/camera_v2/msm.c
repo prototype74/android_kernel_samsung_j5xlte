@@ -33,6 +33,8 @@
 
 static struct v4l2_device *msm_v4l2_dev;
 static struct list_head    ordered_sd_list;
+static struct mutex        ordered_sd_mtx;
+static struct mutex        v4l2_event_mtx;
 
 #if !defined(CONFIG_ARCH_MSM8939) && !defined(CONFIG_ARCH_MSM8929)
 static struct pm_qos_request msm_v4l2_pm_qos_request;
@@ -385,7 +387,9 @@ int msm_sd_register(struct msm_sd_subdev *msm_subdev)
 	if (WARN_ON(!msm_v4l2_dev) || WARN_ON(!msm_v4l2_dev->dev))
 		return -EIO;
 
+	mutex_lock(&ordered_sd_mtx);
 	msm_add_sd_in_position(msm_subdev, &ordered_sd_list);
+	mutex_unlock(&ordered_sd_mtx);
 	return __msm_sd_register_subdev(&msm_subdev->sd);
 }
 
@@ -447,7 +451,7 @@ int msm_create_session(unsigned int session_id, struct video_device *vdev)
 	msm_init_queue(&session->stream_q);
 	msm_enqueue(msm_session_q, &session->list);
 	mutex_init(&session->lock);
-	mutex_init(&session->lock_q);
+	mutex_init(&session->close_lock);
 	rwlock_init(&session->stream_rwlock);
 	return 0;
 }
@@ -606,7 +610,7 @@ int msm_destroy_session(unsigned int session_id)
 	msm_destroy_session_streams(session);
 	msm_remove_session_cmd_ack_q(session);
 	mutex_destroy(&session->lock);
-	mutex_destroy(&session->lock_q);
+	mutex_destroy(&session->close_lock);
 	msm_delete_entry(msm_session_q, struct msm_session,
 		list, session);
 	buf_mgr_subdev = msm_buf_mngr_get_subdev();
@@ -657,6 +661,10 @@ static long msm_private_ioctl(struct file *file, void *fh,
 		return rc;
 	}
 
+	if (!event_data)
+		return -EINVAL;
+
+	memset(&event, 0, sizeof(struct v4l2_event));
 	switch (cmd) {
 	case MSM_CAM_V4L2_IOCTL_NOTIFY:
 	case MSM_CAM_V4L2_IOCTL_CMD_ACK:
@@ -727,10 +735,12 @@ static long msm_private_ioctl(struct file *file, void *fh,
 
 	case MSM_CAM_V4L2_IOCTL_NOTIFY_FREEZE: {
 		pr_err("Notifying subdevs about potential sof freeze\n");
+		mutex_lock(&ordered_sd_mtx);
 		if (!list_empty(&msm_v4l2_dev->subdevs)) {
 			list_for_each_entry(msm_sd, &ordered_sd_list, list)
 				__msm_sd_notify_freeze_subdevs(msm_sd);
 		}
+		mutex_unlock(&ordered_sd_mtx);
 	}
 		break;
 
@@ -752,13 +762,25 @@ static long msm_private_ioctl(struct file *file, void *fh,
 static int msm_unsubscribe_event(struct v4l2_fh *fh,
 	const struct v4l2_event_subscription *sub)
 {
-	return v4l2_event_unsubscribe(fh, sub);
+	int rc;
+
+	mutex_lock(&v4l2_event_mtx);
+	rc = v4l2_event_unsubscribe(fh, sub);
+	mutex_unlock(&v4l2_event_mtx);
+
+	return rc;
 }
 
 static int msm_subscribe_event(struct v4l2_fh *fh,
 	const struct v4l2_event_subscription *sub)
 {
-	return v4l2_event_subscribe(fh, sub, 5, NULL);
+	int rc;
+
+	mutex_lock(&v4l2_event_mtx);
+	rc = v4l2_event_subscribe(fh, sub, 5, NULL);
+	mutex_unlock(&v4l2_event_mtx);
+
+	return rc;
 }
 
 static const struct v4l2_ioctl_ops g_msm_ioctl_ops = {
@@ -920,9 +942,11 @@ static int msm_close(struct file *filep)
 	struct msm_sd_subdev *msm_sd;
 
 	/*stop all hardware blocks immediately*/
+	mutex_lock(&ordered_sd_mtx);
 	if (!list_empty(&msm_v4l2_dev->subdevs))
 		list_for_each_entry(msm_sd, &ordered_sd_list, list)
 			__msm_sd_close_subdevs(msm_sd, &sd_close);
+	mutex_unlock(&ordered_sd_mtx);
 
 #if !defined(CONFIG_ARCH_MSM8939) && !defined(CONFIG_ARCH_MSM8929)
 	/* remove msm_v4l2_pm_qos_request */
@@ -1244,6 +1268,8 @@ static int msm_probe(struct platform_device *pdev)
 	msm_init_queue(msm_session_q);
 	spin_lock_init(&msm_eventq_lock);
 	spin_lock_init(&msm_pid_lock);
+	mutex_init(&ordered_sd_mtx);
+	mutex_init(&v4l2_event_mtx);
 	INIT_LIST_HEAD(&ordered_sd_list);
 	init_waitqueue_head(&cam_dummy_queue.state_wait);
 	goto probe_end;

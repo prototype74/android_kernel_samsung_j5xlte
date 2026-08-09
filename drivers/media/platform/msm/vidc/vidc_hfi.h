@@ -801,7 +801,7 @@ struct hfi_extradata_s3d_frame_packing_payload {
 	int cancel_flag;
 	u32 fpa_type;
 	int quin_cunx_flag;
-	u32 content_interprtation_type;
+	u32 content_interpretation_type;
 	int spatial_flipping_flag;
 	int frame0_flipped_flag;
 	int field_views_flag;
